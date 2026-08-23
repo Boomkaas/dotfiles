@@ -5,10 +5,14 @@
   services.flatpak.enable = true;
   services.upower.enable = true;
   services.power-profiles-daemon.enable = true;
+  services.udisks2.enable = true;
+  services.gvfs.enable = true;
+  services.udev.packages = [ pkgs.android-udev-rules ];
 
   virtualisation.docker.enable = true;
   virtualisation.libvirtd.enable = true;
   virtualisation.spiceUSBRedirection.enable = true;
+  virtualisation.waydroid.enable = true;
 
   programs.virt-manager.enable = true;
   programs.dconf.enable = true;

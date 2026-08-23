@@ -1,0 +1,321 @@
+#!/usr/bin/env bash
+#
+# anti — terminal wrapper around Google Antigravity's CLI (agy).
+#
+# Flow implemented:
+#   $ anti start
+#     -> asks for a directory (default: $DEFAULT_DIR)
+#     -> asks for a model      (default: $DEFAULT_MODEL)
+#     -> opens ONE continuous agy session (--input-format stream-json)
+#     -> you type prompts, the agent's response streams back live
+#     -> type q / exit to close the session cleanly
+#
+# Requires: bash >= 4 (coproc, read -u), jq, and the `agy` binary on PATH.
+# See README.md for NixOS-specific setup (agy is a foreign dynamic binary).
+#
+set -uo pipefail
+# NOTE: deliberately no `-e` — a single bad line from the agent stream
+# should not kill the whole wrapper.
+
+# ---------------------------------------------------------------------------
+# Configuration — edit these to taste.
+# ---------------------------------------------------------------------------
+DEFAULT_DIR="$(pwd)"
+
+# Run `agy models` to see the exact slugs your install currently offers —
+# the catalog changes over time and this default may need adjusting.
+DEFAULT_MODEL="gemini-3.7-flash-low"
+
+# Optional: set ANTI_LOG=/path/to/file.jsonl (as an env var before running)
+# to also dump every raw NDJSON line from agy for debugging.
+# ---------------------------------------------------------------------------
+
+# Session state — populated live during a session, read by show_tokens.
+SESSION_TOKENS_IN=0
+SESSION_TOKENS_OUT=0
+CURRENT_MODEL=""
+CONV_ID=""
+SPAWN_CONTINUE=1
+
+AGY_BIN="${AGY_BIN:-agy}"
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "error: '$1' is required but was not found on PATH." >&2
+    exit 1
+  }
+}
+
+# If the user typed nothing or 'y'/'Y', return the default; otherwise return what they typed.
+ydefault() { [[ "${1:-}" =~ ^[Yy]?$ ]] && printf '%s' "$2" || printf '%s' "$1"; }
+
+usage() {
+  cat <<'EOF'
+Usage: anti [command]
+
+Commands:
+  (default)  Continue previous session or start chat with memory retained.
+  new        Start a fresh conversation (resets previous context).
+  tokens     Show context-window size and estimated tokens remaining.
+  help       Show this help message.
+
+Inside a session:
+  new               Start a fresh conversation / reset context.
+  directory [path]  View or change current working directory.
+  model [name]      View or change current model.
+  tokens            View live token usage stats.
+  q / exit          End the session.
+EOF
+}
+
+# Format an integer with thousands separators.
+fmt_num() { LC_ALL=C printf "%'d" "$1" 2>/dev/null || printf '%d' "$1"; }
+
+# Return the documented context-window size (tokens) for a model slug, or 0.
+model_context_tokens() {
+  case "$1" in
+    gemini-*)  echo 1048576 ;;
+    claude-*)  echo  200000 ;;
+    gpt-oss-*) echo  128000 ;;
+    *)         echo       0 ;;
+  esac
+}
+
+# Print a token-usage summary. Works both mid-session and as a standalone.
+show_tokens() {
+  local ctx total_used left
+  ctx=$(model_context_tokens "${CURRENT_MODEL:-}")
+  total_used=$(( SESSION_TOKENS_IN + SESSION_TOKENS_OUT ))
+  echo
+  echo "  Model         : ${CURRENT_MODEL:-(no active session)}"
+  if [[ -n "$CONV_ID" ]]; then
+    echo "  Session ID    : $CONV_ID"
+  fi
+  printf "  Context window: %s tokens\n" "$(fmt_num "$ctx")"
+  if [[ "$ctx" -gt 0 ]]; then
+    left=$(( ctx - total_used ))
+    local in_pct out_pct tot_pct rem_pct
+    in_pct=$(awk -v v="$SESSION_TOKENS_IN" -v t="$ctx" 'BEGIN { printf "%.2f%%", (v/t)*100 }')
+    out_pct=$(awk -v v="$SESSION_TOKENS_OUT" -v t="$ctx" 'BEGIN { printf "%.2f%%", (v/t)*100 }')
+    tot_pct=$(awk -v v="$total_used" -v t="$ctx" 'BEGIN { printf "%.2f%%", (v/t)*100 }')
+    rem_pct=$(awk -v v="$left" -v t="$ctx" 'BEGIN { printf "%.2f%%", (v/t)*100 }')
+
+    printf "  Used (input)  : %s (%s)\n" "$(fmt_num "$SESSION_TOKENS_IN")" "$in_pct"
+    printf "  Used (output) : %s (%s)\n" "$(fmt_num "$SESSION_TOKENS_OUT")" "$out_pct"
+    printf "  Used (total)  : %s (%s)\n" "$(fmt_num "$total_used")" "$tot_pct"
+    printf "  Est. remaining: %s (%s)\n" "$(fmt_num "$left")" "$rem_pct"
+  else
+    printf "  Used (input)  : %s\n" "$(fmt_num "$SESSION_TOKENS_IN")"
+    printf "  Used (output) : %s\n" "$(fmt_num "$SESSION_TOKENS_OUT")"
+    printf "  Used (total)  : %s\n" "$(fmt_num "$total_used")"
+    echo   "  Est. remaining: (unknown — model not in lookup table)"
+  fi
+  echo
+}
+
+# Send one user turn to the running agy coprocess as a stream-json event.
+send_prompt() {
+  local prompt="$1" msg
+  msg=$(jq -nc --arg c "$prompt" '{event:"user", message:{content:$c}}')
+  printf '%s\n' "$msg" >&"${AGY[1]}"
+}
+
+# Read and render events for exactly one turn, stopping at the "result" event.
+# Returns 1 if the stream ended without a result (agy exited/crashed).
+read_turn() {
+  local line event step_type state delta tool_name status err
+  while IFS= read -r -u "${AGY[0]}" line; do
+    [[ -n "${ANTI_LOG:-}" ]] && printf '%s\n' "$line" >>"$ANTI_LOG"
+
+    event=$(jq -r '.event // empty' <<<"$line" 2>/dev/null)
+    case "$event" in
+      step_update)
+        step_type=$(jq -r '.step_update.step_type // empty' <<<"$line")
+        state=$(jq -r '.step_update.state // empty' <<<"$line")
+        case "$step_type" in
+          agent_response)
+            delta=$(jq -r '.step_update.text_delta // empty' <<<"$line")
+            [[ -n "$delta" ]] && printf '%s' "$delta"
+            ;;
+          tool)
+            if [[ "$state" == "DONE" ]]; then
+              tool_name=$(jq -r '.step_update.tool_info.name // .step_update.tool_name // "tool"' <<<"$line")
+              printf '\n  [ran tool: %s]\n' "$tool_name" >&2
+            fi
+            ;;
+          *) : ;;
+        esac
+        ;;
+      result)
+        status=$(jq -r '.result.status // empty' <<<"$line")
+        CONV_ID=$(jq -r '.result.conversation_id // empty' <<<"$line" 2>/dev/null)
+        # Accumulate per-turn token usage (fields absent → 0).
+        local t_in t_out
+        t_in=$(jq -r  '.result.usage.input_tokens  // 0' <<<"$line")
+        t_out=$(jq -r '.result.usage.output_tokens // 0' <<<"$line")
+        SESSION_TOKENS_IN=$(( SESSION_TOKENS_IN  + t_in  ))
+        SESSION_TOKENS_OUT=$(( SESSION_TOKENS_OUT + t_out ))
+        printf '\n'
+        if [[ "$status" != "SUCCESS" ]]; then
+          err=$(jq -r '.result.error // "unknown error"' <<<"$line")
+          echo "[session] turn ended with status=$status: $err" >&2
+        fi
+        return 0
+        ;;
+      "" ) : ;;   # blank / unparsable line — ignore
+      *) : ;;      # init or anything else — nothing to render
+    esac
+  done
+  echo "[session] agy exited unexpectedly (no result event received)." >&2
+  return 1
+}
+
+# Reads one logical prompt from the terminal. A trailing backslash continues
+# the input onto the next line, so multi-line prompts are possible.
+read_prompt() {
+  local line full=""
+  IFS= read -r line || return 1
+  full="$line"
+  while [[ "$full" == *'\' ]]; do
+    full="${full%\\}"$'\n> '
+    IFS= read -r line || break
+    full+="$line"
+  done
+  printf '%s' "$full"
+}
+
+spawn_agy() {
+  # Terminate existing coproc if running
+  if [[ -n "${AGY_PID:-}" ]] && kill -0 "$AGY_PID" 2>/dev/null; then
+    eval "exec ${AGY[1]}>&-" 2>/dev/null
+    wait "$AGY_PID" 2>/dev/null
+  fi
+
+  local session_flags=("${extra_flags[@]}")
+  if [[ "$SPAWN_CONTINUE" -eq 1 ]]; then
+    session_flags+=(--continue)
+  fi
+
+  coproc AGY {
+    cd "$work_dir" || exit 1
+    exec "$AGY_BIN" --input-format stream-json --output-format stream-json \
+         --model "$model" --add-dir "$work_dir" "${session_flags[@]}"
+  }
+
+  # Consume the single init event before turns start
+  IFS= read -r -u "${AGY[0]}" _init_line
+  local init_conv
+  init_conv=$(jq -r '.conversation_id // empty' <<<"$_init_line" 2>/dev/null)
+  [[ -n "$init_conv" ]] && CONV_ID="$init_conv"
+}
+
+start_session() {
+  need "$AGY_BIN"
+  need jq
+
+  work_dir="$DEFAULT_DIR"
+  model="$DEFAULT_MODEL"
+  CURRENT_MODEL="$model"
+  extra_flags=(--dangerously-skip-permissions)
+
+  echo "Directory : $work_dir"
+  echo "Model     : $model"
+  echo "Commands  : 'new', 'dir', 'model', 'tokens', 'q'"
+  echo "-----------------------------"
+
+  spawn_agy
+
+  cleanup() {
+    if [[ -n "${AGY_PID:-}" ]] && kill -0 "$AGY_PID" 2>/dev/null; then
+      eval "exec ${AGY[1]}>&-" 2>/dev/null
+      wait "$AGY_PID" 2>/dev/null
+    fi
+  }
+  trap cleanup EXIT
+
+  while true; do
+    printf '\nYou> '
+    user_input=$(read_prompt) || { echo; break; }
+
+    case "$user_input" in
+      q|Q|exit|EXIT|Exit) break ;;
+      tokens|TOKENS) show_tokens; continue ;;
+      new|NEW)
+        echo "Starting a new conversation (resetting context)..."
+        SPAWN_CONTINUE=0
+        SESSION_TOKENS_IN=0
+        SESSION_TOKENS_OUT=0
+        spawn_agy
+        SPAWN_CONTINUE=1
+        echo "Started new conversation."
+        continue
+        ;;
+      directory*|dir*)
+        target_dir="${user_input#* }"
+        if [[ "$target_dir" == "$user_input" || -z "$target_dir" ]]; then
+          echo "Current directory: $work_dir"
+          read -r -p "New directory: " target_dir
+        fi
+        target_dir="${target_dir/#\~/$HOME}"
+        if [[ -n "$target_dir" ]]; then
+          if [[ ! -d "$target_dir" ]]; then
+            read -r -p "Directory '$target_dir' does not exist. Create it? [y/N] " make_it
+            if [[ "$make_it" =~ ^[Yy]$ ]]; then
+              mkdir -p -- "$target_dir" || { echo "error: could not create $target_dir" >&2; continue; }
+            else
+              echo "Directory unchanged."
+              continue
+            fi
+          fi
+          work_dir="$(cd "$target_dir" && pwd)"
+          echo "Switching directory to: $work_dir"
+          spawn_agy
+          echo "Session restarted in $work_dir"
+        fi
+        continue
+        ;;
+      model*)
+        target_model="${user_input#* }"
+        if [[ "$target_model" == "$user_input" || -z "$target_model" ]]; then
+          echo "Current model: $model"
+          echo "Available models:"
+          ( cd "$work_dir" && "$AGY_BIN" models )
+          read -r -p "New model [${model}]: " target_model
+          target_model=$(ydefault "$target_model" "$model")
+        fi
+        if [[ -n "$target_model" ]]; then
+          model="$target_model"
+          CURRENT_MODEL="$model"
+          echo "Switching model to: $model"
+          spawn_agy
+          echo "Session restarted with model $model"
+        fi
+        continue
+        ;;
+      "") continue ;;
+    esac
+
+    send_prompt "$user_input"
+    printf 'Antigravity> '
+    read_turn || break
+  done
+
+  echo
+  echo "Closing session..."
+  eval "exec ${AGY[1]}>&-" 2>/dev/null
+  wait "$AGY_PID" 2>/dev/null
+  trap - EXIT
+  echo "Session ended."
+}
+
+main() {
+  case "${1:-}" in
+    ""|start)          SPAWN_CONTINUE=1; start_session ;;
+    new)               SPAWN_CONTINUE=0; start_session ;;
+    tokens)            show_tokens ;;
+    -h|--help|help)    usage ;;
+    *) echo "unknown command: $1" >&2; usage; exit 1 ;;
+  esac
+}
+
+main "$@"
