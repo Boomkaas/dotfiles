@@ -14,7 +14,3 @@ result-*
 *.swp
 *.swo
 *~
-
-# free-games-claimer secrets + browser state (NEVER commit these)
-free-games-claimer/data/config.env
-free-games-claimer/data/browser/

@@ -63,26 +63,5 @@
     curl
     icu
     glib
-    # X11 / GTK3 — required for Playwright-bundled Firefox (vogler/free-games-claimer)
-    xorg.libX11
-    xorg.libxcb
-    xorg.libXcomposite
-    xorg.libXcursor
-    xorg.libXdamage
-    xorg.libXext
-    xorg.libXfixes
-    xorg.libXi
-    xorg.libXrandr
-    xorg.libXrender
-    gtk3
-    pango
-    cairo
-    gdk-pixbuf
-    atk
-    alsa-lib
-    libdbusmenu
-    freetype
-    fontconfig
-    dbus
   ];
 }

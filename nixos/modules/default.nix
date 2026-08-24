@@ -9,7 +9,6 @@
     ./core/services.nix
     ./utils/xserver.nix
     ./utils/zsh.nix
-    ./utils/epic-games.nix
     ./pkgs.nix
   ];
 }
