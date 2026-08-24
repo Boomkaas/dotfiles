@@ -34,7 +34,9 @@ nixos/
 ├── scripts/
 │   ├── anti              # Interactive terminal wrapper around Antigravity CLI (agy)
 │   ├── epic              # Opens native Firefox to claim weekly Epic Games freebies (alias: epic)
-│   ├── epic-games-claimer.user.js # Native in-browser claimer userscript
+│   ├── epic-games-claimer.user.js # Native in-browser Epic claimer userscript
+│   ├── twitch            # Opens native Firefox to auto-claim Twitch Drops (aliases: twitch, tdrops)
+│   ├── twitch-drops-claimer.user.js # Native in-browser Twitch Drops claimer (DST & DBD priority)
 │   ├── nixreb.sh         # Sync dotfiles to /etc/nixos and rebuild system (alias: nixreb)
 │   ├── screenshot.sh     # Area screenshot with grim/slurp and clipboard copy
 │   ├── controlbot.sh     # PC Control Telegram bot runner
@@ -76,6 +78,13 @@ An in-browser auto-claimer for weekly Epic Games freebies:
 - **No Captchas / No Login Prompts:** Runs directly inside your native logged-in Firefox session.
 - **Calm Execution:** Politely navigates and taps "Get", bypasses mature content gates, and completes checkout ("Place Order") without aggressive bot behavior.
 - **Usage:** Run `epic` in any terminal to focus/open Firefox at the Free Games page.
+
+### 🟣 `twitch` (Twitch Drops Auto-Claimer)
+An in-browser auto-claimer for Twitch Drops:
+- **Game Priorities:** Prioritizes **Don't Starve Together** (1st) and **Dead by Daylight** (2nd).
+- **Language Filter:** Automatically ignores Russian-tagged / Russian-language streams and joins the top active non-Russian channel.
+- **Auto-Claim & Auto-Close:** Mutes stream, claims in-chat bonuses and completed drops from inventory, and automatically closes the browser window once all target rewards are claimed.
+- **Usage:** Run `twitch` or `tdrops` in any terminal to start.
 
 ### ⚡ `nix-ld`
 Configured in `nixos/modules/core/system.nix` to allow running unpatched foreign dynamically-linked binaries (e.g. prebuilt language servers, CLI tools) on NixOS.

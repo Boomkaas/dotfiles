@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# twitch — Launch Twitch Drops auto-claimer in native Firefox
+set -euo pipefail
+
+TWITCH_DROPS_URL="https://www.twitch.tv/drops/campaigns"
+
+echo "🎮 Launching Twitch Drops Campaign Hub in your native Firefox..."
+
+# Opens a new tab in your already-running, logged-in Firefox instance
+firefox "$TWITCH_DROPS_URL" >/dev/null 2>&1 &
+
+# If running Hyprland, focus the Firefox window
+if command -v hyprctl >/dev/null 2>&1; then
+  sleep 0.4
+  hyprctl dispatch focuswindow class:firefox 2>/dev/null || true
+fi
+
+echo "✨ Native Firefox opened. The Twitch Drops Auto-Claimer is active!"

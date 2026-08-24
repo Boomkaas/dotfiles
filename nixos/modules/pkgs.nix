@@ -10,6 +10,9 @@ let
   epic = pkgs.writeShellScriptBin "epic" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/epic "$@"
   '';
+  twitch = pkgs.writeShellScriptBin "twitch" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/twitch "$@"
+  '';
   gfn = pkgs.writeShellScriptBin "gfn" ''
     nohup flatpak run com.nvidia.geforcenow > /dev/null 2>&1 &
   '';
@@ -182,6 +185,7 @@ in
     controlbot
     anti
     epic
+    twitch
 
     # Archive
     zip
