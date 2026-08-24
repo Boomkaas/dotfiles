@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Twitch Drops Auto-Claimer (DST & DBD Priority)
 // @namespace    https://github.com/Boomkaas/dotfiles
-// @version      1.1.0
-// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight, filters out Russian streams, auto-claims, with ultra-eco resource consumption (160p, muted, low RAM/CPU/GPU/WiFi), and closes when finished.
+// @version      1.2.0
+// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight, filters out Russian streams, stays on stream to farm watch time, auto-claims, with ultra-eco mode (160p, muted, low RAM/CPU/GPU/WiFi), and closes only when all drops are finished.
 // @author       Peng
 // @match        https://www.twitch.tv/*
 // @grant        GM_closeTab
@@ -28,7 +28,6 @@
 
   const STORAGE_KEY = 'twitch_drops_claimer_state';
   const CHECK_INTERVAL = 3000;
-  const INVENTORY_CHECK_INTERVAL = 180000; // Check inventory every 3 mins
 
   const TARGET_GAMES = [
     {
@@ -54,10 +53,10 @@
         gameIndex: 0,
         currentGame: null,
         currentStreamer: null,
-        lastInventoryCheck: Date.now()
+        watchStartTime: Date.now()
       };
     } catch {
-      return { active: false, gameIndex: 0, currentGame: null, currentStreamer: null, lastInventoryCheck: Date.now() };
+      return { active: false, gameIndex: 0, currentGame: null, currentStreamer: null, watchStartTime: Date.now() };
     }
   }
 
@@ -147,7 +146,7 @@
           <span id="tdrops-spinner" style="font-size: 14px; animation: tdrops-spin 2s linear infinite;">⏳</span>
         </div>
         <div style="display: inline-block; padding: 2px 8px; border-radius: 6px; background: rgba(0, 200, 83, 0.15); border: 1px solid rgba(0, 200, 83, 0.3); color: #00e676; font-size: 11px; font-weight: 600; margin-bottom: 10px;">
-          🌿 Ultra-Eco: 160p • Muted • Low Resource
+          🌿 Ultra-Eco: 160p • Muted • Auto-Farming
         </div>
         <div id="tdrops-status" style="font-size: 13px; color: #dedede; line-height: 1.4; margin-bottom: 12px;">
           Initializing auto-claimer...
@@ -271,7 +270,7 @@
     for (const btn of claimButtons) {
       btn.click();
       console.log('[Twitch Drops] Clicked Drop Claim button!');
-      updateHUDStatus('🎁 <b>Claimed a Drop reward!</b>');
+      updateHUDStatus('🎁 <b>Claimed a Drop reward!</b> Continuing watch time...');
     }
 
     // 3. Mature Content Warning ("Start Watching" / "I Understand")
@@ -285,9 +284,9 @@
   // 1. CAMPAIGNS PAGE HANDLER
   async function handleCampaignsPage() {
     updateHUDStatus('🔍 Scanning active campaigns for <b>DST</b> & <b>DBD</b>...');
-    await sleep(4000);
+    await sleep(4500);
 
-    const pageText = document.body.innerText.toLowerCase();
+    const pageText = document.body ? document.body.innerText.toLowerCase() : '';
 
     // Check Priority 1: Don't Starve Together, Priority 2: Dead by Daylight
     let targetGame = null;
@@ -306,11 +305,11 @@
       return;
     }
 
-    updateHUDStatus(`🎯 Found active campaign for <b>${targetGame.name}</b>! Finding stream...`);
+    updateHUDStatus(`🎯 Found active campaign for <b>${targetGame.name}</b>! Finding non-Russian stream...`);
     const state = {
       active: true,
       currentGame: targetGame,
-      lastInventoryCheck: Date.now()
+      watchStartTime: Date.now()
     };
     setState(state);
 
@@ -320,9 +319,9 @@
 
   // 2. DIRECTORY STREAM SELECTION (Filter out Russian streams)
   async function handleDirectoryPage(state) {
-    const gameName = state.currentGame ? state.currentGame.name : 'Target Game';
-    updateHUDStatus(`🔎 Searching for <b>${gameName}</b> streams (excluding Russian)...`);
-    await sleep(4000);
+    const game = state.currentGame || TARGET_GAMES[0];
+    updateHUDStatus(`🔎 Searching for <b>${game.name}</b> streams (excluding Russian)...`);
+    await sleep(4500);
 
     const streamCards = Array.from(document.querySelectorAll('[data-target="directory-game__card"], [data-target="directory-container"] [data-a-target^="preview-card-image-link"], div[class*="ScTower"] article, article'));
     let chosenUrl = null;
@@ -369,13 +368,14 @@
 
     updateHUDStatus(`📺 Found stream: <b>${chosenTitle}</b>. Joining in Ultra-Eco mode...`);
     state.currentStreamer = chosenUrl;
+    state.watchStartTime = Date.now();
     setState(state);
 
     await sleep(1500);
     window.location.href = chosenUrl;
   }
 
-  // 3. STREAM WATCHING & MONITORING (Ultra-Eco Active)
+  // 3. STREAM WATCHING & CONTINUOUS MONITORING
   async function handleStreamPage(state) {
     const gameName = state.currentGame ? state.currentGame.name : 'Target Game';
     const channelName = window.location.pathname.replace(/\//g, '');
@@ -385,7 +385,9 @@
     setTimeout(enforceUltraEcoMode, 3000);
     setTimeout(enforceUltraEcoMode, 8000);
 
-    // Watchdog loop
+    let minutesWatched = 0;
+
+    // Watchdog loop (stays ON stream — does NOT navigate away!)
     setInterval(() => {
       autoClaimButtons();
 
@@ -398,49 +400,64 @@
         } else {
           window.location.href = 'https://www.twitch.tv/drops/campaigns';
         }
+        return;
       }
 
-      // Check inventory periodically
-      if (Date.now() - state.lastInventoryCheck > INVENTORY_CHECK_INTERVAL) {
-        state.lastInventoryCheck = Date.now();
-        setState(state);
-        updateHUDStatus('🔄 Periodic inventory check for completed drops...');
-        window.location.href = 'https://www.twitch.tv/drops/inventory';
-      }
+      // Update minutes counter in HUD
+      minutesWatched = Math.floor((Date.now() - (state.watchStartTime || Date.now())) / 60000);
+      updateHUDStatus(`👀 Watching <b>${channelName}</b> for <b>${gameName}</b> (${minutesWatched}m farmed • 🌿 Eco)...`);
     }, CHECK_INTERVAL);
   }
 
   // 4. INVENTORY & CLAIM CONFIRMATION
   async function handleInventoryPage(state) {
     updateHUDStatus('📦 Checking Drops inventory & claiming rewards...');
-    await sleep(3500);
+    await sleep(4500);
 
     autoClaimButtons();
-    await sleep(2000);
+    await sleep(2500);
 
-    // Check if any in-progress drop exists
-    const inProgressCards = Array.from(document.querySelectorAll('[data-test-selector="DropsCampaignInProgressDescription"]'));
-    let inProgressText = '';
-    for (const card of inProgressCards) {
-      inProgressText += card.innerText + ' ';
+    const pageText = document.body ? document.body.innerText.toLowerCase() : '';
+
+    // 1. Check Priority 1: Don't Starve Together
+    const dstGame = TARGET_GAMES[0];
+    const isDstMentioned = dstGame.aliases.some(a => pageText.includes(a));
+    const isDstCompleted = pageText.includes("don't starve together") && (pageText.includes('100%') || pageText.includes('claimed')) && !pageText.includes('remaining');
+
+    if (isDstMentioned && !isDstCompleted) {
+      updateHUDStatus(`⏳ Active drop found for <b>${dstGame.name}</b>. Resuming stream...`);
+      state.currentGame = dstGame;
+      setState(state);
+      await sleep(2500);
+      window.location.href = `https://www.twitch.tv/directory/category/${dstGame.slug}?filter=drops`;
+      return;
     }
 
-    // Check if we still have drops in progress for target games
-    let hasActiveDrop = false;
-    for (const game of TARGET_GAMES) {
-      if (game.aliases.some(a => inProgressText.toLowerCase().includes(a))) {
-        hasActiveDrop = true;
-        state.currentGame = game;
-        setState(state);
-        updateHUDStatus(`⏳ Active drop found for <b>${game.name}</b>. Resuming stream...`);
-        await sleep(2500);
-        window.location.href = `https://www.twitch.tv/directory/category/${game.slug}?filter=drops`;
-        return;
-      }
+    // 2. Check Priority 2: Dead by Daylight
+    const dbdGame = TARGET_GAMES[1];
+    const isDbdMentioned = dbdGame.aliases.some(a => pageText.includes(a));
+    const isDbdCompleted = pageText.includes('dead by daylight') && (pageText.includes('100%') || pageText.includes('claimed')) && !pageText.includes('remaining');
+
+    if (isDbdMentioned && !isDbdCompleted) {
+      updateHUDStatus(`⏳ Active drop found for <b>${dbdGame.name}</b>. Resuming stream...`);
+      state.currentGame = dbdGame;
+      setState(state);
+      await sleep(2500);
+      window.location.href = `https://www.twitch.tv/directory/category/${dbdGame.slug}?filter=drops`;
+      return;
     }
 
-    // No drops in progress — check if everything is finished or nothing to get
-    updateHUDStatus('✨ <b>No drops in progress or all rewards claimed!</b> Closing window in 4s...', false);
+    // 3. If any target game was selected in state, re-verify with the directory before giving up
+    if (state.currentGame) {
+      updateHUDStatus(`🔎 Checking if more drops exist for <b>${state.currentGame.name}</b>...`);
+      const gameToResume = state.currentGame;
+      await sleep(2000);
+      window.location.href = `https://www.twitch.tv/directory/category/${gameToResume.slug}?filter=drops`;
+      return;
+    }
+
+    // All target drops are truly completed or no campaigns exist
+    updateHUDStatus('🎉 <b>All drops for DST & DBD have been claimed!</b> Closing window in 4s...', false);
     clearState();
     closeTab(4000);
   }
