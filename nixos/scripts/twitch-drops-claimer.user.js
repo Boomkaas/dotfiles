@@ -1,3 +1,4 @@
+// ==UserScript==
 // @name         Twitch Drops Auto-Claimer (DST & DBD Priority)
 // @namespace    https://github.com/Boomkaas/dotfiles
 // @version      1.5.1
