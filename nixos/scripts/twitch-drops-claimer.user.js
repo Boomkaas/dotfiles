@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Twitch Drops Auto-Claimer (DST & DBD Priority)
 // @namespace    https://github.com/Boomkaas/dotfiles
-// @version      1.4.1
-// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight. Stays on the Inventory page with a mini overlay stream player, auto-claims, reloads on calculated timer (+5m buffer), and closes only when all drops are completed.
+// @version      1.5.0
+// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight. Stays on the Inventory page with a mini overlay stream player, auto-claims, calculates exact remaining time from highest drop duration (+5m buffer), and reloads on completion.
 // @author       Peng
 // @match        https://www.twitch.tv/*
 // @grant        GM_closeTab
@@ -28,7 +28,7 @@
 
   const STORAGE_KEY = 'twitch_drops_claimer_state';
   const CHECK_INTERVAL = 2000;
-  const EXTRA_BUFFER_MINUTES = 5; // Extra 5 minutes buffer
+  const EXTRA_BUFFER_MINUTES = 5; // 5 minutes safety buffer
 
   const TARGET_GAMES = [
     {
@@ -54,11 +54,12 @@
         currentGame: null,
         currentChannel: null,
         targetEndTime: null,
-        calculatedWaitMinutes: 65,
+        totalMinutes: 180,
+        calculatedWaitMinutes: 135,
         progressPercent: 0
       };
     } catch {
-      return { active: false, currentGame: null, currentChannel: null, targetEndTime: null, calculatedWaitMinutes: 65, progressPercent: 0 };
+      return { active: false, currentGame: null, currentChannel: null, targetEndTime: null, totalMinutes: 180, calculatedWaitMinutes: 135, progressPercent: 0 };
     }
   }
 
@@ -88,33 +89,66 @@
     }, delayMs);
   }
 
-  // Parse total duration and progress percentage from inventory/campaign text
+  // ============================================================
+  // TIME & PERCENTAGE PARSER (Picks the HIGHEST drop duration)
+  // ============================================================
   function parseWatchTimeAndProgress(containerText) {
     const text = containerText.toLowerCase();
 
-    let totalMinutes = 60; // default 1 hour
-    const hourMatch = text.match(/watch for (\d+)\s*(?:hours?|hrs?|h)/i);
-    const minMatch = text.match(/watch for (\d+)\s*(?:minutes?|mins?|m)/i);
-
-    if (hourMatch) {
-      totalMinutes = parseInt(hourMatch[1], 10) * 60;
-    } else if (minMatch) {
-      totalMinutes = parseInt(minMatch[1], 10);
-    }
-
     let percent = 0;
-    const percentMatch = text.match(/(\d+)%/);
-    if (percentMatch) {
-      percent = Math.min(100, Math.max(0, parseInt(percentMatch[1], 10)));
+    let maxTotalMinutes = 0;
+
+    // 1. Check for explicit "X% of Y hours/mins"
+    const explicitHourMatch = text.match(/(\d+)%\s*of\s*(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/i);
+    const explicitMinMatch = text.match(/(\d+)%\s*of\s*(\d+)\s*(?:minutes?|mins?|m)\b/i);
+
+    if (explicitHourMatch) {
+      percent = parseFloat(explicitHourMatch[1]);
+      maxTotalMinutes = parseFloat(explicitHourMatch[2]) * 60;
+    } else if (explicitMinMatch) {
+      percent = parseFloat(explicitMinMatch[1]);
+      maxTotalMinutes = parseFloat(explicitMinMatch[2]);
+    } else {
+      // 2. Scan for ALL hour and minute mentions and select the HIGHEST duration
+      const allHourMatches = Array.from(text.matchAll(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/gi));
+      const allMinMatches = Array.from(text.matchAll(/(\d+)\s*(?:minutes?|mins?|m)\b/gi));
+
+      for (const m of allHourMatches) {
+        const val = parseFloat(m[1]) * 60;
+        if (val > maxTotalMinutes && val <= 720) { // Reasonable cap (<= 12h)
+          maxTotalMinutes = val;
+        }
+      }
+
+      for (const m of allMinMatches) {
+        const val = parseFloat(m[1]);
+        if (val > maxTotalMinutes && val <= 720) {
+          maxTotalMinutes = val;
+        }
+      }
+
+      // If no explicit duration found, default to 3 hours (180 mins)
+      if (maxTotalMinutes === 0) {
+        maxTotalMinutes = 180;
+      }
+
+      // Check general percentage
+      const generalPercentMatch = text.match(/(\d+)%/);
+      if (generalPercentMatch) {
+        percent = parseFloat(generalPercentMatch[1]);
+      }
     }
 
-    const remainingMinutes = Math.max(1, Math.ceil(totalMinutes * (1 - (percent / 100))));
+    percent = Math.min(100, Math.max(0, percent));
+
+    // 3. Exact Remaining Time Calculation (+ 5 min buffer)
+    const remainingMinutes = Math.max(1, Math.ceil(maxTotalMinutes * (1 - (percent / 100))));
     const finalWaitMinutes = remainingMinutes + EXTRA_BUFFER_MINUTES;
 
     return {
-      totalMinutes,
-      percent,
-      finalWaitMinutes
+      totalMinutes: maxTotalMinutes,
+      percent: percent,
+      finalWaitMinutes: finalWaitMinutes
     };
   }
 
@@ -131,6 +165,18 @@
   function formatClockTime(timestamp) {
     const d = new Date(timestamp);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  // Find the specific DOM text for the target game
+  function getGameSectionText(game) {
+    const allCards = Array.from(document.querySelectorAll('[data-test-selector="DropsCampaignInProgressDescription"], [class*="DropsCampaignCard"], [class*="inventory-campaign-card"], div[class*="ScTower"], article, div'));
+    for (const card of allCards) {
+      const text = card.innerText || '';
+      if (game.aliases.some(a => text.toLowerCase().includes(a))) {
+        return text;
+      }
+    }
+    return document.body ? document.body.innerText : '';
   }
 
   // ============================================================
@@ -265,8 +311,8 @@
         padding: 16px 20px;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         color: #f0f0f0;
-        min-width: 320px;
-        max-width: 400px;
+        min-width: 330px;
+        max-width: 410px;
         transition: all 0.3s ease;
       ">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -277,7 +323,7 @@
           <span id="tdrops-spinner" style="font-size: 14px; animation: tdrops-spin 2s linear infinite;">⏳</span>
         </div>
         <div style="display: inline-block; padding: 2px 8px; border-radius: 6px; background: rgba(0, 200, 83, 0.15); border: 1px solid rgba(0, 200, 83, 0.3); color: #00e676; font-size: 11px; font-weight: 600; margin-bottom: 10px;">
-          🌿 Ultra-Eco: Inventory Overlay • Auto-Reload
+          🌿 Ultra-Eco: 160p Overlay • Smart Timer
         </div>
         <div id="tdrops-status" style="font-size: 13px; color: #dedede; line-height: 1.4; margin-bottom: 12px;">
           Initializing auto-claimer...
@@ -331,7 +377,7 @@
     if (spinnerEl) spinnerEl.style.display = showSpinner ? 'inline-block' : 'none';
   }
 
-  // Auto-click point bonus & claim buttons on page
+  // Auto-click claim buttons
   function autoClaimButtons() {
     const claimButtons = Array.from(document.querySelectorAll('button')).filter(btn => {
       const text = (btn.innerText || '').trim().toUpperCase();
@@ -433,7 +479,7 @@
     window.location.href = 'https://www.twitch.tv/drops/inventory';
   }
 
-  // 3. INVENTORY PAGE (Main Hub with Mini-Stream Overlay & Calculated Reload Timer)
+  // 3. INVENTORY PAGE (Main Hub with Mini-Stream Overlay & Highest-Time Calculator)
   async function handleInventoryPage(state) {
     updateHUDStatus('📦 Loading Drops Inventory & analyzing drop progress...');
     await sleep(4000);
@@ -441,8 +487,6 @@
     // Auto-claim any finished drops on arrival
     autoClaimButtons();
     await sleep(2000);
-
-    const pageText = document.body ? document.body.innerText.toLowerCase() : '';
 
     // If no channel is attached yet, find one first from campaigns
     if (!state.currentChannel) {
@@ -455,18 +499,22 @@
     // Attach Mini Stream Player Overlay in bottom-left
     createMiniStreamOverlay(state.currentChannel);
 
-    // Parse timing details from the inventory page
-    const timing = parseWatchTimeAndProgress(pageText);
+    const game = state.currentGame || TARGET_GAMES[0];
+    const gameSectionText = getGameSectionText(game);
 
-    // If targetEndTime is not yet set or in the past, calculate it (+5m buffer)
-    if (!state.targetEndTime || state.targetEndTime <= Date.now()) {
-      state.calculatedWaitMinutes = timing.finalWaitMinutes || 65;
-      state.targetEndTime = Date.now() + (state.calculatedWaitMinutes * 60 * 1000);
-      state.progressPercent = timing.percent || 0;
-      setState(state);
-    }
+    // Parse timing details from the specific game section (picks HIGHEST duration)
+    const timing = parseWatchTimeAndProgress(gameSectionText);
 
-    // Keep watching on inventory page — NEVER close while streaming!
+    // Calculate fresh target end time based on the exact parsed calculation
+    state.totalMinutes = timing.totalMinutes;
+    state.progressPercent = timing.percent;
+    state.calculatedWaitMinutes = timing.finalWaitMinutes;
+    state.targetEndTime = Date.now() + (timing.finalWaitMinutes * 60 * 1000);
+    setState(state);
+
+    console.log(`[Twitch Drops] Calculation: ${timing.percent}% of ${timing.totalMinutes}m -> Remaining: ${timing.finalWaitMinutes}m (with +5m buffer)`);
+
+    // Run the watchdog on inventory page
     runInventoryWatchdog(state);
   }
 
@@ -474,6 +522,7 @@
   function runInventoryWatchdog(state) {
     const gameName = state.currentGame ? state.currentGame.name : 'Target Game';
     const channelName = state.currentChannel || 'Live Stream';
+    const totalHoursStr = (state.totalMinutes >= 60) ? `${state.totalMinutes / 60}h` : `${state.totalMinutes}m`;
 
     setInterval(() => {
       autoClaimButtons();
@@ -482,7 +531,7 @@
       const remainingMs = Math.max(0, state.targetEndTime - now);
       const clockTarget = formatClockTime(state.targetEndTime);
 
-      // When timer completes -> reload inventory to claim & re-evaluate
+      // When calculated timer completes -> reload inventory to claim & re-evaluate
       if (remainingMs <= 0) {
         updateHUDStatus('⏰ <b>Calculated watch time complete!</b> Reloading inventory to claim reward...');
         setTimeout(() => {
@@ -493,8 +542,9 @@
 
       updateHUDStatus(`
         <div>🎮 <b>${gameName}</b> (📺 ${channelName})</div>
+        <div style="font-size: 12px; color: #cfd8dc; margin-top: 2px;">📊 Progress: <b>${state.progressPercent}% of ${totalHoursStr}</b> (${state.totalMinutes} mins)</div>
         <div style="margin-top: 4px; color: #a970ff; font-weight: 600;">⏳ ${formatTimeRemaining(remainingMs)} remaining (+5m buffer)</div>
-        <div style="font-size: 11px; color: #aaa; margin-top: 2px;">⏰ Auto-reload & claim at: ${clockTarget}</div>
+        <div style="font-size: 11px; color: #aaa; margin-top: 2px;">⏰ Auto-reload & claim at: <b>${clockTarget}</b></div>
       `);
     }, CHECK_INTERVAL);
   }
@@ -514,7 +564,6 @@
     } else if (path.includes('/drops/inventory')) {
       handleInventoryPage(state);
     } else {
-      // If user navigates to a channel directly, attach it and go to inventory
       const channel = path.replace(/\//g, '');
       if (channel && !path.startsWith('/directory') && !path.startsWith('/downloads')) {
         state.currentChannel = channel;
