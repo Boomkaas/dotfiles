@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Epic Games Store - Auto Free Games Claimer
 // @namespace    https://github.com/Boomkaas/dotfiles
-// @version      1.0.0
+// @version      1.1.0
 // @description  Automatically claims weekly free games in your native logged-in Firefox without rushing.
 // @author       Peng
 // @match        https://store.epicgames.com/*
 // @match        https://www.epicgames.com/store/*
+// @match        https://*.epicgames.com/*
 // @grant        none
 // @run-at       document-idle
 // ==/UserScript==
@@ -13,31 +14,116 @@
 (function () {
   'use strict';
 
+  const isTopWindow = window.self === window.top;
   const STORAGE_KEY = 'epic_auto_claim_state';
-  const DELAY_PAGE_LOAD = 3500;  // 3.5s to ensure React hydration & session load
-  const DELAY_BETWEEN_ACTIONS = 2500; // 2.5s calm pace ("don't rush")
-  const DELAY_CHECKOUT = 3500;   // 3.5s for payment modal to appear
+  const DELAY_PAGE_LOAD = 3500;        // 3.5s to ensure React hydration & session load
+  const DELAY_BETWEEN_ACTIONS = 2500;   // 2.5s calm pace ("don't rush")
+  const DELAY_CHECKOUT_POLL = 1000;     // 1.0s polling for checkout elements
 
-  // Helpers
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   function getState() {
     try {
-      return JSON.parse(sessionStorage.getItem(STORAGE_KEY)) || { active: false, queue: [], currentIndex: 0, claimed: [] };
+      return JSON.parse(sessionStorage.getItem(STORAGE_KEY)) || { active: false, queue: [], currentIndex: 0, status: 'idle' };
     } catch {
-      return { active: false, queue: [], currentIndex: 0, claimed: [] };
+      return { active: false, queue: [], currentIndex: 0, status: 'idle' };
     }
   }
 
   function setState(state) {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.error('[Epic Claimer] Failed to save state:', e);
+    }
   }
 
   function clearState() {
-    sessionStorage.removeItem(STORAGE_KEY);
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch (e) {}
   }
 
-  // Floating HUD
+  // ==========================================
+  // IFRAME HANDLER (Runs inside checkout frame)
+  // ==========================================
+  if (!isTopWindow) {
+    // If running inside a purchase/checkout iframe, ONLY assist with checkout.
+    // NEVER navigate the parent page or touch the queue.
+    async function handleIframeCheckout() {
+      let attempts = 0;
+      const maxAttempts = 30; // 30 seconds
+
+      while (attempts < maxAttempts) {
+        attempts++;
+
+        // 1. Handle agreement checkboxes
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        for (const cb of checkboxes) {
+          if (!cb.checked) {
+            cb.click();
+            await sleep(400);
+          }
+        }
+
+        // 2. Look for "Place Order" or "Add to Library" button
+        const buttons = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"]'));
+        const orderBtn = buttons.find(b => {
+          const text = (b.innerText || b.value || '').trim().toUpperCase();
+          const testId = b.getAttribute('data-testid') || '';
+          const isTarget = text.includes('PLACE ORDER') || 
+                           text.includes('ADD TO LIBRARY') || 
+                           text.includes('CONFIRM') || 
+                           testId.includes('purchase') ||
+                           b.classList.contains('payment-btn');
+          return isTarget && !b.disabled;
+        });
+
+        if (orderBtn) {
+          console.log('[Epic Claimer Iframe] Found order button:', orderBtn.innerText);
+          await sleep(1500); // calm delay
+          orderBtn.click();
+
+          // Notify parent window
+          try {
+            window.top.postMessage({ type: 'EPIC_CLAIMER_ORDER_CLICKED' }, '*');
+          } catch (e) {}
+          return;
+        }
+
+        // 3. Check for thank you / confirmation text
+        const bodyText = document.body ? document.body.innerText : '';
+        if (bodyText.includes('Thank you') || bodyText.includes('Order Complete')) {
+          try {
+            window.top.postMessage({ type: 'EPIC_CLAIMER_ORDER_COMPLETED' }, '*');
+          } catch (e) {}
+          return;
+        }
+
+        await sleep(DELAY_CHECKOUT_POLL);
+      }
+    }
+
+    // Start iframe observer
+    setTimeout(handleIframeCheckout, 1500);
+    return; // Exit script for iframes!
+  }
+
+  // ==========================================
+  // TOP-LEVEL WINDOW HANDLER (Main Controller)
+  // ==========================================
+
+  // Listen for iframe messages
+  window.addEventListener('message', (event) => {
+    if (!event.data || !event.data.type) return;
+    if (event.data.type === 'EPIC_CLAIMER_ORDER_CLICKED') {
+      updateHUDStatus('📝 Order placed inside checkout frame! Waiting for confirmation...');
+    } else if (event.data.type === 'EPIC_CLAIMER_ORDER_COMPLETED') {
+      updateHUDStatus('🎉 Order confirmed in checkout frame!');
+    }
+  });
+
+  // Floating HUD UI
   function createHUD() {
     if (document.getElementById('epic-claimer-hud')) return;
 
@@ -48,17 +134,17 @@
         position: fixed;
         bottom: 24px;
         right: 24px;
-        z-index: 999999;
+        z-index: 9999999;
         background: rgba(18, 18, 26, 0.95);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(51, 204, 255, 0.4);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(51, 204, 255, 0.5);
         border-radius: 14px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 15px rgba(51, 204, 255, 0.2);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.8), 0 0 15px rgba(51, 204, 255, 0.2);
         padding: 16px 20px;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         color: #f0f0f0;
-        min-width: 290px;
+        min-width: 300px;
         max-width: 380px;
         transition: all 0.3s ease;
       ">
@@ -83,7 +169,6 @@
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            transition: opacity 0.2s;
           ">▶ Start Auto-Claim</button>
           <button id="epic-hud-stop" style="
             padding: 8px 12px;
@@ -119,7 +204,7 @@
     if (spinnerEl) spinnerEl.style.display = showSpinner ? 'inline-block' : 'none';
   }
 
-  // Step 1: Scan for free games on Store / Free Games hub
+  // Step 1: Scan for free games on the Free Games / Store Hub
   async function scanFreeGamesPage() {
     updateHUDStatus('🔍 Scanning for weekly free games...');
     await sleep(DELAY_PAGE_LOAD);
@@ -132,8 +217,7 @@
       if (!href) continue;
 
       const fullUrl = new URL(href, window.location.origin).href;
-      // Look at card text or surrounding container
-      const card = link.closest('[data-component="FreeGamesCard"]') || link.closest('div') || link;
+      const card = link.closest('[data-component="FreeGamesCard"]') || link.closest('div[class*="Card"]') || link.closest('div') || link;
       const text = card.innerText || '';
 
       const isFreeNow = text.includes('Free Now') || text.includes('FREE NOW') || text.includes('100%');
@@ -160,13 +244,13 @@
       active: true,
       queue: candidates,
       currentIndex: 0,
-      claimed: []
+      status: 'navigating'
     };
     setState(state);
     window.location.href = candidates[0];
   }
 
-  // Step 2: Handle individual game page
+  // Step 2: Handle individual product page
   async function handleGamePage(state) {
     const gameIndex = state.currentIndex + 1;
     const totalGames = state.queue.length;
@@ -176,7 +260,7 @@
 
     // 1. Check Age Gate / Content Warning
     const continueBtn = Array.from(document.querySelectorAll('button, a')).find(el => {
-      const t = el.innerText.trim().toLowerCase();
+      const t = (el.innerText || '').trim().toLowerCase();
       return t === 'continue' || t === 'view product' || t === 'yes';
     });
 
@@ -187,88 +271,103 @@
     }
 
     // 2. Check if already owned
-    const bodyText = document.body.innerText;
-    const isOwned = bodyText.includes('In Library') || bodyText.includes('IN LIBRARY');
-
-    // 3. Find the "GET" button
-    const getButton = Array.from(document.querySelectorAll('button')).find(btn => {
-      const text = btn.innerText.trim().toUpperCase();
-      const testId = btn.getAttribute('data-testid') || '';
-      return (text === 'GET' || text === 'Get' || testId.includes('purchase-cta')) && !btn.disabled && !text.includes('IN LIBRARY');
-    });
-
-    if (!getButton) {
-      if (isOwned) {
-        updateHUDStatus(`✅ <b>Game ${gameIndex}/${totalGames}</b> already in library! Moving to next...`);
-      } else {
-        updateHUDStatus(`⚠️ Could not find active "GET" button (may be owned or unavailable). Advancing...`);
-      }
+    const pageText = document.body ? document.body.innerText : '';
+    if (pageText.includes('In Library') || pageText.includes('IN LIBRARY')) {
+      updateHUDStatus(`✅ <b>Game ${gameIndex}/${totalGames}</b> already in library! Moving to next...`);
       await sleep(DELAY_BETWEEN_ACTIONS);
       advanceQueue(state);
       return;
     }
 
-    // Click GET
-    updateHUDStatus(`🛒 Clicking <b>GET</b> button (calm pace)...`);
+    // 3. Find the "GET" button on the game page
+    const getButton = Array.from(document.querySelectorAll('button')).find(btn => {
+      const text = (btn.innerText || '').trim().toUpperCase();
+      const testId = btn.getAttribute('data-testid') || '';
+      const isGet = (text === 'GET' || text === 'Get' || testId.includes('purchase-cta'));
+      return isGet && !btn.disabled && !text.includes('IN LIBRARY');
+    });
+
+    if (!getButton) {
+      updateHUDStatus(`⚠️ Could not find "GET" button (may already be in library). Advancing...`);
+      await sleep(DELAY_BETWEEN_ACTIONS);
+      advanceQueue(state);
+      return;
+    }
+
+    // Click GET calmly
+    updateHUDStatus(`🛒 Clicking <b>GET</b> button...`);
     getButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
     await sleep(1000);
     getButton.click();
 
-    updateHUDStatus(`⏳ Waiting for checkout dialog to load...`);
-    await sleep(DELAY_CHECKOUT);
+    updateHUDStatus(`⏳ Waiting for checkout overlay / dialog...`);
+    await sleep(3000);
 
-    // 4. Handle Checkout Modal / Iframe / Place Order
-    await handleCheckoutFlow(state);
+    // 4. Handle the checkout overlay (top window + iframe checking)
+    await monitorAndCompleteCheckout(state);
   }
 
-  async function handleCheckoutFlow(state) {
-    const maxRetries = 15;
-    let retries = 0;
+  // Step 3: Monitor Checkout and wait for completion
+  async function monitorAndCompleteCheckout(state) {
+    let secondsElapsed = 0;
+    const timeoutSeconds = 40; // Wait up to 40 seconds for checkout to finish
 
-    while (retries < maxRetries) {
-      retries++;
+    while (secondsElapsed < timeoutSeconds) {
+      secondsElapsed += 1.5;
 
-      // Check EULA / Email agreement checkboxes if any
-      const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-      for (const cb of checkboxes) {
-        if (!cb.checked && (cb.id?.includes('agree') || cb.name?.includes('agree') || cb.closest('label')?.innerText.includes('agree'))) {
-          cb.click();
-          await sleep(500);
-        }
-      }
-
-      // Look for "Place Order" button
-      const placeOrderBtn = Array.from(document.querySelectorAll('button')).find(btn => {
-        const text = btn.innerText.trim().toUpperCase();
-        const testId = btn.getAttribute('data-testid') || '';
-        return (text === 'PLACE ORDER' || text === 'Place Order' || testId.includes('purchase-button') || btn.classList.contains('payment-btn')) && !btn.disabled;
+      // 1. Check top-level DOM for Place Order / Add to Library buttons
+      const topButtons = Array.from(document.querySelectorAll('button, a, input[type="button"]'));
+      const orderBtn = topButtons.find(b => {
+        const text = (b.innerText || b.value || '').trim().toUpperCase();
+        const testId = b.getAttribute('data-testid') || '';
+        return (text.includes('PLACE ORDER') || 
+                text.includes('ADD TO LIBRARY') || 
+                text.includes('CONFIRM ORDER') || 
+                testId.includes('purchase-button') ||
+                b.classList.contains('payment-btn')) && !b.disabled;
       });
 
-      if (placeOrderBtn) {
-        updateHUDStatus(`📝 Found <b>Place Order</b> button! Finalizing free claim...`);
-        await sleep(1500); // polite pause
-        placeOrderBtn.click();
+      if (orderBtn) {
+        updateHUDStatus(`📝 Found <b>${orderBtn.innerText || 'Place Order'}</b> button! Finalizing...`);
+        // Check agreement checkboxes in top level
+        const cbs = document.querySelectorAll('input[type="checkbox"]');
+        for (const cb of cbs) {
+          if (!cb.checked) cb.click();
+        }
+        await sleep(1500); // calm pace
+        orderBtn.click();
         updateHUDStatus(`🎉 Order placed! Waiting for confirmation...`);
-        await sleep(4500);
-
-        state.claimed.push(window.location.pathname);
+        await sleep(5000);
         advanceQueue(state);
         return;
       }
 
-      // Check if order already went through or redirected back
-      if (document.body.innerText.includes('Thank you for buying') || document.body.innerText.includes('Thank you for your order')) {
+      // 2. Check if purchase confirmation / thank you screen is visible
+      const bodyText = document.body ? document.body.innerText : '';
+      if (bodyText.includes('Thank you for buying') || 
+          bodyText.includes('Thank you for your order') || 
+          bodyText.includes('Order Complete')) {
         updateHUDStatus(`🎉 Purchase confirmed! Moving to next game...`);
         await sleep(DELAY_BETWEEN_ACTIONS);
-        state.claimed.push(window.location.pathname);
         advanceQueue(state);
         return;
       }
 
-      await sleep(1000);
+      // 3. Check if the page reverted to "In Library"
+      const inLibraryBtn = topButtons.find(b => (b.innerText || '').trim().toUpperCase().includes('IN LIBRARY'));
+      if (inLibraryBtn && secondsElapsed > 8) {
+        updateHUDStatus(`✅ Game is now marked In Library! Moving to next...`);
+        await sleep(DELAY_BETWEEN_ACTIONS);
+        advanceQueue(state);
+        return;
+      }
+
+      updateHUDStatus(`⏳ Waiting for checkout completion (${Math.round(secondsElapsed)}s / ${timeoutSeconds}s)...`);
+      await sleep(1500);
     }
 
-    updateHUDStatus(`⚠️ Checkout dialog timed out or manual confirmation needed. Moving to next...`);
+    // If reached here, either completed or manual intervention was done
+    updateHUDStatus(`⚠️ Proceeding to next game in queue...`);
     await sleep(DELAY_BETWEEN_ACTIONS);
     advanceQueue(state);
   }
@@ -283,7 +382,7 @@
       clearState();
       setTimeout(() => {
         window.location.href = 'https://store.epicgames.com/en-US/free-games';
-      }, 3000);
+      }, 3500);
     }
   }
 
@@ -309,7 +408,7 @@
     }
   }
 
-  // Auto-init on page load
+  // Auto-init on top-level window load
   window.addEventListener('load', () => {
     setTimeout(() => {
       createHUD();
@@ -317,7 +416,7 @@
       if (state.active) {
         startClaimProcess(false);
       } else if (window.location.pathname.includes('/free-games')) {
-        updateHUDStatus('✨ On Free Games page. Starting scan in 2 seconds...');
+        updateHUDStatus('✨ On Free Games page. Starting auto-claim in 2s...');
         setTimeout(() => startClaimProcess(true), 2000);
       }
     }, 1500);
