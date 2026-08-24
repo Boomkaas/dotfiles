@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Twitch Drops Auto-Claimer (DST & DBD Priority)
 // @namespace    https://github.com/Boomkaas/dotfiles
-// @version      1.4.0
-// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight. Stays on the Inventory page with a mini overlay stream player, auto-claims, reloads on calculated timer (+5m buffer), and closes when finished.
+// @version      1.4.1
+// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight. Stays on the Inventory page with a mini overlay stream player, auto-claims, reloads on calculated timer (+5m buffer), and closes only when all drops are completed.
 // @author       Peng
 // @match        https://www.twitch.tv/*
 // @grant        GM_closeTab
@@ -28,7 +28,7 @@
 
   const STORAGE_KEY = 'twitch_drops_claimer_state';
   const CHECK_INTERVAL = 2000;
-  const EXTRA_BUFFER_MINUTES = 5; // Extra 5 minutes so watch time is guaranteed
+  const EXTRA_BUFFER_MINUTES = 5; // Extra 5 minutes buffer
 
   const TARGET_GAMES = [
     {
@@ -234,7 +234,6 @@
         }
       });
     } else {
-      // Update iframe source if channel changed
       const iframe = document.getElementById('twitch-embed-player');
       const title = document.getElementById('mini-stream-title');
       if (iframe && !iframe.src.includes(`channel=${channelName}`)) {
@@ -445,7 +444,7 @@
 
     const pageText = document.body ? document.body.innerText.toLowerCase() : '';
 
-    // If no channel is attached yet, find one first
+    // If no channel is attached yet, find one first from campaigns
     if (!state.currentChannel) {
       updateHUDStatus('🔍 No stream attached. Finding active stream...');
       await sleep(2000);
@@ -456,59 +455,19 @@
     // Attach Mini Stream Player Overlay in bottom-left
     createMiniStreamOverlay(state.currentChannel);
 
-    // 1. Check Priority 1: Don't Starve Together
-    const dstGame = TARGET_GAMES[0];
-    const isDstPresent = dstGame.aliases.some(a => pageText.includes(a));
-    const isDstFullyDone = pageText.includes("don't starve together") && (pageText.includes('100%') || pageText.includes('all rewards claimed')) && !pageText.includes('remaining');
+    // Parse timing details from the inventory page
+    const timing = parseWatchTimeAndProgress(pageText);
 
-    if (isDstPresent && !isDstFullyDone) {
-      const timing = parseWatchTimeAndProgress(pageText);
-      const targetEndTime = Date.now() + (timing.finalWaitMinutes * 60 * 1000);
-
-      state.currentGame = dstGame;
-      state.targetEndTime = targetEndTime;
-      state.calculatedWaitMinutes = timing.finalWaitMinutes;
-      state.progressPercent = timing.percent;
+    // If targetEndTime is not yet set or in the past, calculate it (+5m buffer)
+    if (!state.targetEndTime || state.targetEndTime <= Date.now()) {
+      state.calculatedWaitMinutes = timing.finalWaitMinutes || 65;
+      state.targetEndTime = Date.now() + (state.calculatedWaitMinutes * 60 * 1000);
+      state.progressPercent = timing.percent || 0;
       setState(state);
-
-      runInventoryWatchdog(state);
-      return;
     }
 
-    // 2. Check Priority 2: Dead by Daylight
-    const dbdGame = TARGET_GAMES[1];
-    const isDbdPresent = dbdGame.aliases.some(a => pageText.includes(a));
-    const isDbdFullyDone = pageText.includes('dead by daylight') && (pageText.includes('100%') || pageText.includes('all rewards claimed')) && !pageText.includes('remaining');
-
-    if (isDbdPresent && !isDbdFullyDone) {
-      // If we need to switch channel to DBD
-      if (state.currentGame?.slug !== dbdGame.slug) {
-        state.currentGame = dbdGame;
-        state.currentChannel = null;
-        setState(state);
-        updateHUDStatus(`⏳ DST complete! Switching stream to <b>${dbdGame.name}</b>...`);
-        await sleep(2000);
-        window.location.href = `https://www.twitch.tv/directory/category/${dbdGame.slug}?filter=drops`;
-        return;
-      }
-
-      const timing = parseWatchTimeAndProgress(pageText);
-      const targetEndTime = Date.now() + (timing.finalWaitMinutes * 60 * 1000);
-
-      state.currentGame = dbdGame;
-      state.targetEndTime = targetEndTime;
-      state.calculatedWaitMinutes = timing.finalWaitMinutes;
-      state.progressPercent = timing.percent;
-      setState(state);
-
-      runInventoryWatchdog(state);
-      return;
-    }
-
-    // If both DST and DBD are finished
-    updateHUDStatus('🎉 <b>All drops for DST & DBD have been claimed!</b> Closing window in 4s...', false);
-    clearState();
-    closeTab(4000);
+    // Keep watching on inventory page — NEVER close while streaming!
+    runInventoryWatchdog(state);
   }
 
   // Watchdog loop on Inventory Page (Updates countdown & reloads when timer expires)
@@ -523,6 +482,7 @@
       const remainingMs = Math.max(0, state.targetEndTime - now);
       const clockTarget = formatClockTime(state.targetEndTime);
 
+      // When timer completes -> reload inventory to claim & re-evaluate
       if (remainingMs <= 0) {
         updateHUDStatus('⏰ <b>Calculated watch time complete!</b> Reloading inventory to claim reward...');
         setTimeout(() => {
@@ -554,7 +514,7 @@
     } else if (path.includes('/drops/inventory')) {
       handleInventoryPage(state);
     } else {
-      // If user is on a channel page directly, redirect to inventory with this channel
+      // If user navigates to a channel directly, attach it and go to inventory
       const channel = path.replace(/\//g, '');
       if (channel && !path.startsWith('/directory') && !path.startsWith('/downloads')) {
         state.currentChannel = channel;
