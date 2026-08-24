@@ -7,6 +7,9 @@ let
   anti = pkgs.writeShellScriptBin "anti" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/anti "$@"
   '';
+  epic = pkgs.writeShellScriptBin "epic" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/epic "$@"
+  '';
   gfn = pkgs.writeShellScriptBin "gfn" ''
     nohup flatpak run com.nvidia.geforcenow > /dev/null 2>&1 &
   '';
@@ -178,6 +181,7 @@ in
     roblox
     controlbot
     anti
+    epic
 
     # Archive
     zip

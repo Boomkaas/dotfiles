@@ -178,6 +178,7 @@
 
       shellAliases = {
         nixreb = "/home/peng/Code/Dotfiles/nixos/scripts/nixreb.sh";
+        epic = "/home/peng/Code/Dotfiles/nixos/scripts/epic";
         delgar = "sudo nix-collect-garbage --delete-older-than 1d";
         c = "clear";
       };

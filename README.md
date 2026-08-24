@@ -33,6 +33,8 @@ nixos/
 │       └── xserver.nix   # Display & X11/Wayland helpers
 ├── scripts/
 │   ├── anti              # Interactive terminal wrapper around Antigravity CLI (agy)
+│   ├── epic              # Opens native Firefox to claim weekly Epic Games freebies (alias: epic)
+│   ├── epic-games-claimer.user.js # Native in-browser claimer userscript
 │   ├── nixreb.sh         # Sync dotfiles to /etc/nixos and rebuild system (alias: nixreb)
 │   ├── screenshot.sh     # Area screenshot with grim/slurp and clipboard copy
 │   ├── controlbot.sh     # PC Control Telegram bot runner
@@ -68,6 +70,12 @@ A full-featured terminal client for Google Antigravity (`agy`):
 - Session context persistence (`anti` continues previous session, `anti new` starts fresh)
 - Real-time token usage monitor (`tokens`)
 - Model selection and working directory switching on the fly
+
+### 🎁 `epic` (Epic Games Free Games Claimer)
+An in-browser auto-claimer for weekly Epic Games freebies:
+- **No Captchas / No Login Prompts:** Runs directly inside your native logged-in Firefox session.
+- **Calm Execution:** Politely navigates and taps "Get", bypasses mature content gates, and completes checkout ("Place Order") without aggressive bot behavior.
+- **Usage:** Run `epic` in any terminal to focus/open Firefox at the Free Games page.
 
 ### ⚡ `nix-ld`
 Configured in `nixos/modules/core/system.nix` to allow running unpatched foreign dynamically-linked binaries (e.g. prebuilt language servers, CLI tools) on NixOS.
