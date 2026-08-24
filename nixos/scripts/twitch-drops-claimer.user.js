@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Twitch Drops Auto-Claimer (DST & DBD Priority)
 // @namespace    https://github.com/Boomkaas/dotfiles
-// @version      1.0.0
-// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight, filters out Russian streams, auto-claims, and closes when finished.
+// @version      1.1.0
+// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight, filters out Russian streams, auto-claims, with ultra-eco resource consumption (160p, muted, low RAM/CPU/GPU/WiFi), and closes when finished.
 // @author       Peng
 // @match        https://www.twitch.tv/*
 // @grant        GM_closeTab
@@ -15,6 +15,16 @@
 
   const isTopWindow = window.self === window.top;
   if (!isTopWindow) return; // Only run in top window
+
+  // ============================================================
+  // ULTRA-ECO PRE-SEED (Forces 160p, Muted, Low-Latency off)
+  // ============================================================
+  try {
+    localStorage.setItem('video-quality', JSON.stringify({ default: '160p30' }));
+    localStorage.setItem('video-muted', JSON.stringify({ default: true }));
+    localStorage.setItem('volume', '0');
+    localStorage.setItem('lowLatency', 'false');
+  } catch (e) {}
 
   const STORAGE_KEY = 'twitch_drops_claimer_state';
   const CHECK_INTERVAL = 3000;
@@ -77,9 +87,36 @@
     }, delayMs);
   }
 
+  // ============================================================
+  // ULTRA-ECO CSS INJECTION (Drastically cuts CPU / GPU / RAM)
+  // ============================================================
+  function injectEcoStyles() {
+    if (document.getElementById('twitch-eco-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'twitch-eco-styles';
+    style.textContent = `
+      /* Disable expensive background animations & rendering */
+      .chat-room__viewer-status,
+      .chat-line__status,
+      [data-test-selector="community-points-summary"],
+      .stream-chat-header,
+      .reward-center,
+      .animated-emote__img {
+        display: none !important;
+      }
+      /* Prevent GPU scaling overhead on video element */
+      .video-player video {
+        image-rendering: pixelated !important;
+        will-change: auto !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   // Floating HUD UI
   function createHUD() {
     if (document.getElementById('twitch-drops-hud')) return;
+    injectEcoStyles();
 
     const hud = document.createElement('div');
     hud.id = 'twitch-drops-hud';
@@ -98,16 +135,19 @@
         padding: 16px 20px;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         color: #f0f0f0;
-        min-width: 310px;
-        max-width: 380px;
+        min-width: 320px;
+        max-width: 390px;
         transition: all 0.3s ease;
       ">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 20px;">🟣</span>
             <span style="font-weight: 700; font-size: 14px; letter-spacing: 0.5px; color: #a970ff;">TWITCH DROPS CLAIMER</span>
           </div>
           <span id="tdrops-spinner" style="font-size: 14px; animation: tdrops-spin 2s linear infinite;">⏳</span>
+        </div>
+        <div style="display: inline-block; padding: 2px 8px; border-radius: 6px; background: rgba(0, 200, 83, 0.15); border: 1px solid rgba(0, 200, 83, 0.3); color: #00e676; font-size: 11px; font-weight: 600; margin-bottom: 10px;">
+          🌿 Ultra-Eco: 160p • Muted • Low Resource
         </div>
         <div id="tdrops-status" style="font-size: 13px; color: #dedede; line-height: 1.4; margin-bottom: 12px;">
           Initializing auto-claimer...
@@ -159,6 +199,59 @@
     if (spinnerEl) spinnerEl.style.display = showSpinner ? 'inline-block' : 'none';
   }
 
+  // ============================================================
+  // ULTRA-ECO ENFORCER (160p Quality, Mute, Chat Collapse)
+  // ============================================================
+  async function enforceUltraEcoMode() {
+    // 1. Mute HTML5 video elements immediately (0% Audio CPU)
+    const videos = document.querySelectorAll('video');
+    for (const v of videos) {
+      if (!v.muted) v.muted = true;
+      if (v.volume !== 0) v.volume = 0;
+    }
+
+    // 2. Click player mute button if unmuted
+    const muteBtn = document.querySelector('button[data-a-target="player-mute-unmute-button"]');
+    const isMuted = muteBtn && muteBtn.getAttribute('aria-label')?.toLowerCase().includes('unmute');
+    if (muteBtn && !isMuted) {
+      muteBtn.click();
+      console.log('[Twitch Drops] Enforced video mute');
+    }
+
+    // 3. Set quality to 160p (Saves ~97% WiFi / Bandwidth & GPU)
+    const settingsBtn = document.querySelector('button[data-a-target="player-settings-button"]');
+    if (settingsBtn) {
+      settingsBtn.click();
+      await sleep(250);
+
+      const qualityMenuBtn = document.querySelector('button[data-a-target="player-settings-menu-item-quality"]');
+      if (qualityMenuBtn) {
+        qualityMenuBtn.click();
+        await sleep(250);
+
+        const qualityOptions = Array.from(document.querySelectorAll('[data-a-target="player-settings-submenu-quality-option"]'));
+        const lowest160p = qualityOptions.find(opt => opt.innerText.includes('160p')) || qualityOptions[qualityOptions.length - 1];
+        if (lowest160p && !lowest160p.querySelector('[data-a-target="tw-core-button-label-text"]')?.innerText.includes('160p')) {
+          lowest160p.click();
+          console.log('[Twitch Drops] Enforced 160p lowest quality');
+        }
+      }
+
+      // Close settings menu
+      if (settingsBtn.getAttribute('aria-expanded') === 'true') {
+        settingsBtn.click();
+      }
+    }
+
+    // 4. Collapse Twitch Chat (Saves massive RAM & CPU from message streaming)
+    const collapseChatBtn = document.querySelector('button[data-a-target="right-column__toggle-collapse-btn"]');
+    const isChatOpen = collapseChatBtn && collapseChatBtn.getAttribute('aria-label')?.toLowerCase().includes('collapse');
+    if (collapseChatBtn && isChatOpen) {
+      collapseChatBtn.click();
+      console.log('[Twitch Drops] Collapsed live chat to save RAM & CPU');
+    }
+  }
+
   // Auto-click point bonus & drop buttons on any active page
   function autoClaimButtons() {
     // 1. Channel Points Bonus Box
@@ -194,10 +287,9 @@
     updateHUDStatus('🔍 Scanning active campaigns for <b>DST</b> & <b>DBD</b>...');
     await sleep(4000);
 
-    const cards = Array.from(document.querySelectorAll('[data-test-selector="DropsCampaignInProgressDescription"], [class*="DropsCampaignCard"]'));
     const pageText = document.body.innerText.toLowerCase();
 
-    // Check Priority 1: Don't Starve Together
+    // Check Priority 1: Don't Starve Together, Priority 2: Dead by Daylight
     let targetGame = null;
     for (const game of TARGET_GAMES) {
       const isAvailable = game.aliases.some(alias => pageText.includes(alias));
@@ -250,7 +342,7 @@
         continue;
       }
 
-      // Valid stream found!
+      // Valid non-Russian stream found!
       chosenUrl = new URL(href, window.location.origin).href;
       chosenTitle = text.split('\n')[0] || href;
       break;
@@ -275,7 +367,7 @@
       return;
     }
 
-    updateHUDStatus(`📺 Found stream: <b>${chosenTitle}</b>. Joining stream...`);
+    updateHUDStatus(`📺 Found stream: <b>${chosenTitle}</b>. Joining in Ultra-Eco mode...`);
     state.currentStreamer = chosenUrl;
     setState(state);
 
@@ -283,21 +375,15 @@
     window.location.href = chosenUrl;
   }
 
-  // 3. STREAM WATCHING & MONITORING
+  // 3. STREAM WATCHING & MONITORING (Ultra-Eco Active)
   async function handleStreamPage(state) {
     const gameName = state.currentGame ? state.currentGame.name : 'Target Game';
     const channelName = window.location.pathname.replace(/\//g, '');
-    updateHUDStatus(`👀 Watching <b>${channelName}</b> for <b>${gameName}</b> drops...`);
+    updateHUDStatus(`👀 Watching <b>${channelName}</b> for <b>${gameName}</b> drops (🌿 Ultra-Eco)...`);
 
-    // Auto-mute stream to be quiet in background
-    setTimeout(() => {
-      const muteBtn = document.querySelector('button[data-a-target="player-mute-unmute-button"]');
-      const isMuted = muteBtn && muteBtn.getAttribute('aria-label')?.includes('Unmute');
-      if (muteBtn && !isMuted) {
-        muteBtn.click();
-        console.log('[Twitch Drops] Muted stream video');
-      }
-    }, 5000);
+    // Enforce Eco settings on stream start
+    setTimeout(enforceUltraEcoMode, 3000);
+    setTimeout(enforceUltraEcoMode, 8000);
 
     // Watchdog loop
     setInterval(() => {
