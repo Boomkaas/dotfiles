@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Twitch Drops Auto-Claimer (DST & DBD Priority)
 // @namespace    https://github.com/Boomkaas/dotfiles
-// @version      1.3.0
-// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight, filters out Russian streams, calculates exact watch time (+5m buffer), stays on stream without periodic interruptions, auto-claims, with ultra-eco mode (160p, muted), and closes only when all drops are completed.
+// @version      1.4.0
+// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight. Stays on the Inventory page with a mini overlay stream player, auto-claims, reloads on calculated timer (+5m buffer), and closes when finished.
 // @author       Peng
 // @match        https://www.twitch.tv/*
 // @grant        GM_closeTab
@@ -52,14 +52,13 @@
       return JSON.parse(sessionStorage.getItem(STORAGE_KEY)) || {
         active: false,
         currentGame: null,
-        currentStreamer: null,
+        currentChannel: null,
         targetEndTime: null,
-        durationMinutes: 60,
-        progressPercent: 0,
-        calculatedWaitMinutes: 65
+        calculatedWaitMinutes: 65,
+        progressPercent: 0
       };
     } catch {
-      return { active: false, currentGame: null, currentStreamer: null, targetEndTime: null, durationMinutes: 60, progressPercent: 0, calculatedWaitMinutes: 65 };
+      return { active: false, currentGame: null, currentChannel: null, targetEndTime: null, calculatedWaitMinutes: 65, progressPercent: 0 };
     }
   }
 
@@ -89,13 +88,10 @@
     }, delayMs);
   }
 
-  // ============================================================
-  // TIME & PERCENTAGE PARSER
-  // ============================================================
+  // Parse total duration and progress percentage from inventory/campaign text
   function parseWatchTimeAndProgress(containerText) {
     const text = containerText.toLowerCase();
 
-    // 1. Total Required Time
     let totalMinutes = 60; // default 1 hour
     const hourMatch = text.match(/watch for (\d+)\s*(?:hours?|hrs?|h)/i);
     const minMatch = text.match(/watch for (\d+)\s*(?:minutes?|mins?|m)/i);
@@ -106,14 +102,12 @@
       totalMinutes = parseInt(minMatch[1], 10);
     }
 
-    // 2. Progress Percentage
     let percent = 0;
     const percentMatch = text.match(/(\d+)%/);
     if (percentMatch) {
       percent = Math.min(100, Math.max(0, parseInt(percentMatch[1], 10)));
     }
 
-    // 3. Calculate remaining minutes + 5 minute buffer
     const remainingMinutes = Math.max(1, Math.ceil(totalMinutes * (1 - (percent / 100))));
     const finalWaitMinutes = remainingMinutes + EXTRA_BUFFER_MINUTES;
 
@@ -163,7 +157,94 @@
     document.head.appendChild(style);
   }
 
-  // Floating HUD UI
+  // ============================================================
+  // MINI-STREAM OVERLAY PLAYER (Embedded directly in Inventory)
+  // ============================================================
+  function createMiniStreamOverlay(channelName) {
+    if (!channelName) return;
+    let container = document.getElementById('twitch-mini-stream-overlay');
+
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'twitch-mini-stream-overlay';
+      container.innerHTML = `
+        <div style="
+          position: fixed;
+          bottom: 24px;
+          left: 24px;
+          z-index: 999998;
+          width: 320px;
+          height: 195px;
+          background: rgba(15, 14, 23, 0.95);
+          border: 1px solid rgba(145, 70, 255, 0.5);
+          border-radius: 14px;
+          box-shadow: 0 12px 35px rgba(0, 0, 0, 0.85), 0 0 15px rgba(145, 70, 255, 0.3);
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          transition: all 0.3s ease;
+        ">
+          <div style="
+            background: rgba(25, 20, 40, 0.95);
+            padding: 6px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(145, 70, 255, 0.3);
+          ">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: #a970ff;">
+              <span>🔴</span>
+              <span id="mini-stream-title">Live: ${channelName}</span>
+              <span style="font-size: 10px; color: #00e676; margin-left: 4px;">[160p Muted]</span>
+            </div>
+            <button id="mini-stream-toggle" style="
+              background: none;
+              border: none;
+              color: #aaa;
+              font-size: 12px;
+              cursor: pointer;
+              padding: 0 4px;
+            ">_</button>
+          </div>
+          <div id="mini-stream-iframe-wrapper" style="flex: 1; width: 100%; height: 100%; background: #000;">
+            <iframe
+              id="twitch-embed-player"
+              src="https://player.twitch.tv/?channel=${channelName}&parent=www.twitch.tv&muted=true"
+              style="width: 100%; height: 100%; border: none;"
+              allowfullscreen="false">
+            </iframe>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(container);
+
+      // Minimize / Expand toggle
+      let minimized = false;
+      document.getElementById('mini-stream-toggle').addEventListener('click', () => {
+        minimized = !minimized;
+        const wrapper = document.getElementById('mini-stream-iframe-wrapper');
+        const box = container.firstElementChild;
+        if (minimized) {
+          wrapper.style.display = 'none';
+          box.style.height = '34px';
+        } else {
+          wrapper.style.display = 'block';
+          box.style.height = '195px';
+        }
+      });
+    } else {
+      // Update iframe source if channel changed
+      const iframe = document.getElementById('twitch-embed-player');
+      const title = document.getElementById('mini-stream-title');
+      if (iframe && !iframe.src.includes(`channel=${channelName}`)) {
+        iframe.src = `https://player.twitch.tv/?channel=${channelName}&parent=www.twitch.tv&muted=true`;
+      }
+      if (title) title.innerText = `Live: ${channelName}`;
+    }
+  }
+
+  // Floating HUD UI (Bottom-Right)
   function createHUD() {
     if (document.getElementById('twitch-drops-hud')) return;
     injectEcoStyles();
@@ -197,13 +278,13 @@
           <span id="tdrops-spinner" style="font-size: 14px; animation: tdrops-spin 2s linear infinite;">⏳</span>
         </div>
         <div style="display: inline-block; padding: 2px 8px; border-radius: 6px; background: rgba(0, 200, 83, 0.15); border: 1px solid rgba(0, 200, 83, 0.3); color: #00e676; font-size: 11px; font-weight: 600; margin-bottom: 10px;">
-          🌿 Ultra-Eco: 160p • Muted • Calculated Timer
+          🌿 Ultra-Eco: Inventory Overlay • Auto-Reload
         </div>
         <div id="tdrops-status" style="font-size: 13px; color: #dedede; line-height: 1.4; margin-bottom: 12px;">
           Initializing auto-claimer...
         </div>
         <div style="display: flex; gap: 8px;">
-          <button id="tdrops-btn-checknow" style="
+          <button id="tdrops-btn-reloadnow" style="
             flex: 1;
             padding: 8px 12px;
             background: linear-gradient(135deg, #9146ff, #772ce8);
@@ -213,7 +294,7 @@
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-          ">⚡ Check Inventory</button>
+          ">🔄 Reload & Check Now</button>
           <button id="tdrops-btn-stop" style="
             padding: 8px 12px;
             background: rgba(255, 255, 255, 0.1);
@@ -231,13 +312,15 @@
     `;
     document.body.appendChild(hud);
 
-    document.getElementById('tdrops-btn-checknow').addEventListener('click', () => {
-      updateHUDStatus('🔄 Manual check: opening inventory...');
-      window.location.href = 'https://www.twitch.tv/drops/inventory';
+    document.getElementById('tdrops-btn-reloadnow').addEventListener('click', () => {
+      updateHUDStatus('🔄 Reloading page to claim available drops...');
+      window.location.reload();
     });
 
     document.getElementById('tdrops-btn-stop').addEventListener('click', () => {
       clearState();
+      const miniOverlay = document.getElementById('twitch-mini-stream-overlay');
+      if (miniOverlay) miniOverlay.remove();
       updateHUDStatus('⏹ Auto-claimer stopped.', false);
     });
   }
@@ -249,66 +332,8 @@
     if (spinnerEl) spinnerEl.style.display = showSpinner ? 'inline-block' : 'none';
   }
 
-  // ============================================================
-  // ULTRA-ECO ENFORCER (160p, Mute, Chat Collapse)
-  // ============================================================
-  async function enforceUltraEcoMode() {
-    // 1. Mute video elements
-    const videos = document.querySelectorAll('video');
-    for (const v of videos) {
-      if (!v.muted) v.muted = true;
-      if (v.volume !== 0) v.volume = 0;
-    }
-
-    // 2. Mute player button
-    const muteBtn = document.querySelector('button[data-a-target="player-mute-unmute-button"]');
-    const isMuted = muteBtn && muteBtn.getAttribute('aria-label')?.toLowerCase().includes('unmute');
-    if (muteBtn && !isMuted) {
-      muteBtn.click();
-      console.log('[Twitch Drops] Enforced video mute');
-    }
-
-    // 3. Set quality to 160p
-    const settingsBtn = document.querySelector('button[data-a-target="player-settings-button"]');
-    if (settingsBtn) {
-      settingsBtn.click();
-      await sleep(250);
-
-      const qualityMenuBtn = document.querySelector('button[data-a-target="player-settings-menu-item-quality"]');
-      if (qualityMenuBtn) {
-        qualityMenuBtn.click();
-        await sleep(250);
-
-        const qualityOptions = Array.from(document.querySelectorAll('[data-a-target="player-settings-submenu-quality-option"]'));
-        const lowest160p = qualityOptions.find(opt => opt.innerText.includes('160p')) || qualityOptions[qualityOptions.length - 1];
-        if (lowest160p && !lowest160p.querySelector('[data-a-target="tw-core-button-label-text"]')?.innerText.includes('160p')) {
-          lowest160p.click();
-          console.log('[Twitch Drops] Enforced 160p lowest quality');
-        }
-      }
-
-      if (settingsBtn.getAttribute('aria-expanded') === 'true') {
-        settingsBtn.click();
-      }
-    }
-
-    // 4. Collapse Twitch Chat
-    const collapseChatBtn = document.querySelector('button[data-a-target="right-column__toggle-collapse-btn"]');
-    const isChatOpen = collapseChatBtn && collapseChatBtn.getAttribute('aria-label')?.toLowerCase().includes('collapse');
-    if (collapseChatBtn && isChatOpen) {
-      collapseChatBtn.click();
-      console.log('[Twitch Drops] Collapsed live chat to save RAM & CPU');
-    }
-  }
-
-  // Auto-click in-chat bonuses and claim popups
+  // Auto-click point bonus & claim buttons on page
   function autoClaimButtons() {
-    const bonusBtn = document.querySelector('.claimable-bonus__icon, [aria-label*="Claim Bonus"]');
-    if (bonusBtn) {
-      bonusBtn.click();
-      console.log('[Twitch Drops] Claimed channel bonus points!');
-    }
-
     const claimButtons = Array.from(document.querySelectorAll('button')).filter(btn => {
       const text = (btn.innerText || '').trim().toUpperCase();
       const testId = btn.getAttribute('data-test-selector') || '';
@@ -320,31 +345,20 @@
       console.log('[Twitch Drops] Clicked Drop Claim button!');
       updateHUDStatus('🎁 <b>Claimed a Drop reward!</b>');
     }
-
-    const matureBtn = document.querySelector('[data-a-target="player-overlay-mature-accept"], button[data-a-target="content-classification-gate-overlay-start-watching-button"]');
-    if (matureBtn) {
-      matureBtn.click();
-      console.log('[Twitch Drops] Dismissed mature content gate');
-    }
   }
 
-  // 1. CAMPAIGNS PAGE HANDLER
+  // 1. CAMPAIGNS HUB: Find active target game
   async function handleCampaignsPage() {
     updateHUDStatus('🔍 Scanning active campaigns for <b>DST</b> & <b>DBD</b>...');
     await sleep(4500);
 
     const pageText = document.body ? document.body.innerText.toLowerCase() : '';
 
-    // Check Priority 1: DST, Priority 2: DBD
     let targetGame = null;
-    let timing = { totalMinutes: 60, percent: 0, finalWaitMinutes: 65 };
-
     for (const game of TARGET_GAMES) {
       const isAvailable = game.aliases.some(alias => pageText.includes(alias));
       if (isAvailable) {
         targetGame = game;
-        // Parse time details from surrounding text
-        timing = parseWatchTimeAndProgress(pageText);
         break;
       }
     }
@@ -356,15 +370,12 @@
       return;
     }
 
-    const targetEndTime = Date.now() + (timing.finalWaitMinutes * 60 * 1000);
-    updateHUDStatus(`🎯 Found <b>${targetGame.name}</b> (progress: ${timing.percent}%, calculated timer: ${timing.finalWaitMinutes}m). Finding stream...`);
-
+    updateHUDStatus(`🎯 Found <b>${targetGame.name}</b> campaign! Finding non-Russian stream...`);
     const state = {
       active: true,
       currentGame: targetGame,
-      targetEndTime: targetEndTime,
-      calculatedWaitMinutes: timing.finalWaitMinutes,
-      progressPercent: timing.percent
+      currentChannel: null,
+      targetEndTime: null
     };
     setState(state);
 
@@ -372,15 +383,14 @@
     window.location.href = `https://www.twitch.tv/directory/category/${targetGame.slug}?filter=drops`;
   }
 
-  // 2. DIRECTORY STREAM SELECTION (Filter out Russian streams)
+  // 2. DIRECTORY: Pick non-Russian channel and redirect straight to Inventory
   async function handleDirectoryPage(state) {
     const game = state.currentGame || TARGET_GAMES[0];
-    updateHUDStatus(`🔎 Searching for <b>${game.name}</b> streams (excluding Russian)...`);
+    updateHUDStatus(`🔎 Selecting <b>${game.name}</b> stream (excluding Russian)...`);
     await sleep(4500);
 
     const streamCards = Array.from(document.querySelectorAll('[data-target="directory-game__card"], [data-target="directory-container"] [data-a-target^="preview-card-image-link"], div[class*="ScTower"] article, article'));
-    let chosenUrl = null;
-    let chosenTitle = '';
+    let chosenChannel = null;
 
     for (const card of streamCards) {
       const text = card.innerText || '';
@@ -391,112 +401,62 @@
       if (!href || href.startsWith('/directory') || href.includes('/videos')) continue;
 
       if (RU_REGEX.test(text) || RU_REGEX.test(href)) {
-        console.log('[Twitch Drops] Skipping Russian stream:', href);
         continue;
       }
 
-      chosenUrl = new URL(href, window.location.origin).href;
-      chosenTitle = text.split('\n')[0] || href;
+      chosenChannel = href.replace(/\//g, '');
       break;
     }
 
-    if (!chosenUrl) {
+    if (!chosenChannel) {
       const anyLinks = Array.from(document.querySelectorAll('a[data-a-target="preview-card-channel-link"]'));
       for (const a of anyLinks) {
         const href = a.getAttribute('href');
         if (href && !RU_REGEX.test(href) && !RU_REGEX.test(a.innerText)) {
-          chosenUrl = new URL(href, window.location.origin).href;
+          chosenChannel = href.replace(/\//g, '');
           break;
         }
       }
     }
 
-    if (!chosenUrl) {
-      updateHUDStatus('⚠️ No active non-Russian streams found with drops. Checking inventory...');
+    if (!chosenChannel) {
+      updateHUDStatus('⚠️ No active non-Russian streams found. Checking inventory...');
       await sleep(3000);
       window.location.href = 'https://www.twitch.tv/drops/inventory';
       return;
     }
 
-    // If targetEndTime is not yet calculated, set default 65 minutes
-    if (!state.targetEndTime || state.targetEndTime <= Date.now()) {
-      state.calculatedWaitMinutes = 65;
-      state.targetEndTime = Date.now() + (65 * 60 * 1000);
-    }
-
-    updateHUDStatus(`📺 Found stream: <b>${chosenTitle}</b>. Joining in Ultra-Eco mode...`);
-    state.currentStreamer = chosenUrl;
+    updateHUDStatus(`📺 Selected stream: <b>${chosenChannel}</b>. Attaching overlay to Inventory...`);
+    state.currentChannel = chosenChannel;
     setState(state);
 
     await sleep(1500);
-    window.location.href = chosenUrl;
+    window.location.href = 'https://www.twitch.tv/drops/inventory';
   }
 
-  // 3. STREAM WATCHING WITH CALCULATED TIMER
-  async function handleStreamPage(state) {
-    const gameName = state.currentGame ? state.currentGame.name : 'Target Game';
-    const channelName = window.location.pathname.replace(/\//g, '');
-
-    // If timer not set, default to 65 mins
-    if (!state.targetEndTime || state.targetEndTime <= Date.now()) {
-      state.calculatedWaitMinutes = 65;
-      state.targetEndTime = Date.now() + (65 * 60 * 1000);
-      setState(state);
-    }
-
-    // Enforce Eco settings on stream start
-    setTimeout(enforceUltraEcoMode, 3000);
-    setTimeout(enforceUltraEcoMode, 8000);
-
-    // Watchdog loop with live countdown timer
-    setInterval(() => {
-      autoClaimButtons();
-
-      const now = Date.now();
-      const remainingMs = Math.max(0, state.targetEndTime - now);
-      const clockTarget = formatClockTime(state.targetEndTime);
-
-      // Check if stream is offline
-      const isOffline = document.querySelector('.channel-status-info--offline, [data-a-target="player-overlay-offline"]');
-      if (isOffline) {
-        updateHUDStatus('⚠️ Stream went offline. Finding another non-Russian stream...');
-        if (state.currentGame) {
-          window.location.href = `https://www.twitch.tv/directory/category/${state.currentGame.slug}?filter=drops`;
-        } else {
-          window.location.href = 'https://www.twitch.tv/drops/campaigns';
-        }
-        return;
-      }
-
-      // Check if calculated timer has elapsed!
-      if (remainingMs <= 0) {
-        updateHUDStatus('⏰ <b>Calculated watch time complete!</b> Opening inventory to claim rewards and check next drop...');
-        setTimeout(() => {
-          window.location.href = 'https://www.twitch.tv/drops/inventory';
-        }, 2000);
-        return;
-      }
-
-      // Update HUD with live countdown
-      updateHUDStatus(`
-        <div>🎮 <b>${gameName}</b> (${channelName})</div>
-        <div style="margin-top: 4px; color: #a970ff; font-weight: 600;">⏳ ${formatTimeRemaining(remainingMs)} remaining (+5m buffer)</div>
-        <div style="font-size: 11px; color: #aaa; margin-top: 2px;">⏰ Next inventory check at: ${clockTarget}</div>
-      `);
-    }, CHECK_INTERVAL);
-  }
-
-  // 4. INVENTORY, REWARD CLAIMING & NEXT DROP CALCULATION
+  // 3. INVENTORY PAGE (Main Hub with Mini-Stream Overlay & Calculated Reload Timer)
   async function handleInventoryPage(state) {
-    updateHUDStatus('📦 Checking inventory, claiming drops & calculating next drop timer...');
-    await sleep(4500);
+    updateHUDStatus('📦 Loading Drops Inventory & analyzing drop progress...');
+    await sleep(4000);
 
+    // Auto-claim any finished drops on arrival
     autoClaimButtons();
-    await sleep(2500);
+    await sleep(2000);
 
     const pageText = document.body ? document.body.innerText.toLowerCase() : '';
 
-    // Check Priority 1: Don't Starve Together
+    // If no channel is attached yet, find one first
+    if (!state.currentChannel) {
+      updateHUDStatus('🔍 No stream attached. Finding active stream...');
+      await sleep(2000);
+      window.location.href = 'https://www.twitch.tv/drops/campaigns';
+      return;
+    }
+
+    // Attach Mini Stream Player Overlay in bottom-left
+    createMiniStreamOverlay(state.currentChannel);
+
+    // 1. Check Priority 1: Don't Starve Together
     const dstGame = TARGET_GAMES[0];
     const isDstPresent = dstGame.aliases.some(a => pageText.includes(a));
     const isDstFullyDone = pageText.includes("don't starve together") && (pageText.includes('100%') || pageText.includes('all rewards claimed')) && !pageText.includes('remaining');
@@ -504,7 +464,6 @@
     if (isDstPresent && !isDstFullyDone) {
       const timing = parseWatchTimeAndProgress(pageText);
       const targetEndTime = Date.now() + (timing.finalWaitMinutes * 60 * 1000);
-      updateHUDStatus(`⏳ Active drop for <b>${dstGame.name}</b> (progress: ${timing.percent}%, timer: ${timing.finalWaitMinutes}m). Resuming stream...`);
 
       state.currentGame = dstGame;
       state.targetEndTime = targetEndTime;
@@ -512,20 +471,29 @@
       state.progressPercent = timing.percent;
       setState(state);
 
-      await sleep(2500);
-      window.location.href = `https://www.twitch.tv/directory/category/${dstGame.slug}?filter=drops`;
+      runInventoryWatchdog(state);
       return;
     }
 
-    // Check Priority 2: Dead by Daylight
+    // 2. Check Priority 2: Dead by Daylight
     const dbdGame = TARGET_GAMES[1];
     const isDbdPresent = dbdGame.aliases.some(a => pageText.includes(a));
     const isDbdFullyDone = pageText.includes('dead by daylight') && (pageText.includes('100%') || pageText.includes('all rewards claimed')) && !pageText.includes('remaining');
 
     if (isDbdPresent && !isDbdFullyDone) {
+      // If we need to switch channel to DBD
+      if (state.currentGame?.slug !== dbdGame.slug) {
+        state.currentGame = dbdGame;
+        state.currentChannel = null;
+        setState(state);
+        updateHUDStatus(`⏳ DST complete! Switching stream to <b>${dbdGame.name}</b>...`);
+        await sleep(2000);
+        window.location.href = `https://www.twitch.tv/directory/category/${dbdGame.slug}?filter=drops`;
+        return;
+      }
+
       const timing = parseWatchTimeAndProgress(pageText);
       const targetEndTime = Date.now() + (timing.finalWaitMinutes * 60 * 1000);
-      updateHUDStatus(`⏳ Active drop for <b>${dbdGame.name}</b> (progress: ${timing.percent}%, timer: ${timing.finalWaitMinutes}m). Resuming stream...`);
 
       state.currentGame = dbdGame;
       state.targetEndTime = targetEndTime;
@@ -533,26 +501,42 @@
       state.progressPercent = timing.percent;
       setState(state);
 
-      await sleep(2500);
-      window.location.href = `https://www.twitch.tv/directory/category/${dbdGame.slug}?filter=drops`;
+      runInventoryWatchdog(state);
       return;
     }
 
-    // If a game was active in state, re-verify directory before stopping
-    if (state.currentGame) {
-      updateHUDStatus(`🔎 Checking if more drops exist for <b>${state.currentGame.name}</b>...`);
-      const gameToResume = state.currentGame;
-      state.targetEndTime = Date.now() + (65 * 60 * 1000);
-      setState(state);
-      await sleep(2000);
-      window.location.href = `https://www.twitch.tv/directory/category/${gameToResume.slug}?filter=drops`;
-      return;
-    }
-
-    // Everything complete!
+    // If both DST and DBD are finished
     updateHUDStatus('🎉 <b>All drops for DST & DBD have been claimed!</b> Closing window in 4s...', false);
     clearState();
     closeTab(4000);
+  }
+
+  // Watchdog loop on Inventory Page (Updates countdown & reloads when timer expires)
+  function runInventoryWatchdog(state) {
+    const gameName = state.currentGame ? state.currentGame.name : 'Target Game';
+    const channelName = state.currentChannel || 'Live Stream';
+
+    setInterval(() => {
+      autoClaimButtons();
+
+      const now = Date.now();
+      const remainingMs = Math.max(0, state.targetEndTime - now);
+      const clockTarget = formatClockTime(state.targetEndTime);
+
+      if (remainingMs <= 0) {
+        updateHUDStatus('⏰ <b>Calculated watch time complete!</b> Reloading inventory to claim reward...');
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+        return;
+      }
+
+      updateHUDStatus(`
+        <div>🎮 <b>${gameName}</b> (📺 ${channelName})</div>
+        <div style="margin-top: 4px; color: #a970ff; font-weight: 600;">⏳ ${formatTimeRemaining(remainingMs)} remaining (+5m buffer)</div>
+        <div style="font-size: 11px; color: #aaa; margin-top: 2px;">⏰ Auto-reload & claim at: ${clockTarget}</div>
+      `);
+    }, CHECK_INTERVAL);
   }
 
   // Router based on URL
@@ -569,10 +553,16 @@
       handleDirectoryPage(state);
     } else if (path.includes('/drops/inventory')) {
       handleInventoryPage(state);
-    } else if (path !== '/' && !path.startsWith('/directory') && !path.startsWith('/downloads')) {
-      handleStreamPage(state);
     } else {
-      updateHUDStatus('Ready. Click <b>"⚡ Check Inventory"</b> or visit Campaigns to start.', false);
+      // If user is on a channel page directly, redirect to inventory with this channel
+      const channel = path.replace(/\//g, '');
+      if (channel && !path.startsWith('/directory') && !path.startsWith('/downloads')) {
+        state.currentChannel = channel;
+        setState(state);
+        window.location.href = 'https://www.twitch.tv/drops/inventory';
+      } else {
+        updateHUDStatus('Ready. Click <b>"Check Drops"</b> to start.', false);
+      }
     }
   }
 
