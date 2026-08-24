@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Epic Games Store - Auto Free Games Claimer
 // @namespace    https://github.com/Boomkaas/dotfiles
-// @version      1.1.0
+// @version      1.2.0
 // @description  Automatically claims weekly free games in your native logged-in Firefox without rushing.
 // @author       Peng
 // @match        https://store.epicgames.com/*
 // @match        https://www.epicgames.com/store/*
 // @match        https://*.epicgames.com/*
-// @grant        none
+// @grant        GM_closeTab
+// @grant        window.close
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -232,8 +233,9 @@
     }
 
     if (candidates.length === 0) {
-      updateHUDStatus('✨ <b>All current free games are already in your library!</b>', false);
+      updateHUDStatus('✨ <b>All current free games are already in your library!</b> Closing in 3s...', false);
       clearState();
+      closeClaimerTab(3000);
       return;
     }
 
@@ -248,6 +250,20 @@
     };
     setState(state);
     window.location.href = candidates[0];
+  }
+
+  function closeClaimerTab(delayMs = 3000) {
+    setTimeout(() => {
+      try {
+        if (typeof GM_closeTab === 'function') {
+          GM_closeTab();
+        } else {
+          window.close();
+        }
+      } catch (e) {
+        window.close();
+      }
+    }, delayMs);
   }
 
   // Step 2: Handle individual product page
@@ -378,11 +394,9 @@
       setState(state);
       window.location.href = state.queue[state.currentIndex];
     } else {
-      updateHUDStatus('🎉 <b>All weekly free games have been claimed!</b>', false);
+      updateHUDStatus('🎉 <b>All weekly free games have been claimed!</b> Closing window in 4s...', false);
       clearState();
-      setTimeout(() => {
-        window.location.href = 'https://store.epicgames.com/en-US/free-games';
-      }, 3500);
+      closeClaimerTab(4000);
     }
   }
 
