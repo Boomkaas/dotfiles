@@ -1,8 +1,7 @@
-// ==UserScript==
 // @name         Twitch Drops Auto-Claimer (DST & DBD Priority)
 // @namespace    https://github.com/Boomkaas/dotfiles
-// @version      1.5.0
-// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight. Stays on the Inventory page with a mini overlay stream player, auto-claims, calculates exact remaining time from highest drop duration (+5m buffer), and reloads on completion.
+// @version      1.5.1
+// @description  Automates Twitch Drops for Don't Starve Together and Dead by Daylight. Stays on the Inventory page with a mini overlay stream player, auto-claims, calculates exact remaining time from highest drop duration (+1m buffer), and reloads on completion.
 // @author       Peng
 // @match        https://www.twitch.tv/*
 // @grant        GM_closeTab
@@ -28,7 +27,7 @@
 
   const STORAGE_KEY = 'twitch_drops_claimer_state';
   const CHECK_INTERVAL = 2000;
-  const EXTRA_BUFFER_MINUTES = 5; // 5 minutes safety buffer
+  const EXTRA_BUFFER_MINUTES = 1; // 1 minute safety buffer
 
   const TARGET_GAMES = [
     {
@@ -512,7 +511,7 @@
     state.targetEndTime = Date.now() + (timing.finalWaitMinutes * 60 * 1000);
     setState(state);
 
-    console.log(`[Twitch Drops] Calculation: ${timing.percent}% of ${timing.totalMinutes}m -> Remaining: ${timing.finalWaitMinutes}m (with +5m buffer)`);
+    console.log(`[Twitch Drops] Calculation: ${timing.percent}% of ${timing.totalMinutes}m -> Remaining: ${timing.finalWaitMinutes}m (with +1m buffer)`);
 
     // Run the watchdog on inventory page
     runInventoryWatchdog(state);
@@ -543,7 +542,7 @@
       updateHUDStatus(`
         <div>🎮 <b>${gameName}</b> (📺 ${channelName})</div>
         <div style="font-size: 12px; color: #cfd8dc; margin-top: 2px;">📊 Progress: <b>${state.progressPercent}% of ${totalHoursStr}</b> (${state.totalMinutes} mins)</div>
-        <div style="margin-top: 4px; color: #a970ff; font-weight: 600;">⏳ ${formatTimeRemaining(remainingMs)} remaining (+5m buffer)</div>
+        <div style="margin-top: 4px; color: #a970ff; font-weight: 600;">⏳ ${formatTimeRemaining(remainingMs)} remaining (+1m buffer)</div>
         <div style="font-size: 11px; color: #aaa; margin-top: 2px;">⏰ Auto-reload & claim at: <b>${clockTarget}</b></div>
       `);
     }, CHECK_INTERVAL);
