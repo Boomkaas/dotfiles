@@ -16,6 +16,9 @@ Personal declarative NixOS configuration flake and user environment.
 ## 📁 Repository Structure
 
 ```text
+hypr/
+├── hyprland.conf         # Hyprland compositor configuration
+└── scripts/              # Hyprland helper scripts (e.g. special workspace setup)
 nixos/
 ├── flake.nix             # Nix Flake entrypoint
 ├── flake.lock            # Locked input revisions
