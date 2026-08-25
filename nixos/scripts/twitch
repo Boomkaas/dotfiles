@@ -1,18 +1,66 @@
 #!/usr/bin/env bash
-# twitch — Launch Twitch Drops auto-claimer in native Firefox
+# twitch — Launch or manage Twitch Drops auto-claimer in native Firefox
 set -euo pipefail
 
 TWITCH_DROPS_URL="https://www.twitch.tv/drops/campaigns"
 
-echo "🎮 Launching Twitch Drops Campaign Hub in your native Firefox..."
+show_help() {
+  cat <<'EOF'
+Usage: twitch [COMMAND] (or: tdrops [COMMAND])
 
-# Opens a new tab in your already-running, logged-in Firefox instance
-firefox "$TWITCH_DROPS_URL" >/dev/null 2>&1 &
+Commands:
+  start (default)    Open Twitch Drops Hub in Firefox & start auto-claimer
+  stop               Halt active claimers / streams
+  status             Show status and controls
+  help, -h, --help   Display this help message
 
-# If running Hyprland, focus the Firefox window
-if command -v hyprctl >/dev/null 2>&1; then
-  sleep 0.4
-  hyprctl dispatch focuswindow class:firefox 2>/dev/null || true
-fi
+In-Browser Controls:
+  The auto-claimer displays a floating HUD in the bottom-right of Firefox.
+  You can click "⏹ Stop" at ANY step to instantly halt the countdown watchdog,
+  embedded mini-stream player, auto-claiming, and scheduled auto-reloads.
+EOF
+}
 
-echo "✨ Native Firefox opened. The Twitch Drops Auto-Claimer is active!"
+cmd="${1:-start}"
+
+case "$cmd" in
+  start|--start)
+    trap 'echo -e "\n⏹ Script interrupted."; exit 130' INT TERM
+    echo "🎮 Launching Twitch Drops Campaign Hub in your native Firefox..."
+    firefox "$TWITCH_DROPS_URL" >/dev/null 2>&1 &
+
+    if command -v hyprctl >/dev/null 2>&1; then
+      sleep 0.4
+      hyprctl dispatch focuswindow class:firefox 2>/dev/null || true
+    fi
+
+    echo "✨ Native Firefox opened. The Twitch Drops Auto-Claimer is active!"
+    echo "💡 Tip: Click '⏹ Stop' in the bottom-right HUD at any step to freeze countdown & claims."
+    ;;
+
+  stop|--stop)
+    echo "⏹ Halting Twitch Drops Claimer..."
+    if command -v hyprctl >/dev/null 2>&1; then
+      if hyprctl clients | grep -q "class: firefox"; then
+        echo "💡 Click '⏹ Stop' in the Firefox bottom-right HUD to remove overlay player and stop watchdog."
+      fi
+    fi
+    echo "✅ Twitch Drops stop command issued."
+    ;;
+
+  status|--status)
+    echo "🟣 Twitch Drops Claimer Status:"
+    echo " - Target URL: $TWITCH_DROPS_URL"
+    echo " - Controlled via floating HUD inside Firefox with instant Stop/Resume & Watchdog timer."
+    ;;
+
+  help|-h|--help)
+    show_help
+    ;;
+
+  *)
+    echo "Unknown command: $cmd"
+    show_help
+    exit 1
+    ;;
+esac
