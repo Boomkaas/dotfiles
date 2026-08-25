@@ -4,9 +4,6 @@ let
   controlbot = pkgs.writeShellScriptBin "controlbot" ''
     cd /home/peng/Code/PcControlBot && exec venv/bin/python -m bot.main "$@"
   '';
-  anti = pkgs.writeShellScriptBin "anti" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/anti "$@"
-  '';
   epic = pkgs.writeShellScriptBin "epic" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/epic "$@"
   '';
@@ -183,7 +180,6 @@ in
     gfn
     roblox
     controlbot
-    anti
     epic
     twitch
 

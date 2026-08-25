@@ -32,7 +32,6 @@ nixos/
 │       ├── zsh.nix       # Zsh shell configuration & plugins
 │       └── xserver.nix   # Display & X11/Wayland helpers
 ├── scripts/
-│   ├── anti              # Interactive terminal wrapper around Antigravity CLI (agy)
 │   ├── epic              # Opens native Firefox to claim weekly Epic Games freebies (alias: epic)
 │   ├── epic-games-claimer.user.js # Native in-browser Epic claimer userscript
 │   ├── twitch            # Opens native Firefox to auto-claim Twitch Drops (aliases: twitch, tdrops)
@@ -65,13 +64,6 @@ This script:
 ---
 
 ## 🛠️ Key Components & Utilities
-
-### 🤖 `anti` (Antigravity CLI Wrapper)
-A full-featured terminal client for Google Antigravity (`agy`):
-- Multi-line interactive prompts
-- Session context persistence (`anti` continues previous session, `anti new` starts fresh)
-- Real-time token usage monitor (`tokens`)
-- Model selection and working directory switching on the fly
 
 ### 🎁 `epic` (Epic Games Free Games Claimer)
 An in-browser auto-claimer for weekly Epic Games freebies:
