@@ -47,6 +47,8 @@
   ];
 
   const RU_REGEX = /(russian|русский|рус|\[ru\]|\(ru\)|ru\/|\/ru|\bru\b|\brussians\b)/i;
+  const SUB_DROP_REGEX = /(?:support[\s-_]+a[\s-_]+streamer|поддержк[а-я\s]+стример|sub[\s-_]+drop|subscriber[\s-_]+drop|subscription[\s-_]+drop|gift\s+(?:\d+\s+)?(?:subs?|subscriptions?)|purchase\s+(?:\d+\s+)?(?:subs?|subscriptions?)|subscribe\s+to\s+earn|sub\s+to\s+earn|подарите\s+подписк|купите\s+подписк|оформите\s+подписк|дроп(?:ы)?\s+за\s+подписк|саб\s+дроп)/i;
+  const WATCH_DROP_REGEX = /(?:watch\s+(?:for\s+)?(?:\d+\s*(?:hours?|hrs?|h|minutes?|mins?|m|ч|мин))|смотрите\s+(?:в\s+течение\s+)?(?:\d+\s*(?:ч(?:асов)?|мин(?:ут)?))|watch\s+\d+\s*m\s+to\s+earn|watch\s+\d+\s*h\s+to\s+earn)/i;
 
   // ============================================================
   // GLOBAL CANCELLATION & TIMER REGISTRY
@@ -568,59 +570,101 @@
   }
 
   // ============================================================
-  // CAMPAIGN & INVENTORY CLAIM STATUS CHECKER
+  // CAMPAIGN & INVENTORY CLAIM STATUS CHECKER (Excluding Sub Drops)
   // ============================================================
   function checkDSTCampaignStatus() {
-    const pageText = (document.body ? document.body.innerText : '').toLowerCase();
+    const pageText = (document.body ? document.body.innerText : '');
     const dst = TARGET_GAMES[0];
-    const hasDST = dst.aliases.some(a => pageText.includes(a)) ||
-                   dst.signatureKeywords.some(k => pageText.includes(k));
+    const hasDST = dst.aliases.some(a => pageText.toLowerCase().includes(a)) ||
+                   dst.signatureKeywords.some(k => pageText.toLowerCase().includes(k));
 
     if (!hasDST) {
-      return { found: false, allClaimed: false };
+      return { found: false, allClaimed: false, isSubDropOnly: false };
     }
 
-    // Try finding the exact DST campaign section in DOM
-    const allHeadings = Array.from(document.querySelectorAll('h3, h4, h5, h6, p, a, div[data-test-selector*="campaign"], div[class*="campaign"], div[class*="Campaign"]'));
-    let dstCard = null;
-    for (const el of allHeadings) {
-      const t = (el.textContent || '').trim().toLowerCase();
-      if (t === "don't starve together" || t === "dont starve together" || t === "dst") {
-        let parent = el;
-        for (let i = 0; i < 8 && parent; i++) {
-          if (parent.querySelectorAll('button, a, img').length >= 2 && parent.innerText.length > 60) {
-            dstCard = parent;
-            break;
-          }
-          if (parent.parentElement) parent = parent.parentElement;
-          else break;
-        }
-        if (dstCard) break;
+    // Find all potential DST campaign card containers
+    const allCampaignCards = Array.from(document.querySelectorAll('div[data-test-selector*="campaign"], div[class*="campaign"], div[class*="Campaign"], article, [data-target="campaign-card"]'));
+    const matchingCards = [];
+
+    for (const card of allCampaignCards) {
+      const text = card.innerText || '';
+      const lower = text.toLowerCase();
+      if (dst.aliases.some(a => lower.includes(a)) && text.length > 50 && text.length < 5000) {
+        matchingCards.push(card);
       }
     }
 
-    const cardText = (dstCard ? dstCard.innerText : pageText).toLowerCase();
+    // Fallback: search headings and locate containing cards
+    if (matchingCards.length === 0) {
+      const allHeadings = Array.from(document.querySelectorAll('h3, h4, h5, h6, p, a'));
+      for (const el of allHeadings) {
+        const t = (el.textContent || '').trim().toLowerCase();
+        if (t === "don't starve together" || t === "dont starve together" || t === "dst") {
+          let parent = el;
+          for (let i = 0; i < 8 && parent; i++) {
+            if (parent.querySelectorAll('button, a, img').length >= 2 && parent.innerText.length > 60) {
+              matchingCards.push(parent);
+              break;
+            }
+            if (parent.parentElement) parent = parent.parentElement;
+            else break;
+          }
+        }
+      }
+    }
 
-    // Check if DST section explicitly indicates all rewards are earned
-    const allEarnedNotice = /all (?:drop )?rewards (?:have been )?earned|все награды получены|all drops claimed|all rewards claimed/i.test(cardText);
+    const cardsToCheck = matchingCards.length > 0 ? matchingCards.map(c => c.innerText) : [pageText];
 
-    // Look for rewards and claimed statuses within DST section
-    const watchMatches = cardText.match(/watch\s+(?:for\s+)?(?:\d+\s*(?:hours?|hrs?|h|minutes?|mins?|m|ч|мин))/gi) || [];
-    const claimedMatches = cardText.match(/\b(?:claimed|получено|уже получено)\b/gi) || [];
+    let foundWatchCampaign = false;
+    let allWatchDropsClaimed = true;
+    let hasUnclaimedWatchDrops = false;
 
-    const progressMatches = cardText.match(/(\d+(?:\.\d+)?)%\s*(?:of|\/|из)\s*(\d+)/gi) || [];
-    const hasActiveProgress = progressMatches.some(m => {
-      const val = parseFloat(m);
-      return val > 0 && val < 100;
-    });
+    for (const cardContent of cardsToCheck) {
+      const lower = cardContent.toLowerCase();
 
-    const isAllClaimed = allEarnedNotice || (claimedMatches.length > 0 && claimedMatches.length >= watchMatches.length && !hasActiveProgress);
+      // Check if this section is a Sub Drop / Support a Streamer
+      const isSubDrop = SUB_DROP_REGEX.test(lower);
+      const hasWatchDrop = WATCH_DROP_REGEX.test(lower) || /bugburst|portrait|icon|waterballoon/i.test(lower);
+
+      // If it is purely a Sub Drop campaign (e.g. Gift / Purchase subs), ignore it!
+      if (isSubDrop && !hasWatchDrop) {
+        console.log('[Twitch Drops] Skipping Sub Drop / Support a Streamer campaign card');
+        continue;
+      }
+
+      if (hasWatchDrop) {
+        foundWatchCampaign = true;
+
+        // Check if all watch drops in this card are earned/claimed
+        const allEarnedNotice = /all (?:drop )?rewards (?:have been )?earned|все награды получены|all drops claimed|all rewards claimed/i.test(lower);
+
+        // Find watch drop requirements (ignoring sub drop requirements)
+        const watchMatches = cardContent.match(/watch\s+(?:for\s+)?(?:\d+\s*(?:hours?|hrs?|h|minutes?|mins?|m|ч|мин))/gi) || [];
+        const claimedMatches = cardContent.match(/\b(?:claimed|получено|уже получено)\b/gi) || [];
+
+        const progressMatches = cardContent.match(/(\d+(?:\.\d+)?)%\s*(?:of|\/|из)\s*(\d+)/gi) || [];
+        const hasActiveProgress = progressMatches.some(m => {
+          const val = parseFloat(m);
+          return val > 0 && val < 100;
+        });
+
+        const isThisCardClaimed = allEarnedNotice || (claimedMatches.length > 0 && claimedMatches.length >= watchMatches.length && !hasActiveProgress);
+
+        if (!isThisCardClaimed) {
+          allWatchDropsClaimed = false;
+          hasUnclaimedWatchDrops = true;
+        }
+      }
+    }
+
+    if (!foundWatchCampaign) {
+      return { found: false, allClaimed: false, isSubDropOnly: true };
+    }
 
     return {
       found: true,
-      allClaimed: isAllClaimed,
-      claimedCount: claimedMatches.length,
-      watchCount: watchMatches.length
+      allClaimed: allWatchDropsClaimed && !hasUnclaimedWatchDrops,
+      isSubDropOnly: false
     };
   }
 
@@ -630,6 +674,18 @@
   function parseCurrentDropProgress(game) {
     const pageText = document.body ? document.body.innerText : '';
     if (!pageText) return null;
+
+    // If the on-stream panel only shows Sub Drops / Support a Streamer (and no watch drops), treat as complete
+    if (SUB_DROP_REGEX.test(pageText) && !WATCH_DROP_REGEX.test(pageText) && !/Watch\s+(?:\d+)/i.test(pageText)) {
+      return {
+        allClaimed: true,
+        percent: 100,
+        totalMinutes: 180,
+        currentMinutes: 180,
+        remainingMinutes: 0,
+        finalWaitMinutes: 0
+      };
+    }
 
     // Check if all drops are already completed/claimed on-stream
     if (/all (?:drop )?rewards (?:have been )?earned|все награды получены|all drops claimed|all rewards claimed/i.test(pageText)) {
@@ -670,6 +726,12 @@
 
     for (const sec of sections) {
       const lower = sec.toLowerCase();
+
+      // Skip pure Sub Drop sections
+      if (SUB_DROP_REGEX.test(lower) && !WATCH_DROP_REGEX.test(lower)) {
+        continue;
+      }
+
       const isTargetGame = game.aliases.some(a => lower.includes(a)) ||
                            game.signatureKeywords.some(k => lower.includes(k));
 
@@ -711,6 +773,10 @@
       const idx = pageText.toLowerCase().indexOf(keyword);
       if (idx !== -1) {
         const sub = pageText.slice(Math.max(0, idx - 200), idx + 800);
+        if (SUB_DROP_REGEX.test(sub.toLowerCase()) && !WATCH_DROP_REGEX.test(sub.toLowerCase())) {
+          continue;
+        }
+
         const match = sub.match(/(\d+(?:\.\d+)?)%\s*(?:of|\/|из|de|von)?\s*(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?|m|ч|мин)?/i);
         if (match) {
           const percent = parseFloat(match[1]);
@@ -821,7 +887,11 @@
     const status = checkDSTCampaignStatus();
 
     if (!status.found) {
-      updateHUDStatus('🏁 <b>No active drop campaigns found for Don\'t Starve Together (DST).</b> Closing tab...');
+      if (status.isSubDropOnly) {
+        updateHUDStatus('ℹ️ <b>Only Sub Drops (paid subscriptions) found for DST. No free Watch Drops available.</b> Closing tab in 3s...');
+      } else {
+        updateHUDStatus('🏁 <b>No active drop campaigns found for Don\'t Starve Together (DST).</b> Closing tab...');
+      }
       try { await cancellableSleep(3000); } catch (e) { return; }
       if (!isStopped) {
         if (typeof GM_closeTab === 'function') GM_closeTab();
@@ -831,7 +901,7 @@
     }
 
     if (status.allClaimed) {
-      updateHUDStatus('✨ <b>All Don\'t Starve Together drops have already been claimed!</b> Closing tab in 3s...');
+      updateHUDStatus('✨ <b>All free Watch Drops for Don\'t Starve Together are already claimed!</b> Closing tab in 3s...');
       try { await cancellableSleep(3000); } catch (e) { return; }
       if (!isStopped) {
         if (typeof GM_closeTab === 'function') GM_closeTab();
@@ -849,7 +919,7 @@
     state.currentChannel = null;
     setState(state);
 
-    updateHUDStatus(`🎯 Active DST drops found! Navigating to live streams...`);
+    updateHUDStatus(`🎯 Active DST Watch Drops found! Navigating to live streams...`);
     try { await cancellableSleep(1500); } catch (e) { return; }
 
     if (!isStopped) {
@@ -873,8 +943,8 @@
     const dst = TARGET_GAMES[0];
     const status = checkDSTCampaignStatus();
 
-    if (status.found && status.allClaimed) {
-      updateHUDStatus('✨ <b>All Don\'t Starve Together drops are already claimed!</b> Closing tab in 3s...');
+    if (!status.found || status.allClaimed) {
+      updateHUDStatus('✨ <b>All free Watch Drops for Don\'t Starve Together are claimed!</b> Closing tab in 3s...');
       try { await cancellableSleep(3000); } catch (e) { return; }
       if (!isStopped) {
         if (typeof GM_closeTab === 'function') GM_closeTab();
@@ -883,7 +953,7 @@
       return;
     }
 
-    updateHUDStatus('🎯 Unfinished DST drops found. Navigating to live streams...');
+    updateHUDStatus('🎯 Unfinished DST Watch Drops found. Navigating to live streams...');
     try { await cancellableSleep(1500); } catch (e) { return; }
     if (!isStopped) {
       window.location.href = `https://www.twitch.tv/directory/category/${dst.slug}?filter=drops`;
