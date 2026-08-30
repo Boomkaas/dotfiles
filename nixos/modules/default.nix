@@ -8,7 +8,6 @@
     ./core/audio.nix
     ./core/services.nix
     ./utils/xserver.nix
-    ./utils/zsh.nix
     ./pkgs.nix
   ];
 }

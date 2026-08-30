@@ -1,0 +1,301 @@
+{
+    "exclusive": true,
+    "reload_style_on_change": true,
+    "position": "top",
+    "margin-top": 0,
+    "spacing": 0,
+    "height": 0,
+    "margin-bottom": 0,
+    "modules-left": [
+        "custom/menu",
+        "ext/workspaces",
+        "custom/separator",
+        "tray",
+        "custom/separator7",
+        "idle_inhibitor",
+        "custom/notification",
+        "custom/separator2",
+        "custom/separator5",
+        "mpris",
+        "custom/separator6"
+    ],
+    "modules-center": [
+        "custom/separator",
+        "clock",
+        "custom/separator2"
+    ],
+    "modules-right": [
+        "custom/separator",
+        "bluetooth",
+        "custom/separator3",
+        "backlight",
+        "custom/separator4",
+        "battery",
+        "custom/power",
+        "network",
+        "pulseaudio",
+        "memory",
+        "cpu",
+        "custom/separator2"
+    ],
+    "custom/separator": {
+        "format": "[",
+        "tooltip": false
+    },
+    "custom/separator2": {
+        "format": "]",
+        "tooltip": false
+    },
+    "custom/separator3": {
+        "format": "\udb83\udfdf",
+        "tooltip": false
+    },
+    "custom/separator4": {
+        "exec": "sh -c '[ -d /sys/class/backlight ] && [ \"$(ls -A /sys/class/backlight 2>/dev/null)\" ] && ls /sys/class/power_supply 2>/dev/null | grep -q \"^BAT\" && echo \"\udb83\udfdf\"'",
+        "tooltip": false,
+        "interval": "once"
+    },
+    "custom/separator5": {
+        "exec": "sh -c 'if pgrep -x cliamp >/dev/null || playerctl status 2>/dev/null | grep -qE \"Playing|Paused\"; then echo \"{\\\"text\\\":\\\"[\\\",\\\"class\\\":\\\"show\\\"}\"; else echo \"{\\\"text\\\":\\\"\\\",\\\"class\\\":\\\"hide\\\"}\"; fi'",
+        "return-type": "json",
+        "interval": 2,
+        "format": "{}"
+    },
+    "custom/separator6": {
+        "exec": "sh -c 'if pgrep -x cliamp >/dev/null || playerctl status 2>/dev/null | grep -qE \"Playing|Paused\"; then echo \"{\\\"text\\\":\\\"]\\\",\\\"class\\\":\\\"show\\\"}\"; else echo \"{\\\"text\\\":\\\"\\\",\\\"class\\\":\\\"hide\\\"}\"; fi'",
+        "return-type": "json",
+        "interval": 2,
+        "format": "{}"
+    },
+    "custom/separator7": {
+        "exec": "sh -c 'count=$(busctl --user get-property org.kde.StatusNotifierWatcher /StatusNotifierWatcher org.kde.StatusNotifierWatcher RegisteredStatusNotifierItems | sed -n \"s/^as \\([0-9]\\+\\).*/\\1/p\"); if [ \"${count:-0}\" -gt 0 ]; then echo \"{\\\"text\\\":\\\"\udb83\udfdf\\\",\\\"class\\\":\\\"show\\\"}\"; else echo \" {\\\"text\\\":\\\"\\\",\\\"class\\\":\\\"hide\\\"}\"; fi'",
+        "return-type": "json",
+        "interval": 2
+    },
+    "power-profiles-daemon": {
+        "justify": "center",
+        "format": "power {icon}",
+        "tooltip-format": "Power profile: {profile}\nDriver: {driver}",
+        "tooltip": true,
+        "format-icons": {
+            "performance": "<span style='italic'weight='900' color='#df6124'>perf</span>",
+            "balanced": "<span style='italic' weight='900' color='#df6124'>bal</span>",
+            "power-saver": "<span style='italic' weight='900' color='#df6124'>eco</span>"
+        }
+    },
+    "cpu": {
+        "interval": 10,
+        "format": "cpu {usage:02}%",
+        "on-click": "omarchy-launch-or-focus-tui btop",
+        "states": {
+            "warning": 50,
+            "critical": 80
+        }
+    },
+    "backlight": {
+        "device": "intel_backlight",
+        "rotate": 0,
+        "format": "bl {percent}%",
+        "tooltip-format": "\ud83c\udf15 {percent}%",
+        "format-icons": [
+            "\udb80\udcdc",
+            "\udb80\udcdd",
+            "\udb80\udcde",
+            "\udb80\udcdf",
+            "\udb80\udce0"
+        ]
+    },
+    "memory": {
+        "interval": 2,
+        "format": "mem {percentage:02}%",
+        "on-click": "omarchy-launch-or-focus-tui btop",
+        "states": {
+            "warning": 50,
+            "critical": 80
+        }
+    },
+    "custom/clock": {
+        "exec": "date +'%H:%M %p - %A, %b %d' | tr '[:upper:]' '[:lower:]'",
+        "interval": 60,
+        "tooltip": false,
+        "on-click-right": "omarchy-launch-floating-terminal-with-presentation omarchy-tz-select"
+    },
+    "network": {
+        "format-icons": [
+            "\udb82\udd2f",
+            "\udb82\udd1f",
+            "\udb82\udd22",
+            "\udb82\udd25",
+            "\udb82\udd28"
+        ],
+        "format": "{icon}",
+        "format-wifi": "net <span style='italic' weight='900' color='#df6124'>{signalStrength}%</span>",
+        "format-ethernet": "net <span style='italic' weight='900' color='#df6124'>on</span>",
+        "format-disconnected": "net <span style='italic' weight='900' color='#df6124'>off \udb82\udd2e / \udb80\ude00 </span>",
+        "tooltip-format-wifi": "{essid} ({frequency} GHz)\n\u21e3{bandwidthDownBytes}  \u21e1{bandwidthUpBytes}",
+        "tooltip-format-ethernet": "\u21e3{bandwidthDownBytes}  \u21e1{bandwidthUpBytes}",
+        "tooltip-format-disconnected": "Disconnected",
+        "interval": 3,
+        "spacing": 1,
+        "on-click": "omarchy-launch-wifi"
+    },
+    "battery": {
+        "format": "bat {capacity}%",
+        "format-discharging": "bat {capacity}%",
+        "format-charging": "bat {capacity}% \uf1e6",
+        "format-plugged": "bat_p {capacity}%",
+        "format-icons": {
+            "charging": [
+                "\udb82\udc9c",
+                "\udb80\udc86",
+                "\udb80\udc87",
+                "\udb80\udc88",
+                "\udb82\udc9d",
+                "\udb80\udc89",
+                "\udb82\udc9e",
+                "\udb80\udc8a",
+                "\udb80\udc8b",
+                "\udb80\udc85"
+            ],
+            "default": [
+                "\udb80\udc7a",
+                "\udb80\udc7b",
+                "\udb80\udc7c",
+                "\udb80\udc7d",
+                "\udb80\udc7e",
+                "\udb80\udc7f",
+                "\udb80\udc80",
+                "\udb80\udc81",
+                "\udb80\udc82",
+                "\udb80\udc79"
+            ]
+        },
+        "format-full": "bat_f {capacity}%",
+        "tooltip-format-discharging": "{timeTo}",
+        "tooltip-format-charging": "{timeTo}",
+        "interval": 5,
+        "on-click": "omarchy-menu power",
+        "on-click-right": "notify-send -u low \"$(omarchy-battery-status)\"",
+        "states": {
+            "warning": 20,
+            "critical": 10
+        }
+    },
+    "bluetooth": {
+        "justify": "center",
+        "format": "bt <span style='italic' weight='900' color='#df6124'>{status}</span> {num_connections}",
+        "format-disabled": "bt <span style='italic' weight='900' color='#df6124'>{status}</span>",
+        "format-connected": "bt <span style='italic' weight='900' color='#df6124'>{status}</span> {num_connections}",
+        "tooltip-format": "Devices connected: {num_connections}",
+        "on-click": "omarchy-launch-bluetooth"
+    },
+    "pulseaudio": {
+        "justify": "center",
+        "format": "vol {volume}%",
+        "on-click": "omarchy-launch-audio",
+        "on-click-right": "pamixer -t",
+        "tooltip-format": "Playing at {volume}%",
+        "scroll-step": 5,
+        "format-muted": "vol <span style='italic' weight='900' color='#df6124'>muted</span>",
+        "format-icons": {
+            "headphone": "\uf025",
+            "default": [
+                "\uf026",
+                "\uf027",
+                "\uf028"
+            ]
+        },
+        "states": {
+            "warning": 50,
+            "critical": 10
+        }
+    },
+    "mpris": {
+        "format": "\uec1b {dynamic}",
+        "format-paused": "<span color='grey'>{status_icon} {dynamic}</span>",
+        "title-len": 20,
+        "dynamic-order": [
+            "artist",
+            "title"
+        ],
+        "tooltip-format": "{player} ({status}):\n{artist} - {title}",
+        "status-icons": {
+            "paused": "\udb81\udf5b"
+        }
+    },
+    "idle_inhibitor": {
+        "format": "{icon}",
+        "format-icons": {
+            "activated": "idle <span style='italic' weight='900' color='#df6124'>on</span>",
+            "deactivated": "idle <span style='italic' weight='900' color='#df6124'>off</span>"
+        }
+    },
+    "tray": {
+        "icon-size": 14,
+        "spacing": 4
+    },
+    "ext/workspaces": {
+        "format": "{id}",
+        "on-click": "activate",
+        "sort-by-direction": "true"
+    },
+    "wlr/taskbar": {
+        "format": "{icon}",
+        "icon-size": 16,
+        "icon-theme": "Papirus",
+        "tooltip-format": "{title} ({app_id})",
+        "on-click": "activate",
+        "on-click-middle": "close",
+        "on-click-right": "minimize",
+        "all-outputs": true
+    },
+    "custom/menu": {
+        "format": "\udb82\udfaf",
+        "tooltip": true,
+        "tooltip-format": "Application Menu",
+        "on-click": "$HOME/.local/bin/hakumenu.sh"
+    },
+    "custom/power": {
+        "format": "\u23fb",
+        "tooltip": true,
+        "tooltip-format": "Shutdown Menu",
+        "on-click": "$HOME/.local/bin/shutdown.sh"
+    },
+    "custom/nightlight": {
+        "format": "\udb80\udcdb",
+        "tooltip": true,
+        "tooltip-format": "Toggle Night Light",
+        "on-click": "$HOME/.local/bin/nightlight_toggle.sh"
+    },
+    "custom/notification": {
+        "tooltip": true,
+        "format": "{icon}",
+        "format-icons": {
+            "notification": "\udb80\udc9a<span foreground='#e6e6e6'><sup></sup></span>",
+            "none": "\udb80\udc9a",
+            "dnd-notification": "<span foreground='#e6e6e6'><sup></sup></span>",
+            "dnd-none": "",
+            "inhibited-notification": "\udb80\udc9a<span foreground='#e6e6e6'><sup></sup></span>",
+            "inhibited-none": "\udb80\udc9a",
+            "dnd-inhibited-notification": "\udb80\udc9b<span foreground='#e6e6e6'><sup></sup></span>",
+            "dnd-inhibited-none": ""
+        },
+        "return-type": "json",
+        "exec-if": "which swaync-client",
+        "exec": "swaync-client -swb",
+        "on-click": "swaync-client -t -sw",
+        "on-click-right": "swaync-client -d -sw",
+        "escape": true
+    },
+    "clock": {
+        "format": " {:%H:%M:%S  %A, %d %B %Y} ",
+        "interval": 1,
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    },
+    "temperature": {
+        "interval": 2,
+        "format": "\uf2c9 {temperatureC}\u00b0C",
+        "tooltip": true
+    },
+    "layer": "overlay"
+}

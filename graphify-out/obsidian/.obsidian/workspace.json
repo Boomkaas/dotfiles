@@ -1,0 +1,214 @@
+{
+  "main": {
+    "id": "81bd7a2768a502e9",
+    "type": "split",
+    "children": [
+      {
+        "id": "b1a2176819d9ced6",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "16491e109cc6d684",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "9ff2efaca87316de",
+    "type": "split",
+    "children": [
+      {
+        "id": "b8fae42e21b59354",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "69e3a0af2a39d6a8",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "7fa95ee4afc98ac6",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "1b1ce4f00fbf1946",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 268.171875
+  },
+  "right": {
+    "id": "5456a2425bade3d7",
+    "type": "split",
+    "children": [
+      {
+        "id": "86c93ddb0fc9c580",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ce0ff5748a3b4950",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "c0930bc7a2e5cabb",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "f21638bc7405a386",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "ad0849548261704e",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "4532082a74ec7dc3",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "16491e109cc6d684",
+  "lastOpenFiles": [
+    "hide-on-action.md",
+    "_COMMUNITY_NixOS System & Modules (80).md",
+    "_COMMUNITY_Module Group 79.md",
+    "_COMMUNITY_Status Bar & UI Panels (78).md",
+    "_COMMUNITY_Status Bar & UI Panels (77).md",
+    "_COMMUNITY_Status Bar & UI Panels (76).md",
+    "_COMMUNITY_Status Bar & UI Panels (75).md",
+    "_COMMUNITY_Status Bar & UI Panels (74).md",
+    "_COMMUNITY_Window Manager & Compositor (73).md",
+    "_COMMUNITY_Window Manager & Compositor (72).md",
+    "_COMMUNITY_Window Manager & Compositor (71).md",
+    "_COMMUNITY_Bongocat & Desktop Pets (69).md",
+    "_COMMUNITY_Bongocat & Desktop Pets (68).md",
+    "_COMMUNITY_Bongocat & Desktop Pets (67).md",
+    "_COMMUNITY_Browser Customization (65).md",
+    "_COMMUNITY_Status Bar & UI Panels (63).md",
+    "_COMMUNITY_Status Bar & UI Panels (62).md",
+    "_COMMUNITY_Status Bar & UI Panels (61).md",
+    "_COMMUNITY_Status Bar & UI Panels (60).md",
+    "_COMMUNITY_Status Bar & UI Panels (59).md",
+    "_COMMUNITY_Status Bar & UI Panels (58).md",
+    "_COMMUNITY_Status Bar & UI Panels (57).md",
+    "_COMMUNITY_Status Bar & UI Panels (56).md",
+    "_COMMUNITY_Status Bar & UI Panels (54).md",
+    "_COMMUNITY_Status Bar & UI Panels (49).md",
+    "_COMMUNITY_Status Bar & UI Panels (48).md",
+    "graph.canvas"
+  ]
+}

@@ -1,0 +1,469 @@
+@import url("../../.local/state/haku_theme/colors.css");
+@import url("../../.local/state/haku_theme/fonts.css");
+
+/* ============================================================================== */
+/* STRICT FONT-COLOR-ONLY ACCENT SYSTEM                                           */
+/* @accent_color is STRICTLY for font/text/icon color (color: @accent_color).     */
+/* Buttons and active indicators NEVER have background colors (transparent).      */
+/* ============================================================================== */
+@define-color primary @accent_color;
+@define-color accent @accent_color;
+@define-color active @accent_color;
+@define-color secondary @accent_color;
+@define-color rd1 @accent_color;
+@define-color alert @accent_color;
+@define-color rosewater @accent_color;
+@define-color flamingo @accent_color;
+@define-color pink @accent_color;
+@define-color mauve @accent_color;
+@define-color red @accent_color;
+@define-color maroon @accent_color;
+@define-color peach @accent_color;
+@define-color yellow @accent_color;
+@define-color green @accent_color;
+@define-color teal @accent_color;
+@define-color sky @accent_color;
+@define-color sapphire @accent_color;
+@define-color blue @accent_color;
+@define-color lavender @accent_color;
+
+/* Background Surface Tokens (Dark / Neutral / Translucent) */
+@define-color bg rgba(15, 15, 18, 0.92);
+@define-color background rgba(15, 15, 18, 0.92);
+@define-color base rgba(15, 15, 18, 0.92);
+@define-color mantle rgba(12, 12, 14, 0.95);
+@define-color crust rgba(8, 8, 10, 0.98);
+@define-color surface0 rgba(255, 255, 255, 0.05);
+@define-color overlay0 rgba(255, 255, 255, 0.10);
+@define-color ia1 rgba(0, 0, 0, 0.5);
+@define-color fg #e6e6e6;
+@define-color foreground #e6e6e6;
+@define-color text #e6e6e6;
+@define-color subtext #a6a6a6;
+@define-color inactive #777777;
+
+* {
+    min-height: 0;
+    min-width: 0;
+}
+
+/* All buttons: 100% transparent backgrounds */
+button,
+button:hover,
+button:active,
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    background: transparent;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* ============================================================================== */
+/* PURE MONOCHROME COLOR SYSTEM                                                   */
+/* Strictly neutral grays, dark backgrounds, clean whites, and @accent_color.    */
+/* ============================================================================== */
+
+/* Monochrome Background & Neutral Surface Tokens */
+
+* {
+    min-height: 0;
+    min-width: 0;
+}
+
+/* Reset default GTK button extra spacing */
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* ============================================================================== */
+/* STRICT ACCENT SYSTEM (NO ACCENT IN BACKGROUNDS)                                */
+/* @accent_color is strictly for text, icons, borders, outlines, and badges.     */
+/* Backgrounds are ALWAYS clean dark / neutral translucent (@bg / #000000).      */
+/* ============================================================================== */
+
+/* Background and Neutral Surface Tokens (NEVER ACCENT) */
+
+* {
+    min-height: 0;
+    min-width: 0;
+}
+
+/* Reset default GTK button extra spacing */
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* ============================================================================== */
+/* STRICT ACCENT SYSTEM (NO ACCENT IN BACKGROUNDS)                                */
+/* @accent_color is strictly for text, icons, borders, outlines, and badges.     */
+/* Backgrounds are ALWAYS clean dark / neutral translucent (@bg / #000000).      */
+/* ============================================================================== */
+
+/* Background and Neutral Surface Tokens (NEVER ACCENT) */
+
+* {
+    min-height: 0;
+    min-width: 0;
+}
+
+/* Reset default GTK button extra spacing */
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* ============================================================================== */
+/* STRICT MAIN SYSTEM COLOR BINDINGS                                              */
+/* All accent tokens dynamically inherit @accent_color from colors.css            */
+/* ============================================================================== */
+
+/* Background and Neutral Surface Tokens */
+
+* {
+    min-height: 0;
+    min-width: 0;
+}
+
+/* Reset default GTK button extra spacing */
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+* {
+  /* background-color: @background; */
+  /* color: @foreground; */
+  
+  border-radius: 0;
+  border: none;
+  text-shadow: none;
+  padding: 0;
+	min-height: 0;
+  font-family: 'JetBrains Mono Nerd Font';
+    text-shadow: 0 0 5px @accent_color, /* Soft inner glow */
+                 0 0 5px @accent_color, /* Brighter glow */
+                 0 0 5px @accent_color, /* Even brighter */
+                 0 0 5px @accent_color; /* Wider glow */
+}
+
+#waybar  {
+  background-color: transparent;
+  transition-property: background-color;
+  transition-duration: .5s;
+}
+
+#waybar > box {
+  border-radius: 3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 1px 4px 2px 4px;
+  background-color: @bg;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 1);
+  min-height: 30px;
+  transition-property: background-color;
+  transition-duration: .5s;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+
+.modules-center > widget > * {
+    margin: 0px 0px 0px 0px;
+}
+
+#workspaces, #ext-workspaces {
+  padding: 0px 0px;
+  margin: 0px 0px;
+}
+
+button {
+  box-shadow: inset 0 -3px transparent;
+  border: none;
+  border-radius: 0;
+  transition: 0.3s ease-in-out;
+}
+
+button:hover {
+  background: inherit;
+}
+
+#workspaces, #ext-workspaces button, #ext-workspaces button {
+  all: initial;
+  border: 1px solid @border-inactive_ws;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  border-radius: 3px;
+  padding: 1px 35px;
+  background-color: transparent;
+  margin: 0px 1px;
+  opacity: 1;
+  color: @fg;
+  font-size: 0px;
+  font-weight: bold;
+}
+
+#workspaces, #ext-workspaces button, #ext-workspaces button.active, #ext-workspaces button.active, #ext-workspaces button.focused {
+  color: @border-active_ws;
+  border: 1.5px solid @fg2;
+  opacity: 1.0;
+  font-size: 0px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+#workspaces, #ext-workspaces button, #ext-workspaces button.empty, #ext-workspaces button.empty {
+  opacity: 0.45;
+  font-size: 0px;
+  color: @fg;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+#workspaces, #ext-workspaces button, #ext-workspaces button.empty, #ext-workspaces button.empty.active {
+  font-size: 0px;
+  color: @fg;
+  opacity: 1.0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+#workspaces, #ext-workspaces button, #ext-workspaces button.empty, #ext-workspaces button.empty:hover,
+#workspaces, #ext-workspaces button, #ext-workspaces button:hover {
+  background: @hover_bg;
+  color: @hover_fg;
+  opacity: 1.0;
+}
+
+
+#tray,
+#clock,
+#cpu,
+#memory,
+#battery,
+#backlight,
+#network,
+#bluetooth,
+#pulseaudio,
+#power-profiles-daemon,
+#mpris,
+#temperature,
+#idle_inhibitor,
+#group-tray-expander,
+#custom-update,
+#custom-idle-indicator,
+#custom-notification-silencing-indicator, #custom-notification,
+#custom-voxtype,
+#custom-voxtype.recording,
+#custom-voxtype.transcribing,
+#custom-expand-icon,
+#custom-omarchy, #custom-menu,
+#custom-updatespacman,
+#custom-screenrecording-indicator {
+  min-width: 25px;
+  margin: 5px 5px 5px 5px;
+  padding-left: 0px;
+  padding-right: 0px;
+
+}
+
+#custom-update {
+font-size: 10px;
+padding-left: 0px;
+padding-right: 0px;
+margin: 0;
+}
+
+tooltip {
+  padding: 2px;
+}
+
+
+#custom-expand-icon {
+  padding-left: 0;
+}
+
+#tray {
+    background-color: transparent;
+    padding: 0;
+    padding-top: 1px;
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+    background-color: @bg;
+}
+
+.hidden {
+  opacity: 0;
+}
+
+#custom-spacer-desktop {
+  padding: 0 15px;
+  margin-right: 0px;
+  min-width: 0px;
+  min-height: 0;
+  font-size: 0px;
+}
+
+#group-tray-expander {
+  background-color: @bg;
+  color: @fg;
+}
+
+#custom-updatespacman.has-updates {
+  opacity: 1;
+}
+
+#custom-updatespacman.updated {
+  opacity: 0.5;
+}
+
+#custom-separator {
+  opacity: 0.2;
+  padding-top: 2px;
+  padding-left: 4px;
+  padding-right: 4px;
+  color: @border-inactive;
+}
+
+tooltip {
+ padding: 4px;
+ background: @bg;
+ font-size: 11px;
+ border-radius: 8px;
+ border: 1.5px solid rgba(255, 255, 255, 0.25);
+}
+tooltip label {
+    color: @fg;
+}
+
+/* Specific animation Module */
+
+#custom-screenrecording-indicator {
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  color: transparent;
+}
+
+#custom-screenrecording-indicator.active {
+  color: @accent_color;
+  animation-name: blink-recording;
+  animation-duration: 0.5s;
+}
+
+@keyframes blink-recording {
+    to {
+        color: @bg;
+    }
+}
+
+#custom-voxtype {
+  min-width: 12px;
+  margin: 0 0 0 2.5px;
+}
+
+#custom-voxtype.recording {
+  color: @accent_color;
+}
+
+#custom-idle-indicator,
+#custom-notification-silencing-indicator, #custom-notification {
+  min-width: 15px;
+  margin-left: 1px;
+  margin-right: 1px;
+  font-size: 12px;
+  padding-bottom: 0px;
+}
+
+#custom-idle-indicator.active,
+#custom-notification-silencing-indicator, #custom-notification.active {
+  color: @accent_color;
+}
+
+#battery.warning {
+  color: @accent_color;
+  background-color: @bg;
+}
+
+@keyframes blink2 {
+  to {
+    background-color: @bg;
+    color: @accent_color;
+  }
+}
+
+#battery.critical:not(.charging) {
+  background-color: transparent;
+  color: @accent_color;
+  animation-name: blink2;
+  animation-duration: 0.5s;
+  animation-timing-function: steps(12);
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/* ============================================================================== */
+/* BUTTONS & ACTIVE STATES: TRANSPARENT BACKGROUND + ACCENT FONT COLOR ONLY       */
+/* ============================================================================== */
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    background: transparent;
+    background-color: transparent;
+    color: #888888;
+    border: none;
+    box-shadow: none;
+}
+
+#workspaces button:hover,
+#ext-workspaces button:hover,
+#wlr-taskbar button:hover {
+    background: transparent;
+    background-color: transparent;
+    color: @accent_color;
+}
+
+#workspaces button.active,
+#workspaces button.focused,
+#ext-workspaces button.active,
+#ext-workspaces button.focused,
+#wlr-taskbar button.active {
+    background: transparent;
+    background-color: transparent;
+    color: @accent_color;
+    font-weight: bold;
+    border: none;
+    box-shadow: none;
+}
+
+#custom-menu,
+#custom-power {
+    color: @accent_color;
+}

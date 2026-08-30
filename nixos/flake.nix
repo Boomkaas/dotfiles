@@ -1,5 +1,5 @@
 {
-  description = "Peng's NixOS + Hyprland + Noctalia Flake";
+  description = "Peng's NixOS + MangoWM + Noctalia Flake";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
@@ -12,6 +12,11 @@
 
     noctalia = {
       url = "github:noctalia-dev/noctalia-shell";
+    };
+
+    mangowm = {
+      url = "github:mangowm/mango";
+      inputs.nixpkgs.follows = "nixpkgs_unstable";
     };
 
   };

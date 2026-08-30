@@ -4,12 +4,10 @@
   imports =
     [
       ../modules/default.nix
+      inputs.mangowm.nixosModules.mango
     ];
 
-  programs.hyprland = {
-    enable = true;
-    xwayland.enable = true;
-  };
+  programs.mango.enable = true;
 
   hardware.uinput.enable = true;
 
@@ -38,6 +36,7 @@
 
   home-manager.useGlobalPkgs = true;
   home-manager.useUserPackages = true;
+  home-manager.backupFileExtension = "backup";
   home-manager.extraSpecialArgs = { inherit inputs pkgs_unstable; };
   home-manager.users.peng = { config, pkgs, inputs, pkgs_unstable, ... }: {
     home.username = "peng";
@@ -48,19 +47,6 @@
       "$HOME/.npm-global/bin"
     ];
 
-    xdg.desktopEntries = {
-      ranger = {
-        name = "Ranger";
-        genericName = "File Manager";
-        comment = "Vim-like file manager";
-        exec = "kitty --class ranger ranger %F";
-        icon = "utilities-terminal";
-        terminal = false;
-        categories = [ "System" "FileTools" "FileManager" ];
-        mimeType = [ "inode/directory" ];
-      };
-    };
-
     programs.git = {
       enable = true;
       userEmail = "boomeceeb@gmail.com";
@@ -69,6 +55,19 @@
 
     gtk = {
       enable = true;
+      iconTheme = {
+        name = "Papirus-Dark";
+        package = pkgs.papirus-icon-theme;
+      };
+      font = {
+        name = "JetBrainsMono Nerd Font";
+        size = 11;
+      };
+      cursorTheme = {
+        name = "Bibata-Modern-Ice";
+        size = 24;
+        package = pkgs.bibata-cursors;
+      };
       gtk3.extraConfig = {
         gtk-application-prefer-dark-theme = 1;
         gtk-theme = "adw-gtk3";
@@ -87,7 +86,7 @@
     xdg.mimeApps = {
       enable = true;
       defaultApplications = {
-        "inode/directory" = [ "ranger.desktop" "org.kde.dolphin.desktop" ];
+        "inode/directory" = [ "thunar.desktop" ];
 
         # Office Documents
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" = [ "calc.desktop" ];
@@ -149,45 +148,40 @@
 
     programs.fzf = {
       enable = true;
-      enableZshIntegration = true;
+      enableFishIntegration = true;
     };
 
     programs.zoxide = {
       enable = true;
-      enableZshIntegration = true;
+      enableFishIntegration = true;
     };
 
-    programs.zsh = {
+    programs.starship = {
       enable = true;
-      enableCompletion = true;
-      autosuggestion.enable = true;
-      syntaxHighlighting.enable = true;
+      enableFishIntegration = true;
+    };
 
-      oh-my-zsh = {
-        enable = true;
-        plugins = [ "git" "sudo" "docker" ];
+    programs.fish = {
+      enable = true;
+    };
+
+    systemd.user.services.awww-daemon = {
+      Unit = {
+        Description = "awww wallpaper daemon";
+        PartOf = [ "graphical-session.target" "default.target" ];
+        After = [ "graphical-session.target" "default.target" ];
       };
-
-      plugins = [
-        {
-          name = "powerlevel10k";
-          src = pkgs.zsh-powerlevel10k;
-          file = "share/zsh-powerlevel10k/powerlevel10k.zsh-theme";
-        }
-      ];
-
-      shellAliases = {
-        nixreb = "/home/peng/Code/Dotfiles/nixos/scripts/nixreb.sh";
-        epic = "/home/peng/Code/Dotfiles/nixos/scripts/epic";
-        twitch = "/home/peng/Code/Dotfiles/nixos/scripts/twitch";
-        tdrops = "/home/peng/Code/Dotfiles/nixos/scripts/twitch";
-        delgar = "sudo nix-collect-garbage --delete-older-than 1d";
-        c = "clear";
+      Service = {
+        ExecStart = "${pkgs_unstable.awww}/bin/awww-daemon";
+        Restart = "always";
+        RestartSec = "1s";
+        Environment = [
+          "PATH=/run/current-system/sw/bin:/etc/profiles/per-user/peng/bin:/home/peng/.local/bin:/usr/bin:/bin"
+        ];
       };
-
-      initContent = ''
-        [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
-      '';
+      Install = {
+        WantedBy = [ "default.target" ];
+      };
     };
   };
 }

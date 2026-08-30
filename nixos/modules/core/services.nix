@@ -8,6 +8,9 @@
   services.udisks2.enable = true;
   services.gvfs.enable = true;
   services.udev.packages = [ pkgs.android-udev-rules ];
+  services.udev.extraRules = ''
+    KERNEL=="event*", SUBSYSTEM=="input", TAG+="uaccess"
+  '';
 
   virtualisation.docker.enable = true;
   virtualisation.libvirtd.enable = true;

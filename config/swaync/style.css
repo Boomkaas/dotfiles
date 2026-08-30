@@ -1,0 +1,300 @@
+/* ============================================================================== */
+/* SWAY NOTIFICATION CENTER - MODERN CONTROL CENTER THEME                         */
+/* ============================================================================== */
+
+@import url("../../.local/state/haku_theme/colors.css");
+@import url("../../.local/state/haku_theme/fonts.css");
+
+/* Global reset for focus outlines & clean font rendering */
+* {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    transition: all 200ms ease-in-out;
+    outline: none;
+    -gtk-outline-radius: 0;
+}
+
+*:focus,
+*:active,
+*:focus-visible,
+button:focus,
+button:active,
+button:focus-visible {
+    outline: none;
+    box-shadow: none;
+    border: none;
+    -gtk-outline-radius: 0;
+}
+
+/* ============================================================================== */
+/* CONTROL CENTER WINDOW (MAIN PANEL)                                             */
+/* ============================================================================== */
+.control-center {
+    background: rgba(18, 18, 24, 0.92);
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+    padding: 18px;
+    color: #ffffff;
+}
+
+/* ============================================================================== */
+/* HEADER & CLEAR ALL BUTTON                                                      */
+/* ============================================================================== */
+.widget-title {
+    padding: 4px 6px 14px 6px;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    margin-bottom: 14px;
+}
+
+.widget-title > button {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.85);
+    border-radius: 10px;
+    padding: 6px 14px;
+    border: none;
+    outline: none;
+    box-shadow: none;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.widget-title > button:hover {
+    background: @accent_color;
+    color: #121218;
+    box-shadow: 0 0 12px @accent_color;
+}
+
+/* ============================================================================== */
+/* QUICK TOGGLE BUTTONS GRID (WiFi, Bluetooth, Night Light, Lock)                 */
+/* ============================================================================== */
+.widget-buttons-grid {
+    padding: 0;
+    margin: 0 0 14px 0;
+    background: transparent;
+}
+
+.widget-buttons-grid > flowbox > flowboxchild {
+    padding: 4px;
+}
+
+.widget-buttons-grid > flowbox > flowboxchild > button {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 10px 14px;
+    min-height: 42px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.widget-buttons-grid > flowbox > flowboxchild > button:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+}
+
+.widget-buttons-grid > flowbox > flowboxchild > button.checked,
+.widget-buttons-grid > flowbox > flowboxchild > button.toggle:checked {
+    background: @accent_color;
+    color: #121218;
+    border-color: @accent_color;
+    box-shadow: 0 0 14px rgba(255, 255, 255, 0.18);
+}
+
+.widget-buttons-grid > flowbox > flowboxchild > button.checked label,
+.widget-buttons-grid > flowbox > flowboxchild > button.toggle:checked label {
+    color: #121218;
+    font-weight: 700;
+}
+
+/* ============================================================================== */
+/* SLIDERS (VOLUME & BRIGHTNESS)                                                  */
+/* ============================================================================== */
+.widget-volume,
+.widget-backlight {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+}
+
+.widget-volume label,
+.widget-backlight label {
+    font-size: 18px;
+    color: @accent_color;
+    margin-right: 10px;
+}
+
+.widget-volume scale,
+.widget-backlight scale {
+    padding: 0;
+    margin: 0;
+}
+
+.widget-volume trough,
+.widget-backlight trough {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    min-height: 10px;
+    min-width: 80px;
+}
+
+.widget-volume highlight,
+.widget-backlight highlight {
+    background: @accent_color;
+    border-radius: 999px;
+    min-height: 10px;
+}
+
+.widget-volume slider,
+.widget-backlight slider {
+    background: #ffffff;
+    border-radius: 999px;
+    min-width: 14px;
+    min-height: 14px;
+    margin: -2px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* ============================================================================== */
+/* MPRIS (MEDIA PLAYER WIDGET)                                                    */
+/* ============================================================================== */
+.widget-mpris {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 18px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.widget-mpris-player {
+    padding: 0;
+    margin: 0;
+}
+
+.widget-mpris-album-art {
+    border-radius: 12px;
+    margin-right: 12px;
+}
+
+.widget-mpris-title {
+    font-weight: bold;
+    font-size: 14px;
+    color: #ffffff;
+}
+
+.widget-mpris-subtitle {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.widget-mpris > box > button {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    padding: 6px 12px;
+    margin: 0 4px;
+    color: #ffffff;
+}
+
+.widget-mpris > box > button:hover {
+    background: @accent_color;
+    color: #121218;
+}
+
+/* ============================================================================== */
+/* DO NOT DISTURB SWITCH                                                          */
+/* ============================================================================== */
+.widget-dnd {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 14px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.widget-dnd > switch {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    min-width: 44px;
+    min-height: 22px;
+}
+
+.widget-dnd > switch:checked {
+    background: @accent_color;
+}
+
+.widget-dnd > switch slider {
+    background: #ffffff;
+    border-radius: 999px;
+    min-width: 18px;
+    min-height: 18px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================================================== */
+/* NOTIFICATIONS LIST & CARDS                                                     */
+/* ============================================================================== */
+.widget-notifications {
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+}
+
+.notification-row {
+    outline: none;
+    margin-bottom: 10px;
+    border-radius: 18px;
+}
+
+.notification {
+    background: rgba(26, 26, 34, 0.94);
+    border-radius: 18px;
+    padding: 14px 16px;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+}
+
+.notification-content .summary {
+    color: @accent_color;
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.notification-content .body {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+.notification-content .time {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 10px;
+    margin-top: 4px;
+}
+
+.close-button {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+    border-radius: 999px;
+    padding: 6px;
+    margin: 4px;
+    border: none;
+    outline: none;
+    box-shadow: none;
+}
+
+.close-button:hover {
+    background: #ff5555;
+    color: #ffffff;
+}

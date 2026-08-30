@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<actions>
+<action>
+	<icon>utilities-terminal</icon>
+	<name>Open Terminal Here</name>
+	<submenu></submenu>
+	<unique-id>1787933284835998-1</unique-id>
+	<command>kitty --directory %f</command>
+	<description>Open terminal in current directory</description>
+	<range></range>
+	<patterns>*</patterns>
+	<startup-notify/>
+	<directories/>
+</action>
+<action>
+	<icon>package-x-generic</icon>
+	<name>Compress to .zip</name>
+	<submenu></submenu>
+	<unique-id>1787933284835998-2</unique-id>
+	<command>/home/peng/.local/bin/thunar-archive.sh zip %F</command>
+	<description>Compress selected files/folders to a .zip archive</description>
+	<range></range>
+	<patterns>*</patterns>
+	<startup-notify/>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+<action>
+	<icon>package-x-generic</icon>
+	<name>Unzip Here</name>
+	<submenu></submenu>
+	<unique-id>1787933284835998-3</unique-id>
+	<command>/home/peng/.local/bin/thunar-archive.sh unzip-here %F</command>
+	<description>Extract archive contents into the current directory</description>
+	<range></range>
+	<patterns>*.zip;*.ZIP;*.7z;*.7Z;*.tar;*.tar.gz;*.tgz;*.tar.xz;*.txz;*.tar.bz2;*.tbz2;*.tar.zst;*.rar;*.RAR;*.gz</patterns>
+	<startup-notify/>
+	<other-files/>
+</action>
+<action>
+	<icon>package-x-generic</icon>
+	<name>Unzip to Folder</name>
+	<submenu></submenu>
+	<unique-id>1787933284835998-4</unique-id>
+	<command>/home/peng/.local/bin/thunar-archive.sh unzip-folder %F</command>
+	<description>Extract archive contents into a subfolder</description>
+	<range></range>
+	<patterns>*.zip;*.ZIP;*.7z;*.7Z;*.tar;*.tar.gz;*.tgz;*.tar.xz;*.txz;*.tar.bz2;*.tbz2;*.tar.zst;*.rar;*.RAR;*.gz</patterns>
+	<startup-notify/>
+	<other-files/>
+</action>
+</actions>

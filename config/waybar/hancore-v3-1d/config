@@ -1,0 +1,307 @@
+{
+    "exclusive": true,
+    "reload_style_on_change": true,
+    "position": "top",
+    "mod": "dock",
+    "passthrough": false,
+    "gtk-layer-shell": true,
+    "margin-top": 0,
+    "margin-left": 0,
+    "margin-right": 0,
+    "margin-bottom": 0,
+    "modules-left": [
+        "group/left1",
+        "group/left2"
+    ],
+    "group/left1": {
+        "orientation": "inherit",
+        "modules": [
+            "custom/menu",
+            "custom/separator",
+            "idle_inhibitor",
+            "idle_inhibitor",
+            "custom/notification",
+            "power-profiles-daemon",
+            "backlight",
+            "bluetooth"
+        ]
+    },
+    "group/left2": {
+        "orientation": "inherit",
+        "modules": [
+            "mpris"
+        ]
+    },
+    "modules-center": [
+        "ext/workspaces",
+        "memory",
+        "cpu",
+        "battery"
+    ],
+    "modules-right": [
+        "network",
+        "pulseaudio",
+        "custom/separator",
+        "custom/separator4",
+        "clock",
+        "custom/separator2",
+        "tray"
+    ],
+    "custom/separator": {
+        "format": "|",
+        "tooltip": false
+    },
+    "custom/separator2": {
+        "exec": "sh -c 'count=$(busctl --user get-property org.kde.StatusNotifierWatcher /StatusNotifierWatcher org.kde.StatusNotifierWatcher RegisteredStatusNotifierItems | sed -n \"s/^as \\([0-9]\\+\\).*/\\1/p\"); if [ \"${count:-0}\" -gt 0 ]; then echo \"{\\\"text\\\":\\\"|\\\",\\\"class\\\":\\\"show\\\"}\"; else echo \" {\\\"text\\\":\\\"\\\",\\\"class\\\":\\\"hide\\\"}\"; fi'",
+        "return-type": "json",
+        "interval": 2
+    },
+    "custom/separator4": {
+        "format": "\u2022",
+        "tooltip": false
+    },
+    "custom/weather": {
+        "format": "{}\u00b0",
+        "tooltip": true,
+        "interval": 60,
+        "exec": "wttrbar --nerd",
+        "return-type": "json"
+    },
+    "custom/menu": {
+        "format": "\udb82\udfaf",
+        "tooltip": true,
+        "tooltip-format": "Application Menu",
+        "on-click": "$HOME/.local/bin/hakumenu.sh"
+    },
+    "power-profiles-daemon": {
+        "format": "{icon}",
+        "tooltip-format": "Power profile: {profile}\nDriver: {driver}",
+        "tooltip": true,
+        "format-icons": {
+            "performance": "\uef76",
+            "balanced": "\udb83\udea2",
+            "power-saver": "\uf06c"
+        }
+    },
+    "cpu": {
+        "interval": 5,
+        "format": "\uf2db {usage:02}%",
+        "on-click": "omarchy-launch-or-focus-tui btop",
+        "states": {
+            "warning": 50,
+            "critical": 80
+        }
+    },
+    "backlight": {
+        "device": "intel_backlight",
+        "format": "{icon}",
+        "tooltip": true,
+        "tooltip-format": "Brightness: \uf111 {percent}%",
+        "format-alt": "{percent}% {icon}",
+        "format-alt-click": "click-right",
+        "format-icons": [
+            " \udb80\udcdc",
+            "\udb80\udcdd",
+            "\udb80\udcde",
+            "\udb80\udcdf",
+            "\udb80\udce0"
+        ],
+        "on-scroll-down": "brightnessctl s 5%-",
+        "on-scroll-up": "brightnessctl s +5%"
+    },
+    "memory": {
+        "interval": 5,
+        "format": "\ue266 {used:02.1f}GB",
+        "tooltip-format": "Used {percentage}%\n{used:0.1f}GB/{total:0.1f}GB",
+        "on-click": "omarchy-launch-or-focus-tui btop",
+        "states": {
+            "warning": 50,
+            "critical": 80
+        }
+    },
+    "custom/clock": {
+        "exec": "date +'%H:%M %p' | tr '[:upper:]' '[:lower:]'",
+        "interval": 60,
+        "tooltip": false,
+        "on-click-right": "omarchy-launch-floating-terminal-with-presentation omarchy-tz-select"
+    },
+    "network": {
+        "format-icons": [
+            "\udb82\udd2f",
+            "\udb82\udd1f",
+            "\udb82\udd22",
+            "\udb82\udd25",
+            "\udb82\udd28"
+        ],
+        "format": "{icon}",
+        "format-wifi": "{essid} {icon}",
+        "format-ethernet": "{ifname} \udb80\udf17",
+        "format-disconnected": "\udb82\udd2e",
+        "tooltip-format-wifi": "{essid} ({frequency} GHz)\n\u21e3{bandwidthDownBytes}  \u21e1{bandwidthUpBytes}",
+        "tooltip-format-ethernet": "\u21e3{bandwidthDownBytes}  \u21e1{bandwidthUpBytes}",
+        "tooltip-format-disconnected": "Disconnected",
+        "interval": 3,
+        "spacing": 1,
+        "on-click": "omarchy-launch-wifi"
+    },
+    "battery": {
+        "format": "{capacity}% {icon}",
+        "format-discharging": "{capacity}% {icon}",
+        "format-charging": "{capacity}% {icon}",
+        "format-plugged": "\uf1e6",
+        "format-icons": {
+            "charging": [
+                "\udb82\udc9c",
+                "\udb80\udc86",
+                "\udb80\udc87",
+                "\udb80\udc88",
+                "\udb82\udc9d",
+                "\udb80\udc89",
+                "\udb82\udc9e",
+                "\udb80\udc8a",
+                "\udb80\udc8b",
+                "\udb80\udc85"
+            ],
+            "default": [
+                "\udb80\udc7a",
+                "\udb80\udc7b",
+                "\udb80\udc7c",
+                "\udb80\udc7d",
+                "\udb80\udc7e",
+                "\udb80\udc7f",
+                "\udb80\udc80",
+                "\udb80\udc81",
+                "\udb80\udc82",
+                "\udb80\udc79"
+            ]
+        },
+        "format-full": "{capacity}% \udb80\udc85",
+        "tooltip-format-discharging": "{power:>1.0f}W\u2193 {capacity}%",
+        "tooltip-format-charging": "{power:>1.0f}W\u2191 {capacity}%",
+        "interval": 5,
+        "on-click": "omarchy-menu power",
+        "on-click-right": "notify-send -u low \"$(omarchy-battery-status)\"",
+        "states": {
+            "warning": 30,
+            "critical": 15
+        }
+    },
+    "bluetooth": {
+        "format": "\uf294{num_connections}",
+        "format-disabled": "\udb80\udcb2 {status}",
+        "format-connected": "\udb80\udcb1 {num_connections}",
+        "tooltip-format": "Devices connected: {num_connections}",
+        "on-click": "omarchy-launch-bluetooth"
+    },
+    "pulseaudio": {
+        "format": "{icon} {volume}%",
+        "on-click": "omarchy-launch-audio",
+        "on-click-right": "pamixer -t",
+        "tooltip-format": "Playing at {volume}%",
+        "scroll-step": 5,
+        "format-muted": "\ueee8",
+        "format-icons": {
+            "headphone": "\uf025",
+            "headset": "\uf025",
+            "default": [
+                "\uf026",
+                "\uf027",
+                "\uf028"
+            ]
+        }
+    },
+    "mpris": {
+        "format": " \uec1b {dynamic}",
+        "format-paused": " {status_icon} {dynamic}",
+        "interval": 1,
+        "dynamic-order": [
+            "artist",
+            "position",
+            "length"
+        ],
+        "dynamic-importance-order": [
+            "position",
+            "length",
+            "artist"
+        ],
+        "tooltip-format": "{player} ({status}):\n{artist} - {title}",
+        "status-icons": {
+            "paused": "\udb81\udf5b"
+        },
+        "ignored-players": [
+            "firefox",
+            "brave"
+        ]
+    },
+    "idle_inhibitor": {
+        "format": "{icon}",
+        "tooltip-format-activated": "Stay Awake: ON \udb84\udfb4",
+        "tooltip-format-deactivated": "Stay Awake: OFF \udb83\udd90",
+        "format-icons": {
+            "activated": "\udb84\udfb4",
+            "deactivated": "\udb83\udddb"
+        }
+    },
+    "tray": {
+        "icon-size": 13,
+        "spacing": 2
+    },
+    "ext/workspaces": {
+        "format": "{id}",
+        "on-click": "activate",
+        "sort-by-direction": "true"
+    },
+    "wlr/taskbar": {
+        "format": "{icon}",
+        "icon-size": 16,
+        "icon-theme": "Papirus",
+        "tooltip-format": "{title} ({app_id})",
+        "on-click": "activate",
+        "on-click-middle": "close",
+        "on-click-right": "minimize",
+        "all-outputs": true
+    },
+    "custom/power": {
+        "format": "\u23fb",
+        "tooltip": true,
+        "tooltip-format": "Shutdown Menu",
+        "on-click": "$HOME/.local/bin/shutdown.sh"
+    },
+    "custom/nightlight": {
+        "format": "\udb80\udcdb",
+        "tooltip": true,
+        "tooltip-format": "Toggle Night Light",
+        "on-click": "$HOME/.local/bin/nightlight_toggle.sh"
+    },
+    "custom/notification": {
+        "tooltip": true,
+        "format": "{icon}",
+        "format-icons": {
+            "notification": "\udb80\udc9a<span foreground='#e6e6e6'><sup></sup></span>",
+            "none": "\udb80\udc9a",
+            "dnd-notification": "<span foreground='#e6e6e6'><sup></sup></span>",
+            "dnd-none": "",
+            "inhibited-notification": "\udb80\udc9a<span foreground='#e6e6e6'><sup></sup></span>",
+            "inhibited-none": "\udb80\udc9a",
+            "dnd-inhibited-notification": "\udb80\udc9b<span foreground='#e6e6e6'><sup></sup></span>",
+            "dnd-inhibited-none": ""
+        },
+        "return-type": "json",
+        "exec-if": "which swaync-client",
+        "exec": "swaync-client -swb",
+        "on-click": "swaync-client -t -sw",
+        "on-click-right": "swaync-client -d -sw",
+        "escape": true
+    },
+    "clock": {
+        "format": " {:%H:%M:%S  %A, %d %B %Y} ",
+        "interval": 1,
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    },
+    "temperature": {
+        "interval": 2,
+        "format": "\uf2c9 {temperatureC}\u00b0C",
+        "tooltip": true
+    },
+    "layer": "overlay"
+}
