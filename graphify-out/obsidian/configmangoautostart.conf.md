@@ -1,11 +1,11 @@
 ---
 source_file: "config/mango/autostart.conf"
 type: "concept"
-community: "Window Manager & Compositor"
+community: "Mango Window Manager"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Window_Manager__Compositor
+  - community/Mango_Window_Manager
 ---
 
 # config/mango/autostart.conf
@@ -13,4 +13,4 @@ tags:
 ## Connections
 - [[configmangoconfig.conf]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/Window_Manager__Compositor
+#graphify/concept #graphify/EXTRACTED #community/Mango_Window_Manager

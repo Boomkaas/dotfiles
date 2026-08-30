@@ -1,11 +1,11 @@
 ---
 source_file: "nixos/scripts/nixreb.sh"
 type: "concept"
-community: "NixOS System & Modules (2)"
+community: "Automation & Claimer Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_2
+  - community/Automation__Claimer_Scripts
 ---
 
 # nixos/scripts/nixreb.sh
@@ -15,4 +15,4 @@ tags:
 - [[nixreb.sh]] - `defined_in` [EXTRACTED]
 - [[nixreb.sh script]] - `defined_in` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_2
+#graphify/concept #graphify/EXTRACTED #community/Automation__Claimer_Scripts

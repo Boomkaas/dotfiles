@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/hancore-v2-5a/config"
 type: "concept"
-community: "NixOS System & Modules (2)"
+community: "Automation & Claimer Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_2
+  - community/Automation__Claimer_Scripts
 ---
 
 # hancore-v2-5a/config
@@ -19,4 +19,4 @@ tags:
 - [[hancore-v7-2bconfig]] - `references` [EXTRACTED]
 - [[waybarconfig]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_2
+#graphify/concept #graphify/EXTRACTED #community/Automation__Claimer_Scripts

@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/jakoolit-sleek/config"
 type: "concept"
-community: "Status Bar & UI Panels (6)"
+community: "Waybar Status Bar"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_6
+  - community/Waybar_Status_Bar
 ---
 
 # jakoolit-sleek/config
@@ -19,4 +19,4 @@ tags:
 - [[jakoolit-sleekstyle.css]] - `styles` [EXTRACTED]
 - [[waybarconfig]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_6
+#graphify/concept #graphify/EXTRACTED #community/Waybar_Status_Bar

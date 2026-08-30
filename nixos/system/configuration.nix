@@ -163,6 +163,11 @@
 
     programs.fish = {
       enable = true;
+      interactiveShellInit = ''
+        if test -f /home/peng/Code/Dotfiles/config/fish/config.fish
+          source /home/peng/Code/Dotfiles/config/fish/config.fish
+        end
+      '';
     };
 
     systemd.user.services.awww-daemon = {

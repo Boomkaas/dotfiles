@@ -1,11 +1,11 @@
 ---
 source_file: "nixos/scripts/twitch-drops-claimer.user.js"
 type: "concept"
-community: "NixOS System & Modules"
+community: "Automation & Claimer Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules
+  - community/Automation__Claimer_Scripts
 ---
 
 # nixos/scripts/twitch-drops-claimer.user.js
@@ -46,4 +46,4 @@ tags:
 - [[updateHUDButtons()]] - `defined_in` [EXTRACTED]
 - [[updateHUDStatus()]] - `defined_in` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules
+#graphify/concept #graphify/EXTRACTED #community/Automation__Claimer_Scripts

@@ -1,11 +1,11 @@
 ---
 source_file: "nixos/scripts/epic-games-claimer.user.js"
 type: "concept"
-community: "NixOS System & Modules (8)"
+community: "Automation & Claimer Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_8
+  - community/Automation__Claimer_Scripts
 ---
 
 # nixos/scripts/epic-games-claimer.user.js
@@ -30,4 +30,4 @@ tags:
 - [[updateHUDButtons()_1]] - `defined_in` [EXTRACTED]
 - [[updateHUDStatus()_1]] - `defined_in` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_8
+#graphify/concept #graphify/EXTRACTED #community/Automation__Claimer_Scripts

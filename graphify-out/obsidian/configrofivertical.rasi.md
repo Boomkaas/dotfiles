@@ -1,13 +1,13 @@
 ---
 source_file: "config/rofi/vertical.rasi"
 type: "concept"
-community: "Status Bar & UI Panels (77)"
+community: "Rofi App Launcher"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_77
+  - community/Rofi_App_Launcher
 ---
 
 # config/rofi/vertical.rasi
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_77
+#graphify/concept #graphify/EXTRACTED #community/Rofi_App_Launcher

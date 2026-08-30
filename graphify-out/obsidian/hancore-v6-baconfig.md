@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/hancore-v6-ba/config"
 type: "concept"
-community: "NixOS System & Modules (3)"
+community: "NixOS Utility Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_3
+  - community/NixOS_Utility_Scripts
 ---
 
 # hancore-v6-ba/config
@@ -19,4 +19,4 @@ tags:
 - [[hancore-v7-2bconfig]] - `references` [EXTRACTED]
 - [[waybarconfig]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_3
+#graphify/concept #graphify/EXTRACTED #community/NixOS_Utility_Scripts

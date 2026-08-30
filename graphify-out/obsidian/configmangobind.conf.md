@@ -1,11 +1,11 @@
 ---
 source_file: "config/mango/bind.conf"
 type: "concept"
-community: "NixOS System & Modules (3)"
+community: "NixOS Utility Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_3
+  - community/NixOS_Utility_Scripts
 ---
 
 # config/mango/bind.conf
@@ -135,4 +135,4 @@ tags:
 - [[nixosscriptsscreenshot.sh]] - `references` [EXTRACTED]
 - [[waybarconfig]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_3
+#graphify/concept #graphify/EXTRACTED #community/NixOS_Utility_Scripts

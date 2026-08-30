@@ -1,13 +1,13 @@
 ---
 source_file: "config/hypr/hypridle.conf"
 type: "concept"
-community: "Window Manager & Compositor (71)"
+community: "Hyprland Compositor"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Window_Manager__Compositor_71
+  - community/Hyprland_Compositor
 ---
 
 # config/hypr/hypridle.conf
 
-#graphify/concept #graphify/EXTRACTED #community/Window_Manager__Compositor_71
+#graphify/concept #graphify/EXTRACTED #community/Hyprland_Compositor

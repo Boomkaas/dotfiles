@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/jakoolit-top-everforest/config"
 type: "concept"
-community: "Status Bar & UI Panels (57)"
+community: "Waybar Status Bar"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_57
+  - community/Waybar_Status_Bar
 ---
 
 # jakoolit-top-everforest/config
@@ -19,4 +19,4 @@ tags:
 - [[jakoolit-top-everforeststyle.css]] - `styles` [EXTRACTED]
 - [[waybarconfig]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_57
+#graphify/concept #graphify/EXTRACTED #community/Waybar_Status_Bar

@@ -1,11 +1,11 @@
 ---
 source_file: "nixos/system/hardware-configuration.nix"
 type: "concept"
-community: "NixOS System & Modules (9)"
+community: "NixOS System Config"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_9
+  - community/NixOS_System_Config
 ---
 
 # nixos/system/hardware-configuration.nix
@@ -13,4 +13,4 @@ tags:
 ## Connections
 - [[nixosflake.nix]] - `imports` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_9
+#graphify/concept #graphify/EXTRACTED #community/NixOS_System_Config

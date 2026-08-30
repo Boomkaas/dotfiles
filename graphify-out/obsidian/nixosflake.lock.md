@@ -1,13 +1,13 @@
 ---
 source_file: "nixos/flake.lock"
 type: "concept"
-community: "NixOS System & Modules (80)"
+community: "NixOS Configuration"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_80
+  - community/NixOS_Configuration
 ---
 
 # nixos/flake.lock
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_80
+#graphify/concept #graphify/EXTRACTED #community/NixOS_Configuration

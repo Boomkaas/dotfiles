@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/hancore-v1-9c/config"
 type: "concept"
-community: "Status Bar & UI Panels (5)"
+community: "Waybar Status Bar"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_5
+  - community/Waybar_Status_Bar
 ---
 
 # hancore-v1-9c/config
@@ -136,4 +136,4 @@ tags:
 - [[jakoolit-top-sleekconfig]] - `references` [EXTRACTED]
 - [[waybarconfig]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_5
+#graphify/concept #graphify/EXTRACTED #community/Waybar_Status_Bar

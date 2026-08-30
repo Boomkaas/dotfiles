@@ -1,12 +1,12 @@
 ---
 source_file: "config/swaync/config.json"
 type: "code"
-community: "Status Bar & UI Panels"
+community: "Sway Notification Center"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels
+  - community/Sway_Notification_Center
 ---
 
 # config.json
@@ -37,4 +37,4 @@ tags:
 - [[widget-config]] - `contains` [EXTRACTED]
 - [[widgets]] - `contains` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Status_Bar__UI_Panels
+#graphify/code #graphify/EXTRACTED #community/Sway_Notification_Center

@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/jakoolit-top-simple/config"
 type: "concept"
-community: "Status Bar & UI Panels (61)"
+community: "Waybar Status Bar"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_61
+  - community/Waybar_Status_Bar
 ---
 
 # jakoolit-top-simple/config
@@ -19,4 +19,4 @@ tags:
 - [[jakoolit-top-simplestyle.css]] - `styles` [EXTRACTED]
 - [[waybarconfig]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_61
+#graphify/concept #graphify/EXTRACTED #community/Waybar_Status_Bar

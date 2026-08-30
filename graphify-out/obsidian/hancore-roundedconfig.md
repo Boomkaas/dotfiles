@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/hancore-rounded/config"
 type: "concept"
-community: "Status Bar & UI Panels (16)"
+community: "Waybar Status Bar"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_16
+  - community/Waybar_Status_Bar
 ---
 
 # hancore-rounded/config
@@ -19,4 +19,4 @@ tags:
 - [[hancore-v7-2bconfig]] - `references` [EXTRACTED]
 - [[waybarconfig]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_16
+#graphify/concept #graphify/EXTRACTED #community/Waybar_Status_Bar

@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/jakoolit-top-gardenia/style.css"
 type: "concept"
-community: "Status Bar & UI Panels (58)"
+community: "Waybar Status Bar"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_58
+  - community/Waybar_Status_Bar
 ---
 
 # jakoolit-top-gardenia/style.css
@@ -13,4 +13,4 @@ tags:
 ## Connections
 - [[jakoolit-top-gardeniaconfig]] - `styles` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_58
+#graphify/concept #graphify/EXTRACTED #community/Waybar_Status_Bar

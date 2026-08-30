@@ -1,13 +1,13 @@
 ---
 source_file: "config/Thunar/uca.xml"
 type: "concept"
-community: "Module Group 79"
+community: "System Configuration"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Module_Group_79
+  - community/System_Configuration
 ---
 
 # config/Thunar/uca.xml
 
-#graphify/concept #graphify/EXTRACTED #community/Module_Group_79
+#graphify/concept #graphify/EXTRACTED #community/System_Configuration

@@ -1,12 +1,12 @@
 ---
 source_file: "nixos/scripts/gfn.sh"
 type: "code"
-community: "NixOS System & Modules (13)"
+community: "NixOS Utility Scripts"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_13
+  - community/NixOS_Utility_Scripts
 ---
 
 # gfn.sh script
@@ -15,4 +15,4 @@ tags:
 - [[gfn.sh]] - `contains` [EXTRACTED]
 - [[nixosscriptsgfn.sh]] - `defined_in` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/NixOS_System__Modules_13
+#graphify/code #graphify/EXTRACTED #community/NixOS_Utility_Scripts

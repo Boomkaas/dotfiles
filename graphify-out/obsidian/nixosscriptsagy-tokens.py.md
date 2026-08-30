@@ -1,11 +1,11 @@
 ---
 source_file: "nixos/scripts/agy-tokens.py"
 type: "concept"
-community: "NixOS System & Modules (11)"
+community: "NixOS Utility Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_11
+  - community/NixOS_Utility_Scripts
 ---
 
 # nixos/scripts/agy-tokens.py
@@ -18,4 +18,4 @@ tags:
 - [[main()]] - `defined_in` [EXTRACTED]
 - [[make_bar()]] - `defined_in` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_11
+#graphify/concept #graphify/EXTRACTED #community/NixOS_Utility_Scripts

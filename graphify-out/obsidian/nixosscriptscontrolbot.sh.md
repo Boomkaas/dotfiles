@@ -1,11 +1,11 @@
 ---
 source_file: "nixos/scripts/controlbot.sh"
 type: "concept"
-community: "NixOS System & Modules (12)"
+community: "NixOS Utility Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_12
+  - community/NixOS_Utility_Scripts
 ---
 
 # nixos/scripts/controlbot.sh
@@ -14,4 +14,4 @@ tags:
 - [[controlbot.sh]] - `defined_in` [EXTRACTED]
 - [[controlbot.sh script]] - `defined_in` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_12
+#graphify/concept #graphify/EXTRACTED #community/NixOS_Utility_Scripts

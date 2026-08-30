@@ -1,12 +1,12 @@
 ---
 source_file: "nixos/scripts/agy-tokens.py"
 type: "code"
-community: "NixOS System & Modules (11)"
+community: "NixOS Utility Scripts"
 location: "L43"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_11
+  - community/NixOS_Utility_Scripts
 ---
 
 # make_bar()
@@ -16,4 +16,4 @@ tags:
 - [[main()]] - `calls` [EXTRACTED]
 - [[nixosscriptsagy-tokens.py]] - `defined_in` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/NixOS_System__Modules_11
+#graphify/code #graphify/EXTRACTED #community/NixOS_Utility_Scripts

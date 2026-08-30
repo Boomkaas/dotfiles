@@ -1,13 +1,13 @@
 ---
 source_file: "config/mango/pkg-mango.txt"
 type: "concept"
-community: "Window Manager & Compositor (73)"
+community: "Mango Window Manager"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Window_Manager__Compositor_73
+  - community/Mango_Window_Manager
 ---
 
 # config/mango/pkg-mango.txt
 
-#graphify/concept #graphify/EXTRACTED #community/Window_Manager__Compositor_73
+#graphify/concept #graphify/EXTRACTED #community/Mango_Window_Manager

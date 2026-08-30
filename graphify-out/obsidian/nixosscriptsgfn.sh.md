@@ -1,11 +1,11 @@
 ---
 source_file: "nixos/scripts/gfn.sh"
 type: "concept"
-community: "NixOS System & Modules (13)"
+community: "NixOS Utility Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_13
+  - community/NixOS_Utility_Scripts
 ---
 
 # nixos/scripts/gfn.sh
@@ -14,4 +14,4 @@ tags:
 - [[gfn.sh]] - `defined_in` [EXTRACTED]
 - [[gfn.sh script]] - `defined_in` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_13
+#graphify/concept #graphify/EXTRACTED #community/NixOS_Utility_Scripts

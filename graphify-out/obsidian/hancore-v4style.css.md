@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/hancore-v4/style.css"
 type: "concept"
-community: "NixOS System & Modules (3)"
+community: "NixOS Utility Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_3
+  - community/NixOS_Utility_Scripts
 ---
 
 # hancore-v4/style.css
@@ -13,4 +13,4 @@ tags:
 ## Connections
 - [[hancore-v4config]] - `styles` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_3
+#graphify/concept #graphify/EXTRACTED #community/NixOS_Utility_Scripts

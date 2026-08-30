@@ -1,12 +1,12 @@
 ---
 source_file: "nixos/scripts/roblox.sh"
 type: "code"
-community: "NixOS System & Modules (14)"
+community: "NixOS Utility Scripts"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_14
+  - community/NixOS_Utility_Scripts
 ---
 
 # roblox.sh script
@@ -15,4 +15,4 @@ tags:
 - [[nixosscriptsroblox.sh]] - `defined_in` [EXTRACTED]
 - [[roblox.sh]] - `contains` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/NixOS_System__Modules_14
+#graphify/code #graphify/EXTRACTED #community/NixOS_Utility_Scripts

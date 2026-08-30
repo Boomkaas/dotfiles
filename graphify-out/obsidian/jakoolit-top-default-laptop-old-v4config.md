@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/jakoolit-top-default-laptop-old-v4/config"
 type: "concept"
-community: "Status Bar & UI Panels (55)"
+community: "Waybar Status Bar"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_55
+  - community/Waybar_Status_Bar
 ---
 
 # jakoolit-top-default-laptop-old-v4/config
@@ -19,4 +19,4 @@ tags:
 - [[jakoolit-top-default-laptop-old-v4style.css]] - `styles` [EXTRACTED]
 - [[waybarconfig]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_55
+#graphify/concept #graphify/EXTRACTED #community/Waybar_Status_Bar

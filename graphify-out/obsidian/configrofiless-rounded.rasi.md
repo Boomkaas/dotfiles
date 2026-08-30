@@ -1,13 +1,13 @@
 ---
 source_file: "config/rofi/less-rounded.rasi"
 type: "concept"
-community: "Status Bar & UI Panels (76)"
+community: "Rofi App Launcher"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_76
+  - community/Rofi_App_Launcher
 ---
 
 # config/rofi/less-rounded.rasi
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_76
+#graphify/concept #graphify/EXTRACTED #community/Rofi_App_Launcher

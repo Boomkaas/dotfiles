@@ -1,12 +1,12 @@
 ---
 source_file: "nixos/scripts/epic-games-claimer.user.js"
 type: "code"
-community: "NixOS System & Modules (8)"
+community: "Automation & Claimer Scripts"
 location: "L312"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_8
+  - community/Automation__Claimer_Scripts
 ---
 
 # updateHUDStatus()
@@ -21,4 +21,4 @@ tags:
 - [[startClaimProcess()_1]] - `calls` [EXTRACTED]
 - [[stopClaimProcess()_1]] - `calls` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/NixOS_System__Modules_8
+#graphify/code #graphify/EXTRACTED #community/Automation__Claimer_Scripts

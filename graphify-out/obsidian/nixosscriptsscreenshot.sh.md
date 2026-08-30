@@ -1,11 +1,11 @@
 ---
 source_file: "nixos/scripts/screenshot.sh"
 type: "concept"
-community: "NixOS System & Modules (3)"
+community: "NixOS Utility Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_3
+  - community/NixOS_Utility_Scripts
 ---
 
 # nixos/scripts/screenshot.sh
@@ -15,4 +15,4 @@ tags:
 - [[screenshot.sh]] - `defined_in` [EXTRACTED]
 - [[screenshot.sh script]] - `defined_in` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_3
+#graphify/concept #graphify/EXTRACTED #community/NixOS_Utility_Scripts

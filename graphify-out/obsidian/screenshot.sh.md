@@ -1,12 +1,12 @@
 ---
 source_file: "nixos/scripts/screenshot.sh"
 type: "code"
-community: "NixOS System & Modules (3)"
+community: "NixOS Utility Scripts"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_3
+  - community/NixOS_Utility_Scripts
 ---
 
 # screenshot.sh
@@ -15,4 +15,4 @@ tags:
 - [[nixosscriptsscreenshot.sh]] - `defined_in` [EXTRACTED]
 - [[screenshot.sh script]] - `contains` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/NixOS_System__Modules_3
+#graphify/code #graphify/EXTRACTED #community/NixOS_Utility_Scripts

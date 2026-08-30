@@ -1,13 +1,13 @@
 ---
 source_file: "config/swaync/style.css"
 type: "concept"
-community: "Status Bar & UI Panels (78)"
+community: "Sway Notification Center"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_78
+  - community/Sway_Notification_Center
 ---
 
 # swaync/style.css
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_78
+#graphify/concept #graphify/EXTRACTED #community/Sway_Notification_Center

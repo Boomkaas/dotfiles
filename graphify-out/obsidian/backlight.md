@@ -1,12 +1,12 @@
 ---
 source_file: "config/swaync/config.json"
 type: "concept"
-community: "Status Bar & UI Panels"
+community: "Sway Notification Center"
 location: "L27"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels
+  - community/Sway_Notification_Center
 ---
 
 # backlight
@@ -15,4 +15,4 @@ tags:
 - [[configswayncconfig.json]] - `defined_in` [EXTRACTED]
 - [[widgets]] - `extends` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels
+#graphify/concept #graphify/EXTRACTED #community/Sway_Notification_Center

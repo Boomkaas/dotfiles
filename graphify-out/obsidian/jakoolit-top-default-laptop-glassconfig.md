@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/jakoolit-top-default-laptop-glass/config"
 type: "concept"
-community: "NixOS System & Modules (3)"
+community: "NixOS Utility Scripts"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules_3
+  - community/NixOS_Utility_Scripts
 ---
 
 # jakoolit-top-default-laptop-glass/config
@@ -19,4 +19,4 @@ tags:
 - [[jakoolit-top-default-laptop-glassstyle.css]] - `styles` [EXTRACTED]
 - [[waybarconfig]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/NixOS_System__Modules_3
+#graphify/concept #graphify/EXTRACTED #community/NixOS_Utility_Scripts

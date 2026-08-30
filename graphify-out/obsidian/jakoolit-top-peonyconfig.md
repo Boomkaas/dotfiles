@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/jakoolit-top-peony/config"
 type: "concept"
-community: "Status Bar & UI Panels (60)"
+community: "Waybar Status Bar"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_60
+  - community/Waybar_Status_Bar
 ---
 
 # jakoolit-top-peony/config
@@ -19,4 +19,4 @@ tags:
 - [[jakoolit-top-peonystyle.css]] - `styles` [EXTRACTED]
 - [[waybarconfig]] - `references` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_60
+#graphify/concept #graphify/EXTRACTED #community/Waybar_Status_Bar

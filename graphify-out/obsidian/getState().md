@@ -1,12 +1,12 @@
 ---
 source_file: "nixos/scripts/twitch-drops-claimer.user.js"
 type: "code"
-community: "NixOS System & Modules"
+community: "Automation & Claimer Scripts"
 location: "L117"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/NixOS_System__Modules
+  - community/Automation__Claimer_Scripts
 ---
 
 # getState()
@@ -18,4 +18,4 @@ tags:
 - [[stopClaimProcess()]] - `calls` [EXTRACTED]
 - [[twitch-drops-claimer.user.js]] - `contains` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/NixOS_System__Modules
+#graphify/code #graphify/EXTRACTED #community/Automation__Claimer_Scripts

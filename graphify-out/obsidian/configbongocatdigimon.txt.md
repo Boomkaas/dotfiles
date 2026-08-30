@@ -1,13 +1,13 @@
 ---
 source_file: "config/bongocat/digimon.txt"
 type: "concept"
-community: "Bongocat & Desktop Pets (67)"
+community: "Bongocat & Desktop Pets"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Bongocat__Desktop_Pets_67
+  - community/Bongocat__Desktop_Pets
 ---
 
 # config/bongocat/digimon.txt
 
-#graphify/concept #graphify/EXTRACTED #community/Bongocat__Desktop_Pets_67
+#graphify/concept #graphify/EXTRACTED #community/Bongocat__Desktop_Pets

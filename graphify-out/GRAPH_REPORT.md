@@ -1,7 +1,7 @@
 # Graph Report - Dotfiles  (2026-08-30)
 
 ## Corpus Check
-- 297 files · ~210,038 words
+- 297 files · ~210,060 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,15 +10,15 @@
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
-- Status Bar & UI Panels
-- NixOS System & Modules
-- NixOS System & Modules (2)
-- NixOS System & Modules (3)
-- NixOS System & Modules (8)
-- NixOS System & Modules (11)
-- NixOS System & Modules (12)
-- NixOS System & Modules (13)
-- NixOS System & Modules (14)
+- Sway Notification Center
+- Automation & Claimer Scripts
+- Automation & Claimer Scripts
+- NixOS Utility Scripts
+- Automation & Claimer Scripts
+- NixOS Utility Scripts
+- NixOS Utility Scripts
+- NixOS Utility Scripts
+- NixOS Utility Scripts
 
 ## God Nodes (most connected - your core abstractions)
 1. `runStreamWatchdog()` - 15 edges
@@ -40,19 +40,19 @@
 
 ## Communities (81 total, 5 thin omitted)
 
-### Community 0 - "Status Bar & UI Panels"
+### Community 0 - "Sway Notification Center"
 Cohesion: 0.08
 Nodes (49): device, label, sub-cs, actions, control-center-margin-bottom, control-center-margin-left, control-center-margin-right, control-center-margin-top (+41 more)
 
-### Community 1 - "NixOS System & Modules"
+### Community 1 - "Automation & Claimer Scripts"
 Cohesion: 0.24
 Nodes (33): applyStreamPageOptimizations(), autoClaimAllButtons(), autoSwitchStreamer(), cancellableSleep(), checkChannelStatusGQL(), checkDSTCampaignStatus(), clearAllTimers(), createHUD() (+25 more)
 
-### Community 8 - "NixOS System & Modules (8)"
+### Community 8 - "Automation & Claimer Scripts"
 Cohesion: 0.43
 Nodes (17): advanceQueue(), cancellableSleep(), clearAllTimers(), clearState(), closeClaimerTab(), createHUD(), getState(), handleGamePage() (+9 more)
 
-### Community 11 - "NixOS System & Modules (11)"
+### Community 11 - "NixOS Utility Scripts"
 Cohesion: 0.80
 Nodes (4): format_time_remaining(), get_quota(), main(), make_bar()
 
@@ -62,17 +62,17 @@ Nodes (4): format_time_remaining(), get_quota(), main(), make_bar()
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Should `Status Bar & UI Panels` be split into smaller, more focused modules?**
+- **Should `Sway Notification Center` be split into smaller, more focused modules?**
   _Cohesion score 0.07764705882352942 - nodes in this community are weakly interconnected._
-- **Should `NixOS System & Modules (2)` be split into smaller, more focused modules?**
+- **Should `Automation & Claimer Scripts` be split into smaller, more focused modules?**
   _Cohesion score 0.07389162561576355 - nodes in this community are weakly interconnected._
-- **Should `NixOS System & Modules (3)` be split into smaller, more focused modules?**
+- **Should `NixOS Utility Scripts` be split into smaller, more focused modules?**
   _Cohesion score 0.08 - nodes in this community are weakly interconnected._
-- **Should `Status Bar & UI Panels (4)` be split into smaller, more focused modules?**
+- **Should `Waybar Status Bar` be split into smaller, more focused modules?**
   _Cohesion score 0.07692307692307693 - nodes in this community are weakly interconnected._
-- **Should `Status Bar & UI Panels (5)` be split into smaller, more focused modules?**
+- **Should `Waybar Status Bar` be split into smaller, more focused modules?**
   _Cohesion score 0.07692307692307693 - nodes in this community are weakly interconnected._
-- **Should `Status Bar & UI Panels (6)` be split into smaller, more focused modules?**
+- **Should `Waybar Status Bar` be split into smaller, more focused modules?**
   _Cohesion score 0.07692307692307693 - nodes in this community are weakly interconnected._
-- **Should `Status Bar & UI Panels (7)` be split into smaller, more focused modules?**
+- **Should `Waybar Status Bar` be split into smaller, more focused modules?**
   _Cohesion score 0.08 - nodes in this community are weakly interconnected._

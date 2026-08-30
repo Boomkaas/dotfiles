@@ -7,6 +7,9 @@ let
   epic = pkgs.writeShellScriptBin "epic" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/epic "$@"
   '';
+  nixreb = pkgs.writeShellScriptBin "nixreb" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixreb.sh "$@"
+  '';
   twitch = pkgs.writeShellScriptBin "twitch" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/twitch "$@"
   '';
@@ -350,6 +353,7 @@ in
     controlbot
     epic
     twitch
+    nixreb
 
     # Archive
     zip

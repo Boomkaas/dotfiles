@@ -1,11 +1,11 @@
 ---
 source_file: "config/waybar/hancore-v2-1-2/style.css"
 type: "concept"
-community: "Status Bar & UI Panels (24)"
+community: "Waybar Status Bar"
 tags:
   - graphify/concept
   - graphify/EXTRACTED
-  - community/Status_Bar__UI_Panels_24
+  - community/Waybar_Status_Bar
 ---
 
 # hancore-v2-1-2/style.css
@@ -13,4 +13,4 @@ tags:
 ## Connections
 - [[hancore-v2-1-2config]] - `styles` [EXTRACTED]
 
-#graphify/concept #graphify/EXTRACTED #community/Status_Bar__UI_Panels_24
+#graphify/concept #graphify/EXTRACTED #community/Waybar_Status_Bar
