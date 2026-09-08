@@ -17,7 +17,6 @@
     ],
     "modules-right": [
         "group/tray-expander",
-        "idle_inhibitor",
         "battery",
         "clock"
     ],
@@ -308,5 +307,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

@@ -14,3 +14,11 @@ result-*
 *.swp
 *.swo
 *~
+
+# Graphify cache
+graphify-out/
+
+# Obsidian Vault
+vault/
+obsidian/
+.obsidian/

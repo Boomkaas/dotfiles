@@ -55,6 +55,7 @@ if status is-interactive
     abbr nd 'cd /etc/nixos'
 
     # NixOS & Custom Shortcuts (migrated from Zsh)
+    abbr awake '/home/peng/Code/Dotfiles/nixos/scripts/awake'
     abbr nixreb '/home/peng/Code/Dotfiles/nixos/scripts/nixreb.sh'
     abbr addchans '/home/peng/Code/Dotfiles/nixos/scripts/channels.sh'
     abbr epic '/home/peng/Code/Dotfiles/nixos/scripts/epic'
@@ -67,9 +68,6 @@ if status is-interactive
     abbr gfn 'nohup flatpak run com.nvidia.geforcenow > /dev/null 2>&1 &'
     abbr roblox 'nohup flatpak run org.vinegarhq.Sober > /dev/null 2>&1 &'
 
-    # Graphify
-    abbr gsync 'graphify-all'
-    abbr gobsidian 'graphify export obsidian'
 
     # Antigravity wrapper function
     function agy
@@ -79,4 +77,5 @@ if status is-interactive
             command agy --add-dir "$PWD" $argv
         end
     end
+    alias antigravity='agy'
 end

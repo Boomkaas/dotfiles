@@ -38,7 +38,7 @@
   home-manager.useUserPackages = true;
   home-manager.backupFileExtension = "backup";
   home-manager.extraSpecialArgs = { inherit inputs pkgs_unstable; };
-  home-manager.users.peng = { config, pkgs, inputs, pkgs_unstable, ... }: {
+  home-manager.users.peng = { config, pkgs, lib, inputs, pkgs_unstable, ... }: {
     home.username = "peng";
     home.homeDirectory = "/home/peng";
     home.stateVersion = "25.05";
@@ -46,6 +46,13 @@
       "$HOME/.local/bin"
       "$HOME/.npm-global/bin"
     ];
+
+    # Auto-clean any conflicting .backup file if mimeapps.list was rewritten by external GUI apps
+    home.activation.cleanMimeappsBackup = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
+      if [ -f "$HOME/.config/mimeapps.list" ] && [ ! -L "$HOME/.config/mimeapps.list" ] && [ -e "$HOME/.config/mimeapps.list.backup" ]; then
+        rm -f "$HOME/.config/mimeapps.list.backup"
+      fi
+    '';
 
     programs.git = {
       enable = true;
@@ -87,6 +94,24 @@
       enable = true;
       defaultApplications = {
         "inode/directory" = [ "thunar.desktop" ];
+
+        # Web / Browsers
+        "text/html" = [ "firefox.desktop" ];
+        "x-scheme-handler/http" = [ "firefox.desktop" ];
+        "x-scheme-handler/https" = [ "firefox.desktop" ];
+        "x-scheme-handler/chrome" = [ "firefox.desktop" ];
+        "application/x-extension-htm" = [ "firefox.desktop" ];
+        "application/x-extension-html" = [ "firefox.desktop" ];
+        "application/x-extension-shtml" = [ "firefox.desktop" ];
+        "application/xhtml+xml" = [ "firefox.desktop" ];
+        "application/x-extension-xhtml" = [ "firefox.desktop" ];
+        "application/x-extension-xht" = [ "firefox.desktop" ];
+        "application/x-zerosize" = [ "firefox.desktop" ];
+
+        # Messaging / Chat
+        "x-scheme-handler/tg" = [ "org.telegram.desktop.desktop" ];
+        "x-scheme-handler/tonsite" = [ "org.telegram.desktop.desktop" ];
+        "x-scheme-handler/msteams" = [ "teams-for-linux.desktop" ];
 
         # Office Documents
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" = [ "calc.desktop" ];
@@ -188,5 +213,35 @@
         WantedBy = [ "default.target" ];
       };
     };
+
+    systemd.user.services.hypridle = {
+      Unit = {
+        Description = "Hyprland's idle daemon";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+        ConditionEnvironment = "WAYLAND_DISPLAY";
+      };
+      Service = {
+        Type = "simple";
+        ExecStart = "${pkgs_unstable.hypridle}/bin/hypridle";
+        Restart = "always";
+        RestartSec = "2s";
+        Environment = [
+          "PATH=/run/current-system/sw/bin:/etc/profiles/per-user/peng/bin:/home/peng/.local/bin:/run/wrappers/bin:/usr/bin:/bin"
+        ];
+      };
+      Install = {
+        WantedBy = [ "graphical-session.target" ];
+      };
+    };
+
+    xdg.configFile."systemd/user/hypridle.service.d/zz-path.conf".text = ''
+      [Service]
+      Restart=always
+      RestartSec=2s
+      Environment="PATH=/run/current-system/sw/bin:/etc/profiles/per-user/peng/bin:/home/peng/.local/bin:/run/wrappers/bin:/usr/bin:/bin"
+    '';
   };
 }
+
+

@@ -1,15 +1,14 @@
 {
     "reload_style_on_change": true,
-    "layer": "overlay",
+    "layer": "top",
     "position": "top",
     "mod": "dock",
-    "margin-top": 1,
+    "margin-top": 0,
     "height": 32,
     "width": 1100,
     "margin-bottom": 0,
     "modules-left": [
-        "ext/workspaces",
-        "idle_inhibitor"
+        "ext/workspaces"
     ],
     "modules-center": [
         "mpris",

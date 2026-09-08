@@ -5,10 +5,10 @@
     "spacing": 0,
     "height": 32,
     "margin-top": 0,
+    "margin-bottom": 0,
     "modules-left": [
         "group/left1",
         "group/left2",
-        "group/left3",
         "group/left4"
     ],
     "group/left1": {
@@ -16,9 +16,7 @@
         "modules": [
             "custom/menu",
             "clock",
-            "idle_inhibitor",
-            "custom/notification",
-            "idle_inhibitor"
+            "custom/notification"
         ]
     },
     "group/left2": {
@@ -29,10 +27,7 @@
     },
     "group/left3": {
         "orientation": "inherit",
-        "modules": [
-            "custom/omarchy-theme",
-            "custom/omarchy-theme-set"
-        ]
+        "modules": []
     },
     "modules-center": [
         "ext/workspaces"
@@ -314,5 +309,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

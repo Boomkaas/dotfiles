@@ -2,6 +2,7 @@
 
 {
   programs.fish.enable = true;
+  programs.zsh.enable = true;
 
   users.users.peng = {
     isNormalUser = true;

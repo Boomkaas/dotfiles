@@ -12,7 +12,6 @@
         "custom/separator",
         "tray",
         "custom/separator7",
-        "idle_inhibitor",
         "custom/notification",
         "custom/separator2",
         "custom/separator5",
@@ -297,5 +296,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

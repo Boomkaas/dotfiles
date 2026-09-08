@@ -1,19 +1,18 @@
 {
     "reload_style_on_change": true,
-    "layer": "overlay",
+    "layer": "top",
     "position": "top",
     "mod": "dock",
-    "margin-top": 1,
+    "margin-top": 0,
     "height": 32,
     "margin-left": 5,
     "margin-right": 5,
-    "margin-bottom": 2,
+    "margin-bottom": 0,
     "modules-left": [
         "custom/menu",
         "clock",
         "custom/notification",
         "tray",
-        "idle_inhibitor",
         "ext/workspaces",
         "mpris"
     ],

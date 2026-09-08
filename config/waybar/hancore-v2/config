@@ -1,6 +1,6 @@
 {
     "reload_style_on_change": true,
-    "layer": "overlay",
+    "layer": "top",
     "position": "top",
     "mod": "dock",
     "margin-top": 0,
@@ -12,7 +12,6 @@
         "custom/menu",
         "clock",
         "custom/notification",
-        "idle_inhibitor",
         "ext/workspaces",
         "mpris"
     ],

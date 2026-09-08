@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# awake
+#
+# Toggles or controls the system inactivity / idle inhibition state.
+#
+# When Awake mode is ON (State = 1):
+#   - Hypridle listeners are inhibited (no lock, no display sleep, no poweroff)
+#   - Night presence checks are bypassed
+#   - Any pending RTC wake alarms are cancelled
+#
+# When Awake mode is OFF (State = 0):
+#   - Normal inactivity timers resume (screen lock, DPMS off, suspend, poweroff)
+# ==============================================================================
+
+set -euo pipefail
+
+export PATH="/run/current-system/sw/bin:/etc/profiles/per-user/${USER:-peng}/bin:$HOME/.local/bin:/run/wrappers/bin:$PATH"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+
+STATE_DIR="$HOME/.local/state/haku_theme"
+STATE_FILE="$STATE_DIR/idle_inhibit"
+DPMS_HANDLER_BIN="$HOME/.local/bin/dpms_handler.sh"
+
+QUIET=0
+NOTIFY=1
+
+show_help() {
+    cat << 'EOF'
+Awake: Toggle or control the system inactivity / idle inhibition system.
+
+Usage: awake [COMMAND] [OPTIONS]
+
+Commands:
+  (none), toggle     Toggle between awake (inactivity inhibited) and normal
+  on, enable         Turn awake ON (prevent screen lock, display sleep, & auto-poweroff)
+  off, disable       Turn awake OFF (restore normal inactivity behavior)
+  status, check      Check current status (exits 0 if ON, 1 if OFF)
+  -h, --help, help   Show this help message
+
+Options:
+  -q, --quiet        Suppress console output
+  -n, --no-notify    Suppress desktop notifications
+EOF
+}
+
+is_awake() {
+    if [[ -f "$STATE_FILE" ]] && [[ "$(cat "$STATE_FILE" 2>/dev/null || true)" == "1" ]]; then
+        return 0
+    fi
+    return 1
+}
+
+notify_user() {
+    local title="$1"
+    local message="$2"
+    local icon="${3:-preferences-desktop-screensaver}"
+
+    if [[ $NOTIFY -eq 1 ]] && command -v notify-send >/dev/null 2>&1; then
+        notify-send \
+            --app-name="Awake" \
+            --urgency=normal \
+            --icon="$icon" \
+            --expire-time=3500 \
+            "$title" "$message" 2>/dev/null || true
+    fi
+}
+
+enable_awake() {
+    mkdir -p "$STATE_DIR"
+    echo "1" > "$STATE_FILE"
+
+    # Ensure display is powered on immediately
+    if [[ -x "$DPMS_HANDLER_BIN" ]]; then
+        "$DPMS_HANDLER_BIN" on >/dev/null 2>&1 || true
+    fi
+
+    # Cancel any active RTC wake alarms if set
+    if command -v rtcwake >/dev/null 2>&1; then
+        rtcwake -m disable >/dev/null 2>&1 || true
+    fi
+
+    notify_user "Awake Mode Enabled" "Inactivity inhibited: screen lock, display sleep, and auto-poweroff paused." "preferences-desktop-screensaver"
+
+    if [[ $QUIET -eq 0 ]]; then
+        if [[ -t 1 ]]; then
+            echo -e "\033[1;32m[awake]\033[0m Awake mode \033[1;32mON\033[0m — Inactivity system inhibited (screen & system stay awake)"
+        else
+            echo "[awake] Awake mode ON — Inactivity system inhibited"
+        fi
+    fi
+}
+
+disable_awake() {
+    mkdir -p "$STATE_DIR"
+    echo "0" > "$STATE_FILE"
+
+    notify_user "Awake Mode Disabled" "Inactivity system active: normal screen lock, display sleep, and auto-poweroff resumed." "video-display"
+
+    if [[ $QUIET -eq 0 ]]; then
+        if [[ -t 1 ]]; then
+            echo -e "\033[1;33m[awake]\033[0m Awake mode \033[1;31mOFF\033[0m — Inactivity system active (normal idle timeouts restored)"
+        else
+            echo "[awake] Awake mode OFF — Inactivity system active"
+        fi
+    fi
+}
+
+toggle_awake() {
+    if is_awake; then
+        disable_awake
+    else
+        enable_awake
+    fi
+}
+
+show_status() {
+    if is_awake; then
+        if [[ $QUIET -eq 0 ]]; then
+            if [[ -t 1 ]]; then
+                echo -e "\033[1;32m[awake]\033[0m Awake mode is \033[1;32mON\033[0m (Inactivity inhibited)"
+            else
+                echo "[awake] Awake mode: ON"
+            fi
+        fi
+        exit 0
+    else
+        if [[ $QUIET -eq 0 ]]; then
+            if [[ -t 1 ]]; then
+                echo -e "\033[1;33m[awake]\033[0m Awake mode is \033[1;31mOFF\033[0m (Inactivity active)"
+            else
+                echo "[awake] Awake mode: OFF"
+            fi
+        fi
+        exit 1
+    fi
+}
+
+# Parse options and command
+COMMAND="toggle"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -q|--quiet)
+            QUIET=1
+            shift
+            ;;
+        -n|--no-notify)
+            NOTIFY=0
+            shift
+            ;;
+        -h|--help|help)
+            show_help
+            exit 0
+            ;;
+        on|enable|start|1)
+            COMMAND="on"
+            shift
+            ;;
+        off|disable|stop|0)
+            COMMAND="off"
+            shift
+            ;;
+        toggle)
+            COMMAND="toggle"
+            shift
+            ;;
+        status|check|-s|--status)
+            COMMAND="status"
+            shift
+            ;;
+        *)
+            echo "Unknown option/command: $1" >&2
+            show_help >&2
+            exit 2
+            ;;
+    esac
+done
+
+case "$COMMAND" in
+    on)
+        enable_awake
+        ;;
+    off)
+        disable_awake
+        ;;
+    toggle)
+        toggle_awake
+        ;;
+    status)
+        show_status
+        ;;
+esac

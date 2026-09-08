@@ -29,7 +29,6 @@
     "group/left3": {
         "orientation": "inherit",
         "modules": [
-            "idle_inhibitor",
             "group/tray-expander2"
         ]
     },
@@ -316,5 +315,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

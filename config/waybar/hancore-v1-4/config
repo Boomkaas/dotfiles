@@ -5,7 +5,7 @@
     "spacing": 0,
     "height": 0,
     "width": 1440,
-    "margin-top": 1,
+    "margin-top": 0,
     "margin-bottom": 0,
     "margin-right": 0,
     "maring-left": 0,
@@ -30,7 +30,6 @@
     "group/left3": {
         "orientation": "inherit",
         "modules": [
-            "idle_inhibitor",
             "group/tray-expander2"
         ]
     },
@@ -317,5 +316,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

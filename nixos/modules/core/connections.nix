@@ -8,6 +8,13 @@
     allowedTCPPorts = [ 8080 5432 ];
   };
 
+  boot.kernel.sysctl = {
+    "net.ipv4.tcp_keepalive_time" = 60;
+    "net.ipv4.tcp_keepalive_intvl" = 10;
+    "net.ipv4.tcp_keepalive_probes" = 3;
+    "net.ipv4.tcp_retries2" = 5;
+  };
+
   hardware.bluetooth = {
     enable = true;
     powerOnBoot = true;

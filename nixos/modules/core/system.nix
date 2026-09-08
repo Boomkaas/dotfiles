@@ -96,4 +96,13 @@
       };
     };
   };
+
+  # Standard Linux FHS compatibility for shell shebangs (e.g. #!/usr/bin/env bash, #!/bin/bash)
+  system.activationScripts.binbash = {
+    text = ''
+      mkdir -m 0755 -p /bin /usr/bin
+      ln -sfn ${pkgs.bash}/bin/bash /bin/bash
+      ln -sfn ${pkgs.bash}/bin/bash /usr/bin/bash
+    '';
+  };
 }

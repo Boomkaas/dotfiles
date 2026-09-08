@@ -1,11 +1,11 @@
 {
     "reload_style_on_change": true,
-    "layer": "overlay",
+    "layer": "top",
     "position": "top",
     "exclusive": true,
     "passthrough": false,
     "fixed-center": true,
-    "margin-top": 2,
+    "margin-top": 0,
     "margin-left": 2,
     "margin-right": 2,
     "margin-bottom": 0,

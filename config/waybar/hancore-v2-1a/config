@@ -4,11 +4,11 @@
     "position": "top",
     "spacing": 0,
     "height": 32,
-    "margin-top": 2,
+    "margin-top": 0,
+    "margin-bottom": 0,
     "modules-left": [
         "custom/menu",
         "ext/workspaces",
-        "idle_inhibitor",
         "custom/colorpicker",
         "tray",
         "mpris"
@@ -316,5 +316,5 @@
         "on-click-right": "pavucontrol",
         "tooltip-format": "Volume: {volume}%"
     },
-    "layer": "overlay"
+    "layer": "top"
 }

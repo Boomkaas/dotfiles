@@ -1,5 +1,5 @@
 {
-    "layer": "overlay",
+    "layer": "top",
     "exclusive": true,
     "passthrough": false,
     "position": "top",
@@ -9,6 +9,7 @@
     "margin-left": 5,
     "margin-right": 5,
     "margin-top": 0,
+    "margin-bottom": 0,
     "modules-left": [
         "custom/menu",
         "clock",

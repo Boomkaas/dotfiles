@@ -13,8 +13,7 @@
     "modules-center": [
         "mpris",
         "clock",
-        "custom/notification",
-        "idle_inhibitor"
+        "custom/notification"
     ],
     "modules-right": [
         "group/tray-expander",
@@ -260,5 +259,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

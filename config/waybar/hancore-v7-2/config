@@ -17,7 +17,6 @@
     ],
     "modules-right": [
         "mpris",
-        "idle_inhibitor",
         "custom/separator",
         "bluetooth",
         "backlight",
@@ -274,5 +273,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

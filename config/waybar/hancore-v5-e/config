@@ -34,9 +34,7 @@
         "modules": [
             "custom/menu",
             "clock",
-            "idle_inhibitor",
             "custom/notification",
-            "idle_inhibitor",
             "mpris"
         ]
     },
@@ -273,5 +271,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

@@ -5,6 +5,7 @@
     "width": 10,
     "spacing": 0,
     "margin-top": 0,
+    "margin-bottom": 0,
     "modules-center": [
         "group/center-group"
     ],
@@ -26,7 +27,6 @@
         "modules": [
             "custom/spacer-desktop",
             "clock",
-            "idle_inhibitor",
             "custom/notification",
             "custom/menu",
             "custom/separator",
@@ -273,5 +273,5 @@
         },
         "max-length": 30
     },
-    "layer": "overlay"
+    "layer": "top"
 }

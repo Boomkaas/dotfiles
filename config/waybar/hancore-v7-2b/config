@@ -23,7 +23,6 @@
         "network",
         "cpu",
         "bluetooth",
-        "idle_inhibitor",
         "custom/power",
         "custom/separator",
         "group/tray-expander",
@@ -289,5 +288,5 @@
         },
         "max-length": 30
     },
-    "layer": "overlay"
+    "layer": "top"
 }

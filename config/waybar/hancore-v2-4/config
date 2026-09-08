@@ -2,19 +2,17 @@
     "reload_style_on_change": true,
     "position": "top",
     "mod": "dock",
-    "margin-top": 1,
+    "margin-top": 0,
     "height": 32,
     "margin-left": 10,
     "margin-right": 10,
-    "margin-bottom": 2,
+    "margin-bottom": 0,
     "group/left1": {
         "orientation": "inherit",
         "modules": [
             "custom/menu",
             "clock",
-            "idle_inhibitor",
-            "custom/notification",
-            "idle_inhibitor"
+            "custom/notification"
         ]
     },
     "group/left2": {
@@ -320,5 +318,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

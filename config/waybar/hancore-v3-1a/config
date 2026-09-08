@@ -13,7 +13,6 @@
         "custom/menu",
         "custom/separator",
         "ext/workspaces",
-        "idle_inhibitor",
         "custom/notification",
         "custom/power",
         "bluetooth"
@@ -305,5 +304,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

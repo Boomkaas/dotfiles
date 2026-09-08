@@ -14,7 +14,6 @@
         "clock",
         "custom/separator",
         "ext/workspaces",
-        "idle_inhibitor",
         "custom/power",
         "bluetooth",
         "custom/notification",
@@ -327,5 +326,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

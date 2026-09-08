@@ -1,15 +1,14 @@
 {
     "reload_style_on_change": true,
     "position": "top",
-    "margin-top": 1,
+    "margin-top": 0,
     "height": 32,
     "width": 1100,
     "margin-bottom": 0,
     "group/left1": {
         "orientation": "inherit",
         "modules": [
-            "custom/menu",
-            "idle_inhibitor"
+            "custom/menu"
         ]
     },
     "group/left2": {
@@ -268,5 +267,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

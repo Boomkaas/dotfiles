@@ -5,10 +5,9 @@
     "spacing": 0,
     "height": 0,
     "width": 1440,
-    "margin-top": 2,
+    "margin-top": 0,
     "margin-bottom": 0,
     "modules-left": [
-        "group/left1",
         "group/left3",
         "group/left2"
     ],
@@ -47,7 +46,6 @@
         "orientation": "inherit",
         "modules": [
             "clock",
-            "idle_inhibitor",
             "custom/notification",
             "custom/menu"
         ]
@@ -55,7 +53,6 @@
     "group/left2": {
         "orientation": "inherit",
         "modules": [
-            "idle_inhibitor",
             "mpris"
         ]
     },
@@ -333,5 +330,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

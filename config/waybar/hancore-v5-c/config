@@ -6,7 +6,6 @@
     "width": 1440,
     "margin": "0",
     "modules-left": [
-        "group/left3",
         "group/left1",
         "group/left2"
     ],
@@ -21,10 +20,8 @@
         "modules": [
             "mpris",
             "clock",
-            "idle_inhibitor",
             "custom/notification",
-            "custom/menu",
-            "idle_inhibitor"
+            "custom/menu"
         ]
     },
     "group/right1": {
@@ -290,5 +287,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

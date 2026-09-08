@@ -9,7 +9,6 @@
     "modules-left": [
         "ext/workspaces",
         "custom/separator",
-        "idle_inhibitor",
         "custom/notification"
     ],
     "modules-center": [
@@ -270,5 +269,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

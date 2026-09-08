@@ -18,7 +18,6 @@
         "modules": [
             "clock",
             "custom/separator",
-            "idle_inhibitor",
             "custom/notification",
             "custom/menu",
             "tray",
@@ -261,5 +260,5 @@
             "deactivated": "\udb83\udfaa"
         }
     },
-    "layer": "overlay"
+    "layer": "top"
 }

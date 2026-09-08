@@ -25,14 +25,12 @@
         "orientation": "inherit",
         "modules": [
             "clock",
-            "idle_inhibitor",
             "custom/notification"
         ]
     },
     "group/left3": {
         "orientation": "inherit",
         "modules": [
-            "idle_inhibitor",
             "backlight",
             "bluetooth",
             "power-profiles-daemon",
@@ -302,5 +300,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

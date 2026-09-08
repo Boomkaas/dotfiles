@@ -277,5 +277,5 @@
         },
         "max-length": 30
     },
-    "layer": "overlay"
+    "layer": "top"
 }

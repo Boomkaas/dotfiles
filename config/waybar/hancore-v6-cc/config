@@ -4,14 +4,13 @@
     "position": "top",
     "spacing": 0,
     "height": 0,
-    "margin-top": 2,
+    "margin-top": 0,
     "width": 1440,
     "margin-bottom": 0,
     "modules-left": [
         "custom/menu",
         "custom/separator",
         "ext/workspaces",
-        "idle_inhibitor",
         "mpris"
     ],
     "modules-center": [
@@ -300,5 +299,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

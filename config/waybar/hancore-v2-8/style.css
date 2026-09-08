@@ -2,9 +2,9 @@
 @import url("../../.local/state/haku_theme/fonts.css");
 
 /* ============================================================================== */
-/* STRICT FONT-COLOR-ONLY ACCENT SYSTEM                                           */
-/* @accent_color is STRICTLY for font/text/icon color (color: @accent_color).     */
-/* Buttons and active indicators NEVER have background colors (transparent).      */
+/* PURE MONOCHROME COLOR SYSTEM & NORMALIZATION                                    */
+/* @accent_color is strictly for text, icons, and active indicators.              */
+/* All backgrounds are clean dark/translucent; buttons have transparent bg.      */
 /* ============================================================================== */
 @define-color primary @accent_color;
 @define-color accent @accent_color;
@@ -27,7 +27,7 @@
 @define-color blue @accent_color;
 @define-color lavender @accent_color;
 
-/* Background Surface Tokens (Dark / Neutral / Translucent) */
+/* Background Surface Tokens */
 @define-color bg rgba(15, 15, 18, 0.92);
 @define-color background rgba(15, 15, 18, 0.92);
 @define-color base rgba(15, 15, 18, 0.92);
@@ -41,6 +41,50 @@
 @define-color text #e6e6e6;
 @define-color subtext #a6a6a6;
 @define-color inactive #777777;
+
+* {
+    min-height: 0;
+    min-width: 0;
+}
+
+window#waybar {
+    background: transparent;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+/* Ensure all rounded boxes clip their backgrounds inside the border */
+#waybar > box,
+.modules-left,
+.modules-center,
+.modules-right {
+    background-clip: padding-box;
+}
+
+/* Reset default GTK button extra spacing and force transparent bg */
+button,
+button:hover,
+button:active,
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    background: transparent;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* ============================================================================== */
+/* STRICT FONT-COLOR-ONLY ACCENT SYSTEM                                           */
+/* @accent_color is STRICTLY for font/text/icon color (color: @accent_color).     */
+/* Buttons and active indicators NEVER have background colors (transparent).      */
+/* ============================================================================== */
+
+/* Background Surface Tokens (Dark / Neutral / Translucent) */
 
 * {
     min-height: 0;
@@ -308,7 +352,7 @@ tooltip {
  background: @background;
  border: 1px solid alpha(@foreground, 0.8);
  border-radius: 8px;
- box-shadow: 1px 1px 3px 1px @accent_color;
+ box-shadow: none;
  font-size: 12px;
  
 }
@@ -426,21 +470,38 @@ padding-left: 0px;
 }
 
 /* ============================================================================== */
-/* BUTTONS & ACTIVE STATES: TRANSPARENT BACKGROUND + ACCENT FONT COLOR ONLY       */
+
 /* ============================================================================== */
+/* PERFECT ICON SPACING & ROUNDED CORNER OUTLINE REFINEMENT                       */
+/* ============================================================================== */
+
+/* 1. Prevent square background bleeding on rounded containers */
+#waybar > box {
+    background-clip: padding-box;
+    box-shadow: none;
+}
+
+.modules-left,
+.modules-center,
+.modules-right {
+    background-clip: padding-box;
+}
+
+/* 2. Workspace buttons: comfortable breathing room + transparent bg */
 #workspaces button,
-#ext-workspaces button,
-#wlr-taskbar button {
+#ext-workspaces button {
     background: transparent;
     background-color: transparent;
     color: #888888;
     border: none;
     box-shadow: none;
+    padding: 0 6px;
+    margin: 0 2px;
+    min-width: 14px;
 }
 
 #workspaces button:hover,
-#ext-workspaces button:hover,
-#wlr-taskbar button:hover {
+#ext-workspaces button:hover {
     background: transparent;
     background-color: transparent;
     color: @accent_color;
@@ -449,14 +510,53 @@ padding-left: 0px;
 #workspaces button.active,
 #workspaces button.focused,
 #ext-workspaces button.active,
-#ext-workspaces button.focused,
-#wlr-taskbar button.active {
+#ext-workspaces button.focused {
     background: transparent;
     background-color: transparent;
     color: @accent_color;
     font-weight: bold;
     border: none;
     box-shadow: none;
+}
+
+/* 3. Taskbar buttons */
+#wlr-taskbar button {
+    background: transparent;
+    background-color: transparent;
+    color: #e6e6e6;
+    border: none;
+    box-shadow: none;
+    padding: 0 6px;
+    margin: 0 2px;
+}
+
+#wlr-taskbar button.active {
+    background: transparent;
+    background-color: transparent;
+    color: @accent_color;
+    font-weight: bold;
+}
+
+/* 4. Status icons & custom modules: consistent horizontal spacing */
+#custom-menu,
+#custom-power,
+#custom-notification,
+#custom-nightlight,
+#clock,
+#pulseaudio,
+#backlight,
+#battery,
+#network,
+#bluetooth,
+#cpu,
+#memory,
+#temperature,
+#mpris,
+#tray,
+#idle_inhibitor {
+    background-clip: padding-box;
+    padding: 0 6px;
+    margin: 0 3px;
 }
 
 #custom-menu,

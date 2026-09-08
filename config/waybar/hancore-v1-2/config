@@ -4,7 +4,7 @@
     "position": "top",
     "spacing": 0,
     "height": 0,
-    "margin-top": 2,
+    "margin-top": 0,
     "margin-left": 5,
     "margin-right": 5,
     "margin-bottom": 0,
@@ -42,7 +42,6 @@
     "group/left2": {
         "orientation": "inherit",
         "modules": [
-            "idle_inhibitor",
             "custom/menu",
             "mpris"
         ]
@@ -52,7 +51,6 @@
         "modules": [
             "custom/separator",
             "clock",
-            "idle_inhibitor",
             "custom/notification"
         ]
     },
@@ -324,5 +322,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

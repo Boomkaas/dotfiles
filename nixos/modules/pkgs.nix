@@ -4,6 +4,9 @@ let
   controlbot = pkgs.writeShellScriptBin "controlbot" ''
     cd /home/peng/Code/PcControlBot && exec venv/bin/python -m bot.main "$@"
   '';
+  awake = pkgs.writeShellScriptBin "awake" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/awake "$@"
+  '';
   epic = pkgs.writeShellScriptBin "epic" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/epic "$@"
   '';
@@ -158,8 +161,12 @@ EOF
 in
 {
   environment.systemPackages = with pkgs; [
-    # Antigravity from unstable
+    # Antigravity from unstable (both IDE and CLI)
     pkgs_unstable.antigravity-ide
+    pkgs_unstable.antigravity-cli
+    (pkgs.writeShellScriptBin "antigravity" ''
+      exec ${pkgs_unstable.antigravity-cli}/bin/agy "$@"
+    '')
 
     # Noctalia
     inputs.noctalia.packages.${pkgs.system}.default
@@ -169,13 +176,22 @@ in
     foot
     fastfetch
     htop
+    btop
+    nvtopPackages.full
     fish
     eza
     bat
+    fzf
+    ripgrep
+    fd
+    tmux
+    stow
+    ncdu
     nix-output-monitor
 
     # Browser
     firefox
+    chromium
 
     # Communication
     telegram-desktop
@@ -185,6 +201,7 @@ in
 
     # Dev Tools
     git
+    neovim
     codex
     go
     gcc
@@ -354,6 +371,7 @@ in
     epic
     twitch
     nixreb
+    awake
 
     # Archive
     zip

@@ -1,10 +1,11 @@
 {
-    "layer": "overlay",
+    "layer": "top",
     "position": "top",
     "height": 32,
     "margin-left": 8,
     "margin-right": 8,
-    "margin-top": 4,
+    "margin-top": 0,
+    "margin-bottom": 0,
     "exclusive": true,
     "modules-left": [
         "custom/menu",

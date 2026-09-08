@@ -9,7 +9,6 @@
         "custom/menu",
         "clock",
         "custom/notification",
-        "idle_inhibitor",
         "mpris",
         "wlr/taskbar"
     ],
@@ -260,5 +259,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

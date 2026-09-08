@@ -31,26 +31,34 @@
 </action>
 <action>
 	<icon>package-x-generic</icon>
-	<name>Unzip Here</name>
+	<name>Unarchive Here</name>
 	<submenu></submenu>
 	<unique-id>1787933284835998-3</unique-id>
-	<command>/home/peng/.local/bin/thunar-archive.sh unzip-here %F</command>
+	<command>/home/peng/.local/bin/thunar-archive.sh unarchive-here %F</command>
 	<description>Extract archive contents into the current directory</description>
 	<range></range>
-	<patterns>*.zip;*.ZIP;*.7z;*.7Z;*.tar;*.tar.gz;*.tgz;*.tar.xz;*.txz;*.tar.bz2;*.tbz2;*.tar.zst;*.rar;*.RAR;*.gz</patterns>
+	<patterns>*.zip;*.ZIP;*.7z;*.7Z;*.tar;*.TAR;*.tar.gz;*.tgz;*.TGZ;*.tar.xz;*.txz;*.TXZ;*.tar.bz2;*.tbz2;*.tbz;*.TBZ;*.tar.zst;*.tzst;*.TZST;*.tar.lzma;*.tlz;*.tar.lz;*.tar.lz4;*.tar.lzo;*.rar;*.RAR;*.gz;*.GZ;*.bz2;*.BZ2;*.xz;*.XZ;*.zst;*.ZST;*.lzma;*.lz4;*.lzo;*.lz;*.iso;*.ISO;*.deb;*.rpm;*.apk;*.jar;*.aar;*.war;*.cbz;*.cbr;*.cb7;*.cbt;*.wim;*.cab;*.z;*.Z</patterns>
 	<startup-notify/>
+	<audio-files/>
+	<image-files/>
 	<other-files/>
+	<text-files/>
+	<video-files/>
 </action>
 <action>
 	<icon>package-x-generic</icon>
-	<name>Unzip to Folder</name>
+	<name>Unarchive to Folder</name>
 	<submenu></submenu>
 	<unique-id>1787933284835998-4</unique-id>
-	<command>/home/peng/.local/bin/thunar-archive.sh unzip-folder %F</command>
+	<command>/home/peng/.local/bin/thunar-archive.sh unarchive-folder %F</command>
 	<description>Extract archive contents into a subfolder</description>
 	<range></range>
-	<patterns>*.zip;*.ZIP;*.7z;*.7Z;*.tar;*.tar.gz;*.tgz;*.tar.xz;*.txz;*.tar.bz2;*.tbz2;*.tar.zst;*.rar;*.RAR;*.gz</patterns>
+	<patterns>*.zip;*.ZIP;*.7z;*.7Z;*.tar;*.TAR;*.tar.gz;*.tgz;*.TGZ;*.tar.xz;*.txz;*.TXZ;*.tar.bz2;*.tbz2;*.tbz;*.TBZ;*.tar.zst;*.tzst;*.TZST;*.tar.lzma;*.tlz;*.tar.lz;*.tar.lz4;*.tar.lzo;*.rar;*.RAR;*.gz;*.GZ;*.bz2;*.BZ2;*.xz;*.XZ;*.zst;*.ZST;*.lzma;*.lz4;*.lzo;*.lz;*.iso;*.ISO;*.deb;*.rpm;*.apk;*.jar;*.aar;*.war;*.cbz;*.cbr;*.cb7;*.cbt;*.wim;*.cab;*.z;*.Z</patterns>
 	<startup-notify/>
+	<audio-files/>
+	<image-files/>
 	<other-files/>
+	<text-files/>
+	<video-files/>
 </action>
 </actions>

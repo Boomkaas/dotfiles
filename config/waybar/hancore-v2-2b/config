@@ -6,14 +6,12 @@
     "height": 32,
     "margin-left": 5,
     "margin-right": 5,
-    "margin-bottom": 1,
+    "margin-bottom": 0,
     "group/left1": {
         "orientation": "inherit",
         "modules": [
             "custom/menu",
-            "idle_inhibitor",
-            "custom/notification",
-            "idle_inhibitor"
+            "custom/notification"
         ]
     },
     "group/left2": {
@@ -320,5 +318,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }

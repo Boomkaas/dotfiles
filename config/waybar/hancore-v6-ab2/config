@@ -5,6 +5,7 @@
     "width": 220,
     "spacing": 0,
     "margin-top": 0,
+    "margin-bottom": 0,
     "expand-left": true,
     "expand-center": true,
     "expand-right": true,
@@ -36,7 +37,6 @@
         "modules": [
             "custom/menu",
             "clock",
-            "idle_inhibitor",
             "custom/notification",
             "custom/separator",
             "tray",
@@ -321,5 +321,5 @@
         },
         "max-length": 30
     },
-    "layer": "overlay"
+    "layer": "top"
 }

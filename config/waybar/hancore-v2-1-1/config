@@ -1,9 +1,9 @@
 {
     "reload_style_on_change": true,
-    "layer": "overlay",
+    "layer": "top",
     "position": "top",
     "mod": "dock",
-    "margin-top": 4,
+    "margin-top": 0,
     "margin-left": 10,
     "margin-right": 10,
     "margin-bottom": 0,
@@ -12,7 +12,6 @@
         "modules": [
             "custom/menu",
             "clock",
-            "idle_inhibitor",
             "custom/notification"
         ]
     },
@@ -24,9 +23,7 @@
     },
     "group/left3": {
         "orientation": "inherit",
-        "modules": [
-            "idle_inhibitor"
-        ]
+        "modules": []
     },
     "group/left4": {
         "orientation": "inherit",
@@ -37,7 +34,6 @@
     "modules-left": [
         "group/left1",
         "group/left2",
-        "group/left3",
         "group/left4"
     ],
     "modules-center": [

@@ -5,14 +5,13 @@
     "mod": "dock",
     "passthrough": false,
     "gtk-layer-shell": true,
-    "margin-top": 2,
+    "margin-top": 0,
     "margin-left": 80,
     "margin-bottom": 0,
     "margin-right": 80,
     "modules-left": [
         "custom/menu",
         "custom/separator",
-        "idle_inhibitor",
         "custom/notification",
         "custom/separator3",
         "mpris",
@@ -299,5 +298,5 @@
         "format": "\uf2c9 {temperatureC}\u00b0C",
         "tooltip": true
     },
-    "layer": "overlay"
+    "layer": "top"
 }
