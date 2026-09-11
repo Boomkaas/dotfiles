@@ -22,10 +22,12 @@ elif [[ "$WM" =~ niri ]]; then
         niri msg action power-off-monitors
     fi
 elif [[ "$WM" =~ mango ]]; then
+    MONITOR=$(wlr-randr 2>/dev/null | awk '/^[a-zA-Z0-9-]+/ {print $1; exit}')
+    MONITOR=${MONITOR:-eDP-1}
     if [ "$1" = "on" ]; then
-        mmsg dispatch wakeup_monitor 2>/dev/null || wlr-randr --output eDP-1 --on
+        mmsg dispatch wakeup_monitor,"$MONITOR" 2>/dev/null || mmsg dispatch wakeup_monitor 2>/dev/null || wlr-randr --output "$MONITOR" --on
     else
-        mmsg dispatch sleep_monitor 2>/dev/null || wlr-randr --output eDP-1 --off
+        mmsg dispatch sleep_monitor,"$MONITOR" 2>/dev/null || mmsg dispatch sleep_monitor 2>/dev/null || wlr-randr --output "$MONITOR" --off
     fi
 elif [[ "$WM" =~ labwc ]]; then
     # Dynamically extract the first active display name (e.g., eDP-1)

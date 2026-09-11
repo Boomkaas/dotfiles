@@ -19,7 +19,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 | **File Managers** | [Yazi](https://github.com/sxyazi/yazi) + [Thunar](https://docs.xfce.org/xfce/thunar/start) | Lightning-fast TUI file manager with Ueberzug++ previews & shell cd integration + GUI fallback |
 | **Shell** | [Fish](https://fishshell.com/) + [Starship](https://starship.rs/) | Interactive shell with Zoxide, Direnv, Eza, Yazi `Ctrl+O` hotkey, and smart `agy` token wrapper |
 | **Audio Stack** | [PipeWire](https://pipewire.org/) | PipeWire + ALSA + Pulse + JACK + Realtek ALC256 ASUS mic pin routing |
-| **Network & Diagnostics**| NetworkManager + Wireshark | System-wide packet capturing (`wireshark-cli`, `termshark`) with user permissions |
+| **Network & Diagnostics**| NetworkManager + Wireshark | System-wide packet capturing (GUI & CLI `wireshark`, `termshark`) with user permissions |
 | **Virtualization** | Docker, KVM / Libvirt | Container and virtual machine virtualization with SPICE USB redirection |
 | **Media & Images** | Viewnior + Swappy + VLC | Lightweight image viewer (`viewnior`), Wayland snapshot annotator (`swappy`), and media player |
 | **Browser Theme** | Custom Firefox `userChrome.css` | Glassmorphic dark translucent panels & AMOLED gold startpage |
@@ -127,6 +127,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── theme                       # Theme switcher and style setter
 │   │   ├── twitch                      # CLI launcher for native in-browser Twitch Drops claimer (`twitch` / `tdrops`)
 │   │   ├── twitch-drops-claimer.user.js# Userscript for Don't Starve Together Twitch Drops (160p eco, auto-claim)
+│   │   ├── unlock_screen.sh            # Reliable screen unlocker (DPMS wake, wtype PAM auth, MangoWM lock recovery)
 │   │   ├── waybar_manager.sh           # Waybar theme switcher, cycle manager, and daemon controller
 │   │   ├── wifi                        # CLI helper for NetworkManager Wi-Fi scanning and connection
 │   │   └── wifi_menu.sh                # Rofi interactive Wi-Fi selector and connection menu (`wifi-menu`)
@@ -165,7 +166,7 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 - **`connections.nix`**:
   - **Networking**: NetworkManager enabled with open TCP firewall ports `8080` (web dev) and `5432` (PostgreSQL).
   - **Bluetooth**: Auto-powered on boot, Dual Controller Mode, FastConnectable, experimental features, `blueman` integration, and a systemd service running `rfkill unblock bluetooth`.
-  - **Wireshark CLI**: `programs.wireshark` enabled with `pkgs.wireshark-cli` and packet capture capabilities for the user.
+  - **Wireshark**: `programs.wireshark` enabled with full package (`pkgs.wireshark`) and packet capture capabilities for user `peng`.
 - **`services.nix`**:
   - **Virtualization**: Docker daemon and Libvirt / KVM with SPICE USB redirection and `virt-manager`.
   - **Database**: PostgreSQL 16 server pre-configured with `mydatabase` and local trust authentication.
@@ -180,7 +181,7 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 - **Default Image Applications**: Default image associations (PNG, JPEG, WebP, SVG, BMP, ICO) mapped to lightweight [Viewnior](https://github.com/hellnest/viewnior) with [Swappy](https://github.com/jtheoof/swappy) for annotations.
 
 ### 3. Package Management & System Menu Wrappers (`nixos/modules/pkgs.nix`)
-- Declares development toolchains, desktop applications, Wayland utilities, and custom binary wrappers:
+- Declares development toolchains, desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), and custom binary wrappers:
   - System menus: `wifi-menu`, `bluetooth-menu`, `audio-menu`, `process-menu`, `disk-menu`, `clean-menu`, `config-menu`, `gtk-theme-menu`.
   - Core helpers: `nixreb`, `awake`, `controlbot`, `epic`, `twitch` (`tdrops`), `gfn`, `roblox`.
 
@@ -233,7 +234,9 @@ MangoWM is a dynamic tiling Wayland compositor built on the **Scroller layout** 
 - **`awake` Utility (`nixos/scripts/awake`)**:
   - Caffeine CLI that inhibits sleep, screen lock, DPMS timeouts, and poweroff during presentations, downloads, or builds.
   - When disabled, automatically restarts `hypridle` to immediately refresh inactivity listeners.
-- **`hyprlock.conf`**: Refined lockscreen rendering a 3-pass blurred snapshot of the active desktop, extra-bold golden hour / white minute typography, date label, and a minimalist password input box with auth feedback dots.
+- **`dpms_handler.sh`**: Dynamic DPMS display sleep/wake dispatcher across MangoWM (with dynamic monitor name resolution via `wlr-randr`), Hyprland, Niri, and Labwc.
+- **`lock.sh`**: Pre-lock visual process suspension and wallpaper caching (`~/.local/state/haku_theme/lock_wallpaper.jpg`).
+- **`hyprlock.conf`**: Refined lockscreen rendering the active wallpaper with 3-pass blur, extra-bold golden hour / white minute typography, date label, and a minimalist password input box with auth feedback dots.
 
 ---
 
@@ -374,6 +377,15 @@ tokens
 # or
 agy tokens
 ```
+
+### 7. `unlock_screen.sh` (Desktop Unlock & Recovery Utility)
+```bash
+unlock_screen.sh "<password>"
+```
+Performs reliable desktop unlocking across Wayland compositors:
+- **Display Wakeup**: Powers on monitors across MangoWM, Hyprland, Niri, and Sway.
+- **Automated Authentication**: Enters passwords into `hyprlock` via `wtype` with sub-second feedback verification.
+- **Fail-Safe Session Recovery**: Detects gray-screen lock freezes in MangoWM (when `hyprlock` crashes or terminates unexpectedly) and directly resets `locked_bg` scene nodes via `gdb`.
 
 ---
 

@@ -34,7 +34,7 @@
 
   programs.wireshark = {
     enable = true;
-    package = pkgs.wireshark-cli;
+    package = pkgs.wireshark;
   };
 
   systemd.services.unblock-bluetooth = {

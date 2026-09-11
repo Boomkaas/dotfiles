@@ -290,6 +290,7 @@ in
     # Wayland / Desktop Utilities
     xwayland-satellite
     wl-clipboard
+    wtype
     libnotify
     playerctl
     brightnessctl
