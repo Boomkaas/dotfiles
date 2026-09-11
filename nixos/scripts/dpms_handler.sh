@@ -13,21 +13,21 @@ fi
 
 WM=$(echo "$XDG_CURRENT_DESKTOP" | tr '[:upper:]' '[:lower:]')
 
-if [ "$WM" = "hyprland" ]; then
+if [[ "$WM" =~ hyprland ]]; then
     hyprctl eval "hl.dispatch(hl.dsp.dpms({ action = \"$1\" }))"
-elif [ "$WM" = "niri" ]; then
+elif [[ "$WM" =~ niri ]]; then
     if [ "$1" = "on" ]; then
         niri msg action power-on-monitors
     else
         niri msg action power-off-monitors
     fi
-elif [ "$WM" = "mango" ]; then
+elif [[ "$WM" =~ mango ]]; then
     if [ "$1" = "on" ]; then
         mmsg dispatch wakeup_monitor 2>/dev/null || wlr-randr --output eDP-1 --on
     else
         mmsg dispatch sleep_monitor 2>/dev/null || wlr-randr --output eDP-1 --off
     fi
-elif [ "$WM" = "labwc" ]; then
+elif [[ "$WM" =~ labwc ]]; then
     # Dynamically extract the first active display name (e.g., eDP-1)
     MONITOR=$(wlr-randr | awk '/^[a-zA-Z0-9-]+/ {print $1; exit}')
     

@@ -16,6 +16,30 @@ let
   twitch = pkgs.writeShellScriptBin "twitch" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/twitch "$@"
   '';
+  wifi-menu = pkgs.writeShellScriptBin "wifi-menu" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/wifi_menu.sh "$@"
+  '';
+  bluetooth-menu = pkgs.writeShellScriptBin "bluetooth-menu" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/bluetooth_menu.sh "$@"
+  '';
+  audio-menu = pkgs.writeShellScriptBin "audio-menu" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/audio_menu.sh "$@"
+  '';
+  process-menu = pkgs.writeShellScriptBin "process-menu" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/process_menu.sh "$@"
+  '';
+  gtk-theme-menu = pkgs.writeShellScriptBin "gtk-theme-menu" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/gtk_theme_menu.sh "$@"
+  '';
+  disk-menu = pkgs.writeShellScriptBin "disk-menu" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/disk_menu.sh "$@"
+  '';
+  clean-menu = pkgs.writeShellScriptBin "clean-menu" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/clean_menu.sh "$@"
+  '';
+  config-menu = pkgs.writeShellScriptBin "config-menu" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/config_menu.sh "$@"
+  '';
   gfn = pkgs.writeShellScriptBin "gfn" ''
     nohup flatpak run com.nvidia.geforcenow > /dev/null 2>&1 &
   '';
@@ -57,6 +81,10 @@ let
       rev = "v${version}";
       hash = "sha256-V5fg4t4uU3kx5b/UaxYujD1ki6MlX17jtuHR6Sxfsq4=";
     };
+
+    patches = [
+      ./patches/wayland-vpet-fullscreen.patch
+    ];
 
     nativeBuildInputs = with pkgs; [
       cmake
@@ -141,6 +169,9 @@ if [ -f "$CONFIG_FILE" ]; then
     echo "evolution=normal" >> "$CONFIG_FILE"
     echo "evolution_speed_factor=200.0" >> "$CONFIG_FILE"
   fi
+  if ! grep -q "^disable_fullscreen_hide=" "$CONFIG_FILE"; then
+    echo "disable_fullscreen_hide=1" >> "$CONFIG_FILE"
+  fi
 fi
 
 if [ -f "$HOME/.config/bongocat.conf" ] && [ ! -L "$HOME/.config/bongocat.conf" ]; then
@@ -188,6 +219,11 @@ in
     stow
     ncdu
     nix-output-monitor
+    zoxide
+    yazi
+    ueberzugpp
+    nload
+    termshark
 
     # Browser
     firefox
@@ -208,7 +244,6 @@ in
     gnumake
     cmake
     gdb
-    gradle
     (python3.withPackages (ps: with ps; [
       numpy
       matplotlib
@@ -353,12 +388,8 @@ in
     vlc
     obsidian
     evince
-    (shutter.overrideAttrs (oldAttrs: {
-      postPatch = (oldAttrs.postPatch or "") + ''
-        substituteInPlace bin/shutter \
-          --replace-fail "unless (scalar @\$apps) {" "unless (defined \$apps && scalar @\$apps) {"
-      '';
-    }))
+    viewnior
+    swappy
 
     # Wine & Gaming
     wineWowPackages.stable
@@ -372,6 +403,14 @@ in
     twitch
     nixreb
     awake
+    wifi-menu
+    bluetooth-menu
+    audio-menu
+    process-menu
+    gtk-theme-menu
+    disk-menu
+    clean-menu
+    config-menu
 
     # Archive
     zip

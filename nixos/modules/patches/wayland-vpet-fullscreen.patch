@@ -1,0 +1,87 @@
+diff --git a/src/graphics/bar.cpp b/src/graphics/bar.cpp
+index 93a58df..270c23e 100644
+--- a/src/graphics/bar.cpp
++++ b/src/graphics/bar.cpp
+@@ -328,8 +328,11 @@ void draw_sprite(platform::wayland::wayland_context_t& ctx, platform::wayland::w
+       }
+ 
+       // draw debug bar
++      const bool is_overlay_layer = current_config.layer == config::layer_type_t::LAYER_OVERLAY;
++      const bool is_fullscreen =
++          !is_overlay_layer && (current_config.disable_fullscreen_hide <= 0 && wayland_ctx._fullscreen_detected);
+       const bool bar_visible =
+-          !wayland_ctx._fullscreen_detected && wayland_ctx.bar_visibility == platform::wayland::bar_visibility_t::Show;
++          !is_fullscreen && wayland_ctx.bar_visibility == platform::wayland::bar_visibility_t::Show;
+       const int effective_opacity = bar_visible ? current_config.overlay_opacity : 0;
+       const uint32_t fill = DEBUG_MOVEMENT_BAR_COLOR &
+                             (0x00FFFFFF | (static_cast<uint32_t>(effective_opacity) << 24u));  // RGBA, little-endian
+@@ -442,8 +445,11 @@ void draw_sprite(platform::wayland::wayland_context_t& ctx, platform::wayland::w
+         break;
+       }
+ 
++      const bool is_overlay_layer = current_config.layer == config::layer_type_t::LAYER_OVERLAY;
++      const bool is_fullscreen =
++          !is_overlay_layer && (current_config.disable_fullscreen_hide <= 0 && wayland_ctx._fullscreen_detected);
+       const bool bar_visible =
+-          !wayland_ctx._fullscreen_detected && wayland_ctx.bar_visibility == platform::wayland::bar_visibility_t::Show;
++          !is_fullscreen && wayland_ctx.bar_visibility == platform::wayland::bar_visibility_t::Show;
+       const int effective_opacity = bar_visible ? current_config.overlay_opacity : 0;
+       const uint32_t fill = DEBUG_MOVEMENT_BAR_COLOR &
+                             (0x00FFFFFF | (static_cast<uint32_t>(effective_opacity) << 24u));  // RGBA, little-endian
+@@ -594,8 +600,11 @@ void draw_sprite(platform::wayland::wayland_context_t& ctx, platform::wayland::w
+       break;
+     }
+ 
++    const bool is_overlay_layer = current_config.layer == config::layer_type_t::LAYER_OVERLAY;
++    const bool is_fullscreen =
++        !is_overlay_layer && (current_config.disable_fullscreen_hide <= 0 && wayland_ctx._fullscreen_detected);
+     const bool bar_visible =
+-        !wayland_ctx._fullscreen_detected && wayland_ctx.bar_visibility == platform::wayland::bar_visibility_t::Show;
++        !is_fullscreen && wayland_ctx.bar_visibility == platform::wayland::bar_visibility_t::Show;
+     const int effective_opacity = bar_visible ? current_config.overlay_opacity : 0;
+     const uint32_t fill = DEBUG_MOVEMENT_BAR_COLOR &
+                           (0x00FFFFFF | (static_cast<uint32_t>(effective_opacity) << 24u));  // RGBA, little-endian
+@@ -678,8 +687,11 @@ static bool draw_bar_on_buffer(platform::wayland::wayland_context_t& ctx,
+   const int pixels_width = shm_buffer._physical_buffer_width;
+   const int pixels_height = shm_buffer._physical_buffer_height;
+ 
++  const bool is_overlay_layer = current_config.layer == config::layer_type_t::LAYER_OVERLAY;
++  const bool is_fullscreen =
++      !is_overlay_layer && (current_config.disable_fullscreen_hide <= 0 && wayland_ctx._fullscreen_detected);
+   const bool bar_visible =
+-      !wayland_ctx._fullscreen_detected && wayland_ctx.bar_visibility == platform::wayland::bar_visibility_t::Show;
++      !is_fullscreen && wayland_ctx.bar_visibility == platform::wayland::bar_visibility_t::Show;
+   const int effective_opacity = bar_visible ? current_config.overlay_opacity : 0;
+ 
+   assert(pixels_width >= 0);
+diff --git a/src/platform/wayland_callbacks.cpp b/src/platform/wayland_callbacks.cpp
+index dc45df4..d3cc93b 100644
+--- a/src/platform/wayland_callbacks.cpp
++++ b/src/platform/wayland_callbacks.cpp
+@@ -212,6 +212,13 @@ static bool fs_update_state(wayland_context_t& ctx, update_fullscreen_state_topl
+     return false;
+   }
+ 
++  if (ctx.thread_context._local_copy_config) {
++    const auto& current_config = *ctx.thread_context._local_copy_config.ptr;
++    if (current_config.disable_fullscreen_hide >= 1 || current_config.layer == config::layer_type_t::LAYER_OVERLAY) {
++      new_state.is_fullscreen = false;
++    }
++  }
++
+   // const wayland_shared_memory_t& wayland_ctx_shm = *ctx.wayland_context.ctx_shm;
+ 
+   if (new_state.is_fullscreen != ctx.fs_detector.has_fullscreen_toplevel) {
+@@ -309,6 +316,12 @@ static bool fs_check_status(wayland_context_t& ctx) {
+ }
+ 
+ void fs_update_state_fallback(wayland_context_t& ctx) {
++  if (ctx.thread_context._local_copy_config) {
++    const auto& current_config = *ctx.thread_context._local_copy_config.ptr;
++    if (current_config.disable_fullscreen_hide >= 1 || current_config.layer == config::layer_type_t::LAYER_OVERLAY) {
++      return;
++    }
++  }
+   for (size_t i = 0; i < ctx.num_toplevels; ++i) {
+     const tracked_toplevel_t& tracked = ctx.tracked_toplevels[i];
+     // Skip handles that are not mapped or destroyed

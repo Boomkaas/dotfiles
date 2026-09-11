@@ -1,0 +1,46 @@
+--- a/yazi-adapter/src/emulator.rs
++++ b/yazi-adapter/src/emulator.rs
+@@ -118,7 +118,7 @@ impl Emulator {
+ 		let now = std::time::Instant::now();
+ 		let h = tokio::spawn(Self::error_to_user());
+ 
+-		let (buf, result) = TTY.read_until(Duration::from_millis(500), |b, buf| {
++		let (buf, result) = TTY.read_until(Duration::from_millis(50), |b, buf| {
+ 			b == b'c'
+ 				&& buf.contains(&0x1b)
+ 				&& buf.rsplitn(2, |&b| b == 0x1b).next().is_some_and(|s| s.starts_with(b"[?"))
+@@ -137,7 +137,7 @@ impl Emulator {
+ 
+ 	pub fn read_until_dsr() -> String {
+ 		let now = std::time::Instant::now();
+-		let (buf, result) = TTY.read_until(Duration::from_millis(100), |b, buf| {
++		let (buf, result) = TTY.read_until(Duration::from_millis(20), |b, buf| {
+ 			b == b'n' && (buf.ends_with(b"\x1b[0n") || buf.ends_with(b"\x1b[3n"))
+ 		});
+ 
+@@ -150,24 +150,7 @@ impl Emulator {
+ 		String::from_utf8_lossy(&buf).into_owned()
+ 	}
+ 
+-	async fn error_to_user() {
+-		use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttributes, SetForegroundColor};
+-
+-		sleep(Duration::from_millis(400)).await;
+-		_ = crossterm::execute!(
+-			std::io::stderr(),
+-			SetForegroundColor(Color::Red),
+-			SetAttributes(Attribute::Bold.into()),
+-			Print("\r\nTerminal response timeout: "),
+-			ResetColor,
+-			SetAttributes(Attribute::Reset.into()),
+-			//
+-			Print("The request sent by Yazi didn't receive a correct response.\r\n"),
+-			Print(
+-				"Please check your terminal environment as per: https://yazi-rs.github.io/docs/faq#trt\r\n"
+-			),
+-		);
+-	}
++	async fn error_to_user() {}
+ 
+ 	fn csi_16t(resp: &str) -> Option<(u16, u16)> {
+ 		let b = resp.split_once("\x1b[6;")?.1.as_bytes();

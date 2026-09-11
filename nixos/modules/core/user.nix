@@ -8,7 +8,7 @@
     isNormalUser = true;
     description = "Peng";
     shell = pkgs.fish;
-    extraGroups = [ "networkmanager" "wheel" "video" "docker" "libvirtd" "input" "uinput" ];
+    extraGroups = [ "networkmanager" "wheel" "video" "docker" "libvirtd" "input" "uinput" "wireshark" ];
     packages = with pkgs; [];
   };
 }

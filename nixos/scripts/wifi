@@ -1,0 +1,636 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# wifi - Terminal Wi-Fi Manager (CLI & fzf TUI)
+# Access, scan, connect, and manage Wi-Fi connections via terminal.
+# ==============================================================================
+
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+# ------------------------------------------------------------------------------
+# Helper Functions
+# ------------------------------------------------------------------------------
+
+get_wifi_iface() {
+    nmcli -t -f DEVICE,TYPE dev 2>/dev/null | awk -F: '$2=="wifi"{print $1; exit}'
+}
+
+get_wifi_status() {
+    nmcli -t -f WIFI g 2>/dev/null || echo "disabled"
+}
+
+get_active_ssid() {
+    nmcli -t -f ACTIVE,SSID dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}'
+}
+
+is_saved_ssid() {
+    local target="$1"
+    nmcli -t -f NAME,TYPE con show 2>/dev/null | awk -F: -v s="$target" '$1 == s && $2 == "802-11-wireless" { found=1; exit } END { exit !found }'
+}
+
+sig_to_icon() {
+    local sig="$1"
+    if [ "$sig" -ge 80 ]; then echo "󰤨"
+    elif [ "$sig" -ge 60 ]; then echo "󰤥"
+    elif [ "$sig" -ge 40 ]; then echo "󰤢"
+    elif [ "$sig" -ge 20 ]; then echo "󰤟"
+    else echo "󰤯"
+    fi
+}
+
+sec_to_icon() {
+    local sec="$1"
+    if [ -n "$sec" ] && [ "$sec" != "--" ]; then
+        echo "󰌾"
+    else
+        echo " "
+    fi
+}
+
+freq_to_band() {
+    local freq="$1"
+    local f_num
+    f_num=$(echo "$freq" | tr -dc '0-9')
+    if [ -n "$f_num" ]; then
+        if [ "$f_num" -gt 4000 ]; then echo "5 GHz"
+        elif [ "$f_num" -gt 2000 ]; then echo "2.4 GHz"
+        else echo "${f_num}MHz"
+        fi
+    else
+        echo "--"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Commands
+# ------------------------------------------------------------------------------
+
+cmd_status() {
+    local status iface active_ssid
+    status=$(get_wifi_status)
+    iface=$(get_wifi_iface)
+    active_ssid=$(get_active_ssid)
+
+    echo -e "${BOLD}${CYAN}=== Wi-Fi Status ===${RESET}"
+    echo -e "  ${BOLD}Radio:${RESET}       $([ "$status" = "enabled" ] && echo -e "${GREEN}Enabled (ON)${RESET}" || echo -e "${RED}Disabled (OFF)${RESET}")"
+    echo -e "  ${BOLD}Interface:${RESET}   ${iface:---}"
+
+    if [ -n "$active_ssid" ]; then
+        echo -e "  ${BOLD}Status:${RESET}      ${GREEN}Connected${RESET}"
+        echo -e "  ${BOLD}Network:${RESET}     ${BOLD}${GREEN}$active_ssid${RESET}"
+
+        # Fetch IP and Gateway
+        local ip_info gw_info dns_info sig_info bssid_info freq_info
+        ip_info=$(nmcli -t -f IP4.ADDRESS dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
+        gw_info=$(nmcli -t -f IP4.GATEWAY dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
+        dns_info=$(nmcli -t -f IP4.DNS dev show "$iface" 2>/dev/null | tr '\n' ' ' | sed 's/IP4.DNS\[[0-9]*\]://g' | xargs)
+        
+        local active_line
+        active_line=$(nmcli -t -f ACTIVE,SSID,BSSID,SIGNAL,SECURITY,FREQ dev wifi list 2>/dev/null | grep '^yes:' | head -n 1 || true)
+        if [ -n "$active_line" ]; then
+            bssid_info=$(echo "$active_line" | cut -d: -f3-8 | sed 's/\\:/:/g')
+            sig_info=$(echo "$active_line" | cut -d: -f9)
+            freq_info=$(echo "$active_line" | cut -d: -f11)
+        fi
+
+        [ -n "$ip_info" ] && echo -e "  ${BOLD}IPv4 Address:${RESET} $ip_info"
+        [ -n "$gw_info" ] && echo -e "  ${BOLD}Gateway:${RESET}      $gw_info"
+        [ -n "$dns_info" ] && echo -e "  ${BOLD}DNS:${RESET}          $dns_info"
+        [ -n "$sig_info" ] && echo -e "  ${BOLD}Signal:${RESET}       $(sig_to_icon "$sig_info") $sig_info%"
+        [ -n "$freq_info" ] && echo -e "  ${BOLD}Frequency:${RESET}    $(freq_to_band "$freq_info") ($freq_info)"
+        [ -n "$bssid_info" ] && echo -e "  ${BOLD}BSSID:${RESET}        $bssid_info"
+    else
+        echo -e "  ${BOLD}Status:${RESET}      ${YELLOW}Disconnected${RESET}"
+    fi
+}
+
+cmd_scan() {
+    local iface
+    iface=$(get_wifi_iface)
+    if [ -z "$iface" ]; then
+        echo -e "${RED}Error: No Wi-Fi interface found.${RESET}" >&2
+        return 1
+    fi
+
+    echo -e "${CYAN}Scanning nearby Wi-Fi networks...${RESET}"
+    nmcli dev wifi rescan >/dev/null 2>&1 || true
+
+    local raw_list active_ssid
+    raw_list=$(nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY,FREQ dev wifi list 2>/dev/null || true)
+    active_ssid=$(get_active_ssid)
+
+    if [ -z "$raw_list" ]; then
+        echo -e "${YELLOW}No networks found.${RESET}"
+        return 0
+    fi
+
+    declare -A SEEN_SIG SEEN_SEC SEEN_BAND SEEN_ACT
+
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local in_use ssid signal security freq
+        in_use=$(echo "$line" | cut -d: -f1)
+        ssid=$(echo "$line" | cut -d: -f2)
+        signal=$(echo "$line" | cut -d: -f3)
+        security=$(echo "$line" | cut -d: -f4)
+        freq=$(echo "$line" | cut -d: -f5)
+
+        [ -z "$ssid" ] || [ "$ssid" = "--" ] && continue
+        local sig_num
+        sig_num=$(echo "$signal" | tr -dc '0-9')
+        [ -z "$sig_num" ] && sig_num=0
+
+        local is_act=0
+        if [ "$in_use" = "*" ] || [ "$ssid" = "$active_ssid" ]; then
+            is_act=1
+        fi
+
+        if [ -z "${SEEN_SIG["$ssid"]+x}" ] || [ "$sig_num" -gt "${SEEN_SIG["$ssid"]}" ] || [ "$is_act" -eq 1 ]; then
+            SEEN_SIG["$ssid"]="$sig_num"
+            SEEN_SEC["$ssid"]="$security"
+            SEEN_BAND["$ssid"]="$(freq_to_band "$freq")"
+            SEEN_ACT["$ssid"]="$is_act"
+        fi
+    done <<< "$raw_list"
+
+    echo ""
+    printf "${BOLD}%-4s %-4s %-6s %-9s %-14s %s${RESET}\n" "ST" "" "SIGNAL" "BAND" "SECURITY" "SSID"
+    echo -e "${DIM}------------------------------------------------------------${RESET}"
+
+    # Build formatted lines and sort
+    local lines=()
+    for s in "${!SEEN_SIG[@]}"; do
+        local sig="${SEEN_SIG["$s"]}"
+        local sec="${SEEN_SEC["$s"]}"
+        local band="${SEEN_BAND["$s"]}"
+        local is_act="${SEEN_ACT["$s"]}"
+        local is_saved=0
+        is_saved_ssid "$s" && is_saved=1
+
+        local st_tag="  "
+        if [ "$is_act" -eq 1 ]; then
+            st_tag="${GREEN}✓ ${RESET}"
+        elif [ "$is_saved" -eq 1 ]; then
+            st_tag="${YELLOW}★ ${RESET}"
+        fi
+
+        local icon
+        icon=$(sig_to_icon "$sig")
+        local sec_label="${sec:---}"
+        [ "$sec_label" = "--" ] && sec_label="Open"
+
+        lines+=("$(printf "%s %s %3d%%   %-9s %-14s %s" "$st_tag" "$icon" "$sig" "$band" "$sec_label" "$s")")
+    done
+
+    # Sort: active first, then saved, then highest signal
+    printf "%s\n" "${lines[@]}" | sort -k1,1r -k3,3nr
+}
+
+cmd_saved() {
+    echo -e "${BOLD}${CYAN}=== Saved Wi-Fi Connections ===${RESET}"
+    local saved active_ssid
+    saved=$(nmcli -t -f NAME,TYPE con show 2>/dev/null | awk -F: '$2=="802-11-wireless"{print $1}')
+    active_ssid=$(get_active_ssid)
+
+    if [ -z "$saved" ]; then
+        echo -e "${YELLOW}No saved Wi-Fi connections found.${RESET}"
+        return 0
+    fi
+
+    while IFS= read -r name; do
+        [ -z "$name" ] && continue
+        if [ "$name" = "$active_ssid" ]; then
+            echo -e "  ${GREEN}✓ $name (Active)${RESET}"
+        else
+            echo -e "  ${YELLOW}★${RESET} $name"
+        fi
+    done <<< "$saved"
+}
+
+cmd_connect() {
+    local target_ssid="$1"
+    local password="$2"
+
+    if [ -z "$target_ssid" ]; then
+        # If no SSID provided and interactive, launch fzf picker
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+            return 0
+        else
+            echo -e "${RED}Error: Specify SSID to connect to. Usage: wifi connect <SSID> [password]${RESET}" >&2
+            return 1
+        fi
+    fi
+
+    # Check if network profile is already saved
+    if is_saved_ssid "$target_ssid"; then
+        echo -e "${CYAN}Connecting to saved profile: ${BOLD}$target_ssid${RESET}..."
+        if nmcli con up id "$target_ssid"; then
+            echo -e "${GREEN}✓ Successfully connected to $target_ssid${RESET}"
+            return 0
+        else
+            echo -e "${RED}Failed to connect to saved profile $target_ssid.${RESET}"
+            read -r -p "Do you want to re-enter credentials? [y/N]: " retry
+            if [[ ! "$retry" =~ ^[Yy]$ ]]; then
+                return 1
+            fi
+        fi
+    fi
+
+    # Detect security if not specified
+    local sec
+    sec=$(nmcli -t -f SSID,SECURITY dev wifi list 2>/dev/null | awk -F: -v s="$target_ssid" '$1 == s { print $2; exit }')
+
+    if [ -z "$password" ] && [ -n "$sec" ] && [ "$sec" != "--" ]; then
+        echo -e "${YELLOW}Network '$target_ssid' is secured ($sec).${RESET}"
+        read -rsp "Enter Wi-Fi password: " password
+        echo ""
+    fi
+
+    echo -e "${CYAN}Connecting to ${BOLD}$target_ssid${RESET}..."
+    if [ -n "$password" ]; then
+        if nmcli dev wifi connect "$target_ssid" password "$password"; then
+            echo -e "${GREEN}✓ Successfully connected to $target_ssid!${RESET}"
+        else
+            echo -e "${RED}✗ Failed to connect to $target_ssid.${RESET}"
+            return 1
+        fi
+    else
+        if nmcli dev wifi connect "$target_ssid"; then
+            echo -e "${GREEN}✓ Successfully connected to open network $target_ssid!${RESET}"
+        else
+            echo -e "${RED}✗ Failed to connect to $target_ssid.${RESET}"
+            return 1
+        fi
+    fi
+}
+
+cmd_hidden() {
+    local ssid pass
+    read -rp "Enter Hidden Network SSID: " ssid
+    [ -z "$ssid" ] && return 0
+    read -rsp "Enter Password (leave blank if Open): " pass
+    echo ""
+
+    echo -e "${CYAN}Connecting to hidden network: ${BOLD}$ssid${RESET}..."
+    if [ -n "$pass" ]; then
+        nmcli dev wifi connect "$ssid" password "$pass" hidden yes
+    else
+        nmcli dev wifi connect "$ssid" hidden yes
+    fi
+}
+
+cmd_disconnect() {
+    local active_ssid iface
+    active_ssid=$(get_active_ssid)
+    iface=$(get_wifi_iface)
+
+    if [ -n "$active_ssid" ]; then
+        echo -e "${YELLOW}Disconnecting from $active_ssid...${RESET}"
+        nmcli con down id "$active_ssid" >/dev/null 2>&1 || nmcli dev disconnect iface "$iface" >/dev/null 2>&1 || true
+        echo -e "${GREEN}✓ Disconnected.${RESET}"
+    else
+        echo -e "${YELLOW}Not currently connected to any Wi-Fi network.${RESET}"
+    fi
+}
+
+cmd_forget() {
+    local target="$1"
+    if [ -z "$target" ]; then
+        local saved
+        saved=$(nmcli -t -f NAME,TYPE con show 2>/dev/null | awk -F: '$2=="802-11-wireless"{print $1}')
+        if [ -z "$saved" ]; then
+            echo -e "${YELLOW}No saved profiles to forget.${RESET}"
+            return 0
+        fi
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            target=$(echo "$saved" | fzf --prompt="Select profile to forget: " --height=40% --reverse --border)
+        else
+            echo "$saved"
+            read -rp "Enter profile name to forget: " target
+        fi
+    fi
+
+    [ -z "$target" ] && return 0
+
+    if nmcli con delete id "$target"; then
+        echo -e "${GREEN}✓ Removed network profile: $target${RESET}"
+    else
+        echo -e "${RED}✗ Could not remove profile: $target${RESET}"
+        return 1
+    fi
+}
+
+cmd_toggle() {
+    local status
+    status=$(get_wifi_status)
+    if [ "$status" = "enabled" ]; then
+        nmcli radio wifi off
+        echo -e "${YELLOW}Wi-Fi turned OFF.${RESET}"
+    else
+        nmcli radio wifi on
+        echo -e "${GREEN}Wi-Fi turned ON.${RESET}"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Interactive TUI Menu (fzf)
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    if ! command -v fzf >/dev/null 2>&1; then
+        echo -e "${YELLOW}fzf not found. Showing status and scanned networks:${RESET}"
+        cmd_status
+        echo ""
+        cmd_scan
+        return 0
+    fi
+
+    while true; do
+        clear
+        local status iface active_ssid
+        status=$(get_wifi_status)
+        iface=$(get_wifi_iface)
+        active_ssid=$(get_active_ssid)
+
+        local header_info=""
+        if [ "$status" = "disabled" ]; then
+            header_info="Wi-Fi: DISABLED (OFF)"
+        elif [ -n "$active_ssid" ]; then
+            local ip_info
+            ip_info=$(nmcli -t -f IP4.ADDRESS dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
+            header_info="Connected: $active_ssid (${ip_info:---})"
+        else
+            header_info="Wi-Fi: ON (Disconnected)"
+        fi
+
+        # Fetch scanned networks
+        local raw_list
+        raw_list=$(nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY,FREQ dev wifi list 2>/dev/null || true)
+
+        declare -A SEEN_SIG SEEN_SEC SEEN_BAND SEEN_ACT
+
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            local in_use ssid signal security freq
+            in_use=$(echo "$line" | cut -d: -f1)
+            ssid=$(echo "$line" | cut -d: -f2)
+            signal=$(echo "$line" | cut -d: -f3)
+            security=$(echo "$line" | cut -d: -f4)
+            freq=$(echo "$line" | cut -d: -f5)
+
+            [ -z "$ssid" ] || [ "$ssid" = "--" ] && continue
+            local sig_num
+            sig_num=$(echo "$signal" | tr -dc '0-9')
+            [ -z "$sig_num" ] && sig_num=0
+
+            local is_act=0
+            if [ "$in_use" = "*" ] || [ "$ssid" = "$active_ssid" ]; then
+                is_act=1
+            fi
+
+            if [ -z "${SEEN_SIG["$ssid"]+x}" ] || [ "$sig_num" -gt "${SEEN_SIG["$ssid"]}" ] || [ "$is_act" -eq 1 ]; then
+                SEEN_SIG["$ssid"]="$sig_num"
+                SEEN_SEC["$ssid"]="$security"
+                SEEN_BAND["$ssid"]="$(freq_to_band "$freq")"
+                SEEN_ACT["$ssid"]="$is_act"
+            fi
+        done <<< "$raw_list"
+
+        # Build menu items
+        local menu=()
+        menu+=("󰑐  Rescan Available Networks")
+        if [ -n "$active_ssid" ]; then
+            menu+=("󰤮  Disconnect from \"$active_ssid\"")
+        fi
+        menu+=("󰛐  Connect to Hidden Network...")
+        menu+=("★  Saved Networks Manager")
+        if [ "$status" = "enabled" ]; then
+            menu+=("󰖪  Turn Wi-Fi OFF")
+        else
+            menu+=("󰖩  Turn Wi-Fi ON")
+        fi
+        menu+=("󰌢  Launch nmtui (NetworkManager TUI)")
+        menu+=("─────────────────────────────────────────────────────────────")
+
+        # Network list items
+        local net_lines=()
+        for s in "${!SEEN_SIG[@]}"; do
+            local sig="${SEEN_SIG["$s"]}"
+            local sec="${SEEN_SEC["$s"]}"
+            local band="${SEEN_BAND["$s"]}"
+            local is_act="${SEEN_ACT["$s"]}"
+            local is_saved=0
+            is_saved_ssid "$s" && is_saved=1
+
+            local mark="  "
+            if [ "$is_act" -eq 1 ]; then mark="✓ "
+            elif [ "$is_saved" -eq 1 ]; then mark="★ "
+            fi
+
+            local icon
+            icon=$(sig_to_icon "$sig")
+            local sec_lbl="${sec:---}"
+            [ "$sec_lbl" = "--" ] && sec_lbl="Open"
+
+            net_lines+=("$(printf "%s%s %3d%%  %-7s  %-12s  %s" "$mark" "$icon" "$sig" "$band" "$sec_lbl" "$s")")
+        done
+
+        if [ ${#net_lines[@]} -gt 0 ]; then
+            while IFS= read -r sorted_line; do
+                [ -n "$sorted_line" ] && menu+=("$sorted_line")
+            done < <(printf "%s\n" "${net_lines[@]}" | sort -k1,1r -k3,3nr)
+        else
+            menu+=("--- No Wi-Fi networks found ---")
+        fi
+
+        local choice
+        choice=$(printf "%s\n" "${menu[@]}" | fzf \
+            --prompt="Wi-Fi > " \
+            --header="[$header_info] (Enter to select, Esc to exit)" \
+            --reverse \
+            --height=65% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$choice" ] && break
+
+        case "$choice" in
+            *"Rescan Available Networks"*)
+                echo -e "${CYAN}Rescanning...${RESET}"
+                nmcli dev wifi rescan >/dev/null 2>&1 || true
+                sleep 1
+                ;;
+            *"Disconnect from"*)
+                cmd_disconnect
+                sleep 1
+                ;;
+            *"Connect to Hidden Network"*)
+                cmd_hidden
+                echo "Press enter to continue..."
+                read -r
+                ;;
+            *"Saved Networks Manager"*)
+                local saved_sel
+                saved_sel=$(nmcli -t -f NAME,TYPE con show 2>/dev/null | awk -F: '$2=="802-11-wireless"{print $1}' | fzf \
+                    --prompt="Saved Network > " \
+                    --header="Select saved network to manage" \
+                    --reverse --height=40% --border=rounded) || true
+                if [ -n "$saved_sel" ]; then
+                    local act
+                    act=$(printf "1. Connect\n2. Forget / Delete\n3. Cancel" | fzf \
+                        --prompt="$saved_sel > " \
+                        --reverse --height=25% --border=rounded) || true
+                    case "$act" in
+                        *"Connect"*) cmd_connect "$saved_sel" ;;
+                        *"Forget"*) cmd_forget "$saved_sel" ;;
+                    esac
+                    echo "Press enter to continue..."
+                    read -r
+                fi
+                ;;
+            *"Turn Wi-Fi OFF"*)
+                nmcli radio wifi off
+                sleep 0.5
+                ;;
+            *"Turn Wi-Fi ON"*)
+                nmcli radio wifi on
+                sleep 1
+                ;;
+            *"Launch nmtui"*)
+                nmtui
+                ;;
+            *"────"*|*"No Wi-Fi networks"*)
+                ;;
+            *)
+                # Extracted network selected
+                local sel_ssid
+                # Match SSID at the end of formatted line
+                sel_ssid=$(echo "$choice" | awk '{for (i=6; i<=NF; i++) printf "%s%s", $i, (i<NF?" ":""); print ""}')
+                [ -z "$sel_ssid" ] && continue
+
+                if [ "$sel_ssid" = "$active_ssid" ]; then
+                    local act
+                    act=$(printf "1. Disconnect\n2. Reconnect\n3. Forget Profile\n4. Show Info\n5. Cancel" | fzf \
+                        --prompt="$sel_ssid (Active) > " \
+                        --reverse --height=30% --border=rounded) || true
+                    case "$act" in
+                        *"Disconnect"*) cmd_disconnect ;;
+                        *"Reconnect"*) cmd_connect "$sel_ssid" ;;
+                        *"Forget"*) cmd_forget "$sel_ssid" ;;
+                        *"Show Info"*) cmd_status ;;
+                    esac
+                    echo "Press enter to continue..."
+                    read -r
+                else
+                    cmd_connect "$sel_ssid"
+                    echo "Press enter to continue..."
+                    read -r
+                fi
+                ;;
+        esac
+    done
+}
+
+cmd_help() {
+    cat << EOF
+${BOLD}wifi${RESET} - Terminal Wi-Fi Connection Manager
+
+${BOLD}USAGE:${RESET}
+    wifi                         Launch interactive fzf menu
+    wifi status | s              Display current connection details and IP
+    wifi list | scan | l         Scan and list nearby Wi-Fi networks
+    wifi connect <SSID> [pass]   Connect to a Wi-Fi network
+    wifi disconnect | d          Disconnect from current Wi-Fi
+    wifi saved                   List saved Wi-Fi profiles
+    wifi forget [SSID]           Delete a saved Wi-Fi profile
+    wifi hidden                  Connect to a hidden Wi-Fi network
+    wifi on | off                Turn Wi-Fi radio ON or OFF
+    wifi tui                     Open NetworkManager TUI (nmtui)
+    wifi help | -h               Show this help message
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Entrypoint
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    status|s|info)
+        cmd_status
+        ;;
+    list|scan|l)
+        cmd_scan
+        ;;
+    connect|c)
+        shift
+        cmd_connect "$@"
+        ;;
+    disconnect|d|down)
+        cmd_disconnect
+        ;;
+    saved|profiles)
+        cmd_saved
+        ;;
+    forget|delete|rm)
+        shift
+        cmd_forget "$@"
+        ;;
+    hidden)
+        cmd_hidden
+        ;;
+    on)
+        nmcli radio wifi on
+        echo -e "${GREEN}Wi-Fi turned ON.${RESET}"
+        ;;
+    off)
+        nmcli radio wifi off
+        echo -e "${YELLOW}Wi-Fi turned OFF.${RESET}"
+        ;;
+    toggle)
+        cmd_toggle
+        ;;
+    tui)
+        nmtui
+        ;;
+    help|-h|--help)
+        cmd_help
+        ;;
+    "")
+        if [ -t 0 ] && [ -t 1 ]; then
+            cmd_interactive
+        else
+            cmd_status
+            echo ""
+            cmd_help
+        fi
+        ;;
+    *)
+        # If argument matches a scanned or saved SSID, connect to it directly
+        cmd_connect "$@"
+        ;;
+esac

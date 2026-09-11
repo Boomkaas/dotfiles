@@ -32,6 +32,11 @@
 
   services.blueman.enable = true;
 
+  programs.wireshark = {
+    enable = true;
+    package = pkgs.wireshark-cli;
+  };
+
   systemd.services.unblock-bluetooth = {
     description = "Unblock Bluetooth using rfkill";
     wantedBy = [ "multi-user.target" ];

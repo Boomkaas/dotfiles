@@ -9,6 +9,21 @@
 
   programs.mango.enable = true;
 
+  nixpkgs.overlays = [
+    (final: prev: {
+      tmux = prev.tmux.overrideAttrs (old: {
+        postPatch = (old.postPatch or "") + ''
+          substituteInPlace input.c --replace "#define INPUT_BUF_LIMIT 1048576" "#define INPUT_BUF_LIMIT 104857600"
+        '';
+      });
+      yazi-unwrapped = prev.yazi-unwrapped.overrideAttrs (old: {
+        patches = (old.patches or []) ++ [
+          ../modules/patches/yazi-disable-trt.patch
+        ];
+      });
+    })
+  ];
+
   hardware.uinput.enable = true;
 
   services.logind = {
@@ -131,20 +146,20 @@
 
         "application/pdf" = [ "org.gnome.Evince.desktop" ];
 
-        # Images (Gwenview)
-        "image/bmp" = [ "org.kde.gwenview.desktop" ];
-        "image/jpeg" = [ "org.kde.gwenview.desktop" ];
-        "image/gif" = [ "org.kde.gwenview.desktop" ];
-        "image/png" = [ "org.kde.gwenview.desktop" ];
-        "image/tiff" = [ "org.kde.gwenview.desktop" ];
-        "image/webp" = [ "org.kde.gwenview.desktop" ];
-        "image/x-bmp" = [ "org.kde.gwenview.desktop" ];
-        "image/x-ico" = [ "org.kde.gwenview.desktop" ];
-        "image/x-png" = [ "org.kde.gwenview.desktop" ];
-        "image/x-pcx" = [ "org.kde.gwenview.desktop" ];
-        "image/x-tga" = [ "org.kde.gwenview.desktop" ];
-        "image/xpm" = [ "org.kde.gwenview.desktop" ];
-        "image/svg+xml" = [ "org.kde.gwenview.desktop" ];
+        # Images (Viewnior)
+        "image/bmp" = [ "viewnior.desktop" ];
+        "image/jpeg" = [ "viewnior.desktop" ];
+        "image/gif" = [ "viewnior.desktop" ];
+        "image/png" = [ "viewnior.desktop" ];
+        "image/tiff" = [ "viewnior.desktop" ];
+        "image/webp" = [ "viewnior.desktop" ];
+        "image/x-bmp" = [ "viewnior.desktop" ];
+        "image/x-ico" = [ "viewnior.desktop" ];
+        "image/x-png" = [ "viewnior.desktop" ];
+        "image/x-pcx" = [ "viewnior.desktop" ];
+        "image/x-tga" = [ "viewnior.desktop" ];
+        "image/xpm" = [ "viewnior.desktop" ];
+        "image/svg+xml" = [ "viewnior.desktop" ];
 
         # Audio (VLC)
         "audio/mpeg" = [ "vlc.desktop" ];
@@ -181,6 +196,11 @@
       enableFishIntegration = true;
     };
 
+    programs.yazi = {
+      enable = true;
+      enableFishIntegration = true;
+    };
+
     programs.starship = {
       enable = true;
       enableFishIntegration = true;
@@ -198,8 +218,9 @@
     systemd.user.services.awww-daemon = {
       Unit = {
         Description = "awww wallpaper daemon";
-        PartOf = [ "graphical-session.target" "default.target" ];
-        After = [ "graphical-session.target" "default.target" ];
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+        ConditionEnvironment = "WAYLAND_DISPLAY";
       };
       Service = {
         ExecStart = "${pkgs_unstable.awww}/bin/awww-daemon";
@@ -210,7 +231,7 @@
         ];
       };
       Install = {
-        WantedBy = [ "default.target" ];
+        WantedBy = [ "graphical-session.target" ];
       };
     };
 

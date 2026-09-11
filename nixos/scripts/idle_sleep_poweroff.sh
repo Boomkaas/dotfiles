@@ -206,8 +206,22 @@ fi
 # Pre-sleep Inhibit Validation
 # ------------------------------------------------------------------------------
 if [[ -x "$IDLE_INHIBIT_BIN" ]]; then
-    if ! "$IDLE_INHIBIT_BIN" "--$MODE"; then
-        log "Inactivity action inhibited by idle_inhibit.sh for mode --$MODE (caffeine active, audio playing, or condition mismatch)."
+    set +e
+    "$IDLE_INHIBIT_BIN" "--$MODE"
+    INHIBIT_RC=$?
+    set -e
+    if [[ $INHIBIT_RC -ne 0 ]]; then
+        if [[ $INHIBIT_RC -eq 2 ]]; then
+            log "Inactivity action inhibited: Awake / Caffeine mode is ON."
+        elif [[ $INHIBIT_RC -eq 3 ]]; then
+            if [[ "$MODE" == "battery" ]]; then
+                log "Inactivity action skipped: System is on AC power (this listener is for battery mode). AC suspend will occur at ${DEFAULT_AC_IDLE_SECS}s (${DEFAULT_AC_TOTAL_SECS}s poweroff)."
+            else
+                log "Inactivity action skipped: System is on battery power (this listener is for AC mode)."
+            fi
+        else
+            log "Inactivity action inhibited by idle_inhibit.sh (code: $INHIBIT_RC)."
+        fi
         exit 0
     fi
 fi

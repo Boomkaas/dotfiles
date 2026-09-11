@@ -144,19 +144,19 @@ fi
 
 # Check manual override state (1 = manual caffeine override to prevent idle actions)
 if [[ -f "$STATE_FILE" ]] && [[ "$(cat "$STATE_FILE" 2>/dev/null)" == "1" ]]; then
-    exit 1
+    exit 2
 fi
 
 # Power source condition checks
 if [[ "$1" == "--battery" || "$1" == "--on-battery" || "$1" == "--sleep" || "$1" == "--suspend" || "$1" == "--check-sleep" ]]; then
     # Must be on battery (NOT charging)
     if is_on_ac; then
-        exit 1
+        exit 3
     fi
 elif [[ "$1" == "--ac" || "$1" == "--on-ac" || "$1" == "--charging" ]]; then
     # Must be on AC power (IS charging)
     if ! is_on_ac; then
-        exit 1
+        exit 3
     fi
 fi
 

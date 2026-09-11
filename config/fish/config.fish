@@ -15,6 +15,8 @@ if status is-interactive
     fish_add_path ~/go/bin
 
     # Env
+    set -gx EDITOR nvim
+    set -gx VISUAL nvim
     set -gx GTK_USE_PORTAL 1
     set -gx MOZ_ENABLE_WAYLAND 1
     set -gx QT_QPA_PLATFORMTHEME qt6ct
@@ -46,10 +48,8 @@ if status is-interactive
     abbr c 'clear'
     abbr h 'history'
     abbr haku '~/.local/bin/haku.sh'
-    abbr menu '~/.local/bin/hakumenu.sh'
+    abbr menu 'rofi -show drun'
     abbr openconfig '~/.local/bin/open_config.sh'
-    abbr pacsize 'expac -H M "%m\t%n" $(\pacman -Qeq) | sort -h -r'
-    abbr pacsizefull 'expac -H M "%m\t%n" | sort -h -r'
     abbr nc 'sudo nix-env --profile /nix/var/nix/profiles/system --delete-generations +3 && sudo nix-store --gc'
     abbr nrb 'sudo nixos-rebuild switch'
     abbr nd 'cd /etc/nixos'
@@ -67,6 +67,27 @@ if status is-interactive
     abbr delgar 'sudo nix-collect-garbage --delete-older-than 1d'
     abbr gfn 'nohup flatpak run com.nvidia.geforcenow > /dev/null 2>&1 &'
     abbr roblox 'nohup flatpak run org.vinegarhq.Sober > /dev/null 2>&1 &'
+
+    # Tmux Shortcuts
+    abbr t 'tmux'
+    abbr ta 'tmux attach -t'
+    abbr tls 'tmux ls'
+    abbr tn 'tmux new-session -s'
+    abbr tk 'tmux kill-session -t'
+
+    # Yazi File Manager Wrapper (cd on exit)
+    function y
+        set tmp (mktemp -t "yazi-cwd.XXXXXX")
+        command yazi $argv --cwd-file="$tmp"
+        if set cwd (command cat -- "$tmp"); and [ -n "$cwd" ]; and [ "$cwd" != "$PWD" ]
+            builtin cd -- "$cwd"
+        end
+        rm -f -- "$tmp"
+    end
+
+    # Interactive Shell Hotkey:
+    # Ctrl-o to open Yazi from the prompt
+    bind \co 'y; commandline -f repaint'
 
 
     # Antigravity wrapper function
