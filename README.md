@@ -1,6 +1,6 @@
 # ❄️ NixOS & MangoWM / Hyprland Dotfiles
 
-A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)** flake configuration featuring **MangoWM** (Scroller tiling compositor), **Hyprland** ecosystem utilities, **80+ Waybar themes**, **Fish shell with Starship**, custom browser skins, automation scripts, and an integrated **Graphify** knowledge graph.
+A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)** flake configuration featuring **MangoWM** (Scroller tiling compositor), **Hyprland** ecosystem utilities, **80+ Waybar themes**, **Tmux & Yazi terminal workflow**, **Rofi interactive control menus**, **Fish shell with Starship**, custom browser skins, automation scripts, and an integrated **Graphify** knowledge graph.
 
 ---
 
@@ -10,17 +10,20 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 | :--- | :--- | :--- |
 | **Operating System** | [NixOS](https://nixos.org/) (25.05 / unstable) | Pure Flake-based declarative system configuration |
 | **Compositor** | [MangoWM](https://github.com/Mangowm/mangowm) (v0.3.4) | Wayland tiling compositor with dynamic Scroller layout & 2-pass blur |
-| **Idle & Lockscreen** | [Hypridle](https://github.com/hyprwm/hypridle) + [Hyprlock](https://github.com/hyprwm/hyprlock) | Intelligent AC/Battery dual power saving & blurred PAM lockscreen |
+| **Idle & Lockscreen** | [Hypridle](https://github.com/hyprwm/hypridle) + [Hyprlock](https://github.com/hyprwm/hyprlock) | Intelligent AC/Battery dual power saving, blurred lockscreen, & `awake` caffeine tool |
 | **Display Manager** | [GDM](https://wiki.gnome.org/Projects/GDM) | Native Wayland session display manager |
-| **Status Bar** | [Waybar](https://github.com/Alexays/Waybar) | Modular status bar featuring 80+ switchable Hancore & Jakoolit themes |
+| **Status Bar** | [Waybar](https://github.com/Alexays/Waybar) | Modular status bar featuring 80+ switchable Hancore & Jakoolit themes via `waybar_manager.sh` |
 | **Notification Center**| [SwayNC](https://github.com/ErikReider/SwayNotificationCenter) | GTK-based control center with quick toggles, sliders, and media widget |
-| **App Launcher** | [Rofi](https://github.com/davatorium/rofi) (Wayland) | Multi-mode launcher (Apps, Commands, Window Switcher, Emoji Picker) |
-| **Terminal** | [Kitty](https://sw.kovidgoyal.net/kitty/) | GPU-accelerated terminal with Gruvbox Dark aesthetic & cursor trails |
-| **Shell** | [Fish](https://fishshell.com/) + [Starship](https://starship.rs/) | Interactive shell with Zoxide, Direnv, Eza, and smart `agy` token wrapper |
+| **App Launcher & Menus**| [Rofi](https://github.com/davatorium/rofi) (Wayland) | Multi-mode launcher + interactive submenus (Wi-Fi, Bluetooth, Audio, Processes, Disk, Clean, Config) |
+| **Terminal & Multiplexer**| [Kitty](https://sw.kovidgoyal.net/kitty/) + [Tmux](https://github.com/tmux/tmux) | GPU-accelerated terminal (Gruvbox Dark) + Tmux patched for 100MB buffer limit |
+| **File Managers** | [Yazi](https://github.com/sxyazi/yazi) + [Thunar](https://docs.xfce.org/xfce/thunar/start) | Lightning-fast TUI file manager with Ueberzug++ previews & shell cd integration + GUI fallback |
+| **Shell** | [Fish](https://fishshell.com/) + [Starship](https://starship.rs/) | Interactive shell with Zoxide, Direnv, Eza, Yazi `Ctrl+O` hotkey, and smart `agy` token wrapper |
 | **Audio Stack** | [PipeWire](https://pipewire.org/) | PipeWire + ALSA + Pulse + JACK + Realtek ALC256 ASUS mic pin routing |
-| **Virtualization** | Docker, KVM / Libvirt, Waydroid | Full container, virtual machine, and Android Wayland virtualization |
+| **Network & Diagnostics**| NetworkManager + Wireshark | System-wide packet capturing (`wireshark-cli`, `termshark`) with user permissions |
+| **Virtualization** | Docker, KVM / Libvirt | Container and virtual machine virtualization with SPICE USB redirection |
+| **Media & Images** | Viewnior + Swappy + VLC | Lightweight image viewer (`viewnior`), Wayland snapshot annotator (`swappy`), and media player |
 | **Browser Theme** | Custom Firefox `userChrome.css` | Glassmorphic dark translucent panels & AMOLED gold startpage |
-| **Desktop Pet** | [Wayland-VPet](https://github.com/Boomkaas/dotfiles) (Bongo Cat) | Hardware input & CPU-reactive overlay pet with Digimon/Pokemon sprites |
+| **Desktop Pet** | [Wayland-VPet](https://github.com/Boomkaas/dotfiles) (Bongo Cat) | Hardware input & CPU-reactive overlay pet with Digimon/Pokemon sprites (patched fullscreen behavior) |
 | **Knowledge Graph** | [Graphify](https://github.com/safishamsi/graphify) | AST + semantic codebase knowledge graph & interactive HTML |
 
 ---
@@ -40,7 +43,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── pet_list.txt                # Active pet selection list (Dodomon, Agumon, etc.)
 │   │   └── pokemon.txt                 # Pokemon sprite roster definitions
 │   ├── fish/                           # Fish interactive shell configuration
-│   │   ├── config.fish                 # Environment variables, Git/Nix abbreviations, smart 'agy' wrapper function
+│   │   ├── config.fish                 # Environment variables, Tmux/Yazi shortcuts, 'y' cd wrapper, 'agy' tokens
 │   │   └── functions/
 │   │       └── fish_greeting.fish      # Startup greeting with randomized coder quotes
 │   ├── hypr/                           # Hyprland ecosystem idle and lockscreen configurations
@@ -51,7 +54,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   ├── mango/                          # MangoWM Wayland Compositor configuration suite
 │   │   ├── config.conf                 # Master entrypoint sourcing sub-configs and user overrides
 │   │   ├── autostart.conf              # Startup daemons (awww, swaync, hypridle, cliphist, waybar, dockbar, polkit)
-│   │   ├── bind.conf                   # Keybindings (WASD/arrows navigation, window state toggles, launchers, scratchpad)
+│   │   ├── bind.conf                   # Keybindings (WASD navigation, Kitty+Tmux, Antigravity IDE, Rofi menus, media)
 │   │   ├── layout.conf                 # Scroller layout engine rules, master-stack, and dwindle settings
 │   │   ├── effect.conf                 # Visual effects: 2-pass blur, noise, brightness/saturation, 24px drop-shadows
 │   │   ├── animation.conf              # Cubic-bezier zoom, slide, and fade window transitions
@@ -59,7 +62,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── settings.conf               # Hot corners, cursor theme (Bibata-Modern-Ice), and XWayland persistence
 │   │   └── pkg-mango.txt               # Package dependencies list (mangowm-git, gammastep, xdg-desktop-portal-wlr)
 │   ├── rofi/                           # Rofi application launcher and menu themes
-│   │   ├── config.rasi                 # Master configuration (drun, run, window modes, Kitty terminal target)
+│   │   ├── config.rasi                 # Master configuration (drun & Processes modes, keyboard navigation bindings)
 │   │   ├── horizontal.rasi             # Horizontal card layout theme variant
 │   │   ├── less-rounded.rasi           # Crisp square corner theme variant
 │   │   └── vertical.rasi               # Default sleek vertical list theme
@@ -69,41 +72,66 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   └── style.css                   # GTK stylesheet with JetBrainsMono Nerd Font and translucent cards
 │   ├── Thunar/
 │   │   └── uca.xml                     # Thunar custom actions ("Open Terminal Here", "Compress to .zip")
-│   └── waybar/                         # Extensive Waybar library (80+ switchable themes)
-│       ├── config                      # Active Waybar module configuration
-│       ├── config.jsonc                # Alternative / extended JSONC module definition
-│       ├── style.css                   # Active Waybar stylesheet
-│       ├── hancore-*/                  # Hancore theme collection (v1 through v7 iterations, cyber, glass, neon, pill, rounded)
-│       └── jakoolit-*/                 # Jakoolit theme collection (camellia, everforest, minimal, sleek, summitsplit, top-*)
+│   ├── tmux/                           # Tmux terminal multiplexer suite
+│   │   ├── tmux.conf                   # Gruvbox styling, Vi keybindings, statusbar format, prefix configuration
+│   │   └── cheatsheet.sh               # Interactive floating cheat-sheet script for tmux shortcuts
+│   ├── waybar/                         # Extensive Waybar library (80+ switchable themes)
+│   │   ├── config                      # Active Waybar module configuration
+│   │   ├── config.jsonc                # Alternative / extended JSONC module definition
+│   │   ├── style.css                   # Active Waybar stylesheet
+│   │   ├── hancore-*/                  # Hancore theme collection (v1 through v7 iterations, cyber, glass, neon, pill)
+│   │   └── jakoolit-*/                 # Jakoolit theme collection (camellia, everforest, minimal, sleek, summitsplit)
+│   └── yazi/                           # Yazi terminal file manager configuration
+│       ├── keymap.toml                 # Custom keybindings (quick editor, cd-on-exit, shell integrations)
+│       └── yazi.toml                   # Ratio layout (1:4:3), natural sort, image previews, trash behavior
 │
 ├── nixos/
 │   ├── flake.nix                       # Nix Flake entrypoint (nixpkgs 25.05, nixpkgs-unstable, mangowm, home-manager)
 │   ├── flake.lock                      # Locked input dependency revisions
 │   ├── modules/
 │   │   ├── default.nix                 # Module aggregator importing core, utils, and package configurations
-│   │   ├── pkgs.nix                    # System and user package declarations, custom binary wrappers
+│   │   ├── pkgs.nix                    # System packages, custom script wrappers (wifi-menu, awake, etc.), overlays
+│   │   ├── patches/                    # Custom source patches applied to nixpkgs builds
+│   │   │   ├── wayland-vpet-fullscreen.patch  # Prevents wayland-vpet from auto-hiding during fullscreen apps
+│   │   │   └── yazi-disable-trt.patch         # Disables unwanted terminal reset behaviors in Yazi
 │   │   ├── core/
 │   │   │   ├── audio.nix               # PipeWire sound server + Realtek ALC256 ASUS mic pin routing fix
-│   │   │   ├── connections.nix         # NetworkManager, Bluetooth (dual mode, fast connect), rfkill unblock, firewall
-│   │   │   ├── services.nix            # Virtualization (Docker, Libvirt/KVM, Waydroid), PostgreSQL 16, UPower, printing
-│   │   │   ├── system.nix              # systemd-boot, locale (Europe/Kyiv, US/UA keymap), nix-ld, Wayland session variables
-│   │   │   └── user.nix                # User account 'peng' (groups: wheel, video, docker, libvirtd, input, uinput)
+│   │   │   ├── connections.nix         # NetworkManager, Bluetooth, Wireshark CLI, rfkill unblock, firewall
+│   │   │   ├── services.nix            # Virtualization (Docker, Libvirt/KVM), PostgreSQL 16, UPower, printing
+│   │   │   ├── system.nix              # systemd-boot, kernel params (mem_sleep_default, i915), nix-ld, Wayland flags
+│   │   │   └── user.nix                # User 'peng' (groups: wheel, video, docker, libvirtd, input, uinput, wireshark)
 │   │   └── utils/
 │   │       └── xserver.nix             # GDM Wayland display manager, Hyprlock PAM auth, XDG desktop portals
 │   ├── scripts/
-│   │   ├── agy-tokens.py               # Antigravity Global Token & Quota Reporter CLI (colored gauges, live reset timers)
-│   │   ├── channels.sh                 # Channel setup script for nixos-unstable, nixpkgs-unstable, home-manager
-│   │   ├── controlbot.sh               # Telegram PC Remote Control bot runner
+│   │   ├── agy-tokens.py               # Antigravity Global Token & Quota Reporter CLI (colored gauges, reset timers)
+│   │   ├── audio_menu.sh               # Rofi-driven PipeWire output/input device and volume switcher (`audio-menu`)
+│   │   ├── awake                       # CLI wake-lock / caffeine inhibitor (`awake on`, `awake off`, `awake status`)
+│   │   ├── bluetooth                   # CLI helper for fast Bluetooth device discovery and connections
+│   │   ├── bluetooth_menu.sh           # Rofi interactive Bluetooth control menu (`bluetooth-menu`)
+│   │   ├── clean_menu.sh               # Rofi system cleaner (Nix generations, Nix store GC, temp caches) (`clean-menu`)
+│   │   ├── config_menu.sh              # Rofi rapid configuration editor for dotfiles and NixOS (`config-menu`)
+│   │   ├── disk_menu.sh                # Rofi visual disk usage breakdown and mount inspector (`disk-menu`)
+│   │   ├── dpms_handler.sh             # Unified DPMS monitor sleep/wake dispatcher (Hyprland, MangoWM, Niri, Labwc)
 │   │   ├── epic                        # CLI launcher for native in-browser Epic Games Store freebies claimer
 │   │   ├── epic-games-claimer.user.js  # Userscript for calm, in-browser Epic free game checkout with floating HUD
 │   │   ├── gfn.sh                      # GeForce NOW Flatpak launcher
-│   │   ├── nixreb.sh                   # Dotfiles sync to /etc/nixos and system rebuild helper ('nixreb')
+│   │   ├── gtk_theme_menu.sh           # Rofi GTK theme and icon theme switcher (`gtk-theme-menu`)
+│   │   ├── idle_inhibit.sh             # Activity & power state validator before sleep/poweroff actions
+│   │   ├── idle_sleep_poweroff.sh      # RTC hardware wake timer and dual-tier idle sleep/shutdown daemon
+│   │   ├── lock.sh                     # Multi-compositor screen lock script
+│   │   ├── nixreb.sh                   # Dotfiles sync to /etc/nixos and system rebuild helper (`nixreb`)
+│   │   ├── process_menu.sh             # Rofi interactive process monitor and signal sender (`process-menu`)
 │   │   ├── roblox.sh                   # Roblox launcher via Sober Flatpak
-│   │   ├── screenshot.sh               # Area screenshot via Grim + Slurp, copied to clipboard with notification
-│   │   ├── twitch                      # CLI launcher for native in-browser Twitch Drops claimer ('twitch' / 'tdrops')
-│   │   └── twitch-drops-claimer.user.js# Userscript for Don't Starve Together Twitch Drops (160p eco, non-RU filter, auto-claim)
+│   │   ├── screenshot.sh               # Region (slurp) and fullscreen screenshot utility with clipboard & notifications
+│   │   ├── setting                     # System settings dispatcher
+│   │   ├── theme                       # Theme switcher and style setter
+│   │   ├── twitch                      # CLI launcher for native in-browser Twitch Drops claimer (`twitch` / `tdrops`)
+│   │   ├── twitch-drops-claimer.user.js# Userscript for Don't Starve Together Twitch Drops (160p eco, auto-claim)
+│   │   ├── waybar_manager.sh           # Waybar theme switcher, cycle manager, and daemon controller
+│   │   ├── wifi                        # CLI helper for NetworkManager Wi-Fi scanning and connection
+│   │   └── wifi_menu.sh                # Rofi interactive Wi-Fi selector and connection menu (`wifi-menu`)
 │   └── system/
-│       ├── configuration.nix           # Main system configuration (MangoWM enable, Steam firewall, power key rules)
+│       ├── configuration.nix           # System entrypoint (Tmux/Yazi overlays, Viewnior defaults, awww daemon service)
 │       └── hardware-configuration.nix  # Hardware-specific scan (Intel CPU, NVMe, EXT4 root, VFAT boot, swap partition)
 │
 ├── graphify-out/                       # Codebase knowledge graph generated by Graphify
@@ -117,13 +145,16 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 
 ---
 
-## ⚙️ NixOS System Architecture & Modules
+## ⚙️ NixOS System Architecture & Overlays
 
 The NixOS configuration is built on flakes with a modular separation of concerns located in `nixos/modules/`:
 
 ### 1. Core Modules (`nixos/modules/core/`)
 - **`system.nix`**:
   - **Bootloader**: `systemd-boot` with EFI variables and a 5-generation configuration limit.
+  - **Kernel Parameters**:
+    - `mem_sleep_default=deep`: Ensures deep sleep (`s3`) power saving during suspend.
+    - `i915.enable_psr=0`: Disables Intel Panel Self Refresh to eliminate display stutter/flicker on mobile Intel UHD graphics.
   - **Localization**: Timezone set to `Europe/Kyiv`, default locale `en_US.UTF-8`, console keymap `ua-utf`.
   - **Keyboard Layout**: `us,ua` switching via `Win + Space` (`grp:win_space_toggle`).
   - **Binary Compatibility (`nix-ld`)**: Enables running unpatched foreign dynamically-linked binaries (prebuilt language servers, CLI binaries, IDE tooling).
@@ -134,27 +165,24 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 - **`connections.nix`**:
   - **Networking**: NetworkManager enabled with open TCP firewall ports `8080` (web dev) and `5432` (PostgreSQL).
   - **Bluetooth**: Auto-powered on boot, Dual Controller Mode, FastConnectable, experimental features, `blueman` integration, and a systemd service running `rfkill unblock bluetooth`.
+  - **Wireshark CLI**: `programs.wireshark` enabled with `pkgs.wireshark-cli` and packet capture capabilities for the user.
 - **`services.nix`**:
-  - **Virtualization**: Docker daemon, Libvirt / KVM with SPICE USB redirection and `virt-manager`, and Waydroid for containerized Android on Wayland.
+  - **Virtualization**: Docker daemon and Libvirt / KVM with SPICE USB redirection and `virt-manager`.
   - **Database**: PostgreSQL 16 server pre-configured with `mydatabase` and local trust authentication.
   - **Power & System**: UPower, `power-profiles-daemon`, UDisks2, GVFS, CUPS printing, and Android udev permissions.
 - **`user.nix`**:
-  - User `peng` configured with default shell `pkgs.fish` and membership in `networkmanager`, `wheel`, `video`, `docker`, `libvirtd`, `input`, and `uinput`.
+  - User `peng` configured with default shell `pkgs.fish` and membership in `networkmanager`, `wheel`, `video`, `docker`, `libvirtd`, `input`, `uinput`, and `wireshark`.
 
-### 2. Utilities & Display (`nixos/modules/utils/`)
-- **`xserver.nix`**:
-  - **Display Manager**: GDM with native Wayland session support (`gdm.wayland = true`), ensuring MangoWM and Hyprland launch in pure Wayland without missing `$DISPLAY` errors.
-  - **Authentication**: Hyprlock PAM integration (`programs.hyprlock.enable = true`).
-  - **Portals**: `xdg-desktop-portal-gtk` and `xdg-desktop-portal-wlr` for screensharing and file pickers.
+### 2. Nixpkgs Overlays & Patches (`nixos/system/configuration.nix` & `nixos/modules/patches/`)
+- **Tmux Buffer Patch**: Overrides `tmux` input buffer size from 1MB to 100MB (`#define INPUT_BUF_LIMIT 104857600`) in `input.c`, eliminating scrollback truncations during large build or log outputs.
+- **Yazi Terminal Reset Patch**: Applies `yazi-disable-trt.patch` onto `yazi-unwrapped` to prevent spurious terminal state clears when transitioning between preview filters.
+- **Wayland-VPet Fullscreen Patch**: Applies `wayland-vpet-fullscreen.patch` to allow the desktop pet overlay to persist during full-screen applications without auto-hiding.
+- **Default Image Applications**: Default image associations (PNG, JPEG, WebP, SVG, BMP, ICO) mapped to lightweight [Viewnior](https://github.com/hellnest/viewnior) with [Swappy](https://github.com/jtheoof/swappy) for annotations.
 
-### 3. Package Management & Wrappers (`nixos/modules/pkgs.nix`)
+### 3. Package Management & System Menu Wrappers (`nixos/modules/pkgs.nix`)
 - Declares development toolchains, desktop applications, Wayland utilities, and custom binary wrappers:
-  - `controlbot`: Wrapper launching the Telegram PC remote control bot.
-  - `epic`: Wrapper for the in-browser Epic Games Store claimer.
-  - `twitch`: Wrapper for the in-browser DST Twitch Drops claimer.
-  - `gfn`: Background launcher for GeForce NOW (`com.nvidia.geforcenow`).
-  - `roblox`: Background launcher for Sober / Roblox (`org.vinegarhq.Sober`).
-  - `tlauncher`: Minecraft TLauncher wrapper with auto-downloader and `steam-run` Java 17 execution.
+  - System menus: `wifi-menu`, `bluetooth-menu`, `audio-menu`, `process-menu`, `disk-menu`, `clean-menu`, `config-menu`, `gtk-theme-menu`.
+  - Core helpers: `nixreb`, `awake`, `controlbot`, `epic`, `twitch` (`tdrops`), `gfn`, `roblox`.
 
 ---
 
@@ -166,20 +194,24 @@ MangoWM is a dynamic tiling Wayland compositor built on the **Scroller layout** 
 - **`layout.conf`**: Scroller layout configuration with 20 memory structures, default proportion `0.5`, auto center focusing, and single-window expansion (`1.0`). Also provides Master-Stack and Dwindle layout options.
 - **`effect.conf`**: GPU-accelerated visual styling with 2-pass Gaussian blur, custom brightness (`0.8`), contrast (`1.4`), saturation (`1.6`), and 24px blurred drop shadows.
 - **`animation.conf`**: Smooth cubic-bezier zoom transitions for window opening, closing, moving, and tag switching.
-- **`autostart.conf`**: Starts `awww-daemon` (wallpaper), `swaync`, `hypridle`, `cliphist` (clipboard manager), `fcitx5`, and startup bar scripts.
-- **`bind.conf`**: Full hotkey bindings:
+- **`autostart.conf`**: Starts `awww-daemon` (wallpaper), `swaync`, `hypridle`, `cliphist` (clipboard manager), and startup bar scripts.
+- **`bind.conf`**: Keybindings:
 
 | Hotkey | Action |
 | :--- | :--- |
-| `Super + Q` | Open Kitty terminal |
-| `Super + R` | Open Rofi application launcher |
+| `Super + Q` | Open Kitty terminal running **Tmux** in fullscreen |
+| `Super + Shift + Q` | Open standalone clean Kitty terminal |
+| `Super + R` | Launch **Antigravity IDE** (`antigravity-ide`) |
+| `Super + TAB` | Open Rofi application launcher (`rofi -show drun`) |
+| `Super + Shift + TAB` | Open Rofi interactive process monitor (`rofi -show Processes`) |
 | `Super + B` | Launch Firefox |
 | `Super + E` | Open Thunar file manager |
+| `Super + T` | Launch Telegram Desktop |
 | `Super + N` | Toggle SwayNC notification control center |
 | `Super + C` | Close / kill active client window |
 | `Super + M` / `Super + K` | Lock screen via Hyprlock |
 | `Super + P` | Capture area screenshot (`screenshot.sh`) |
-| `Super + Shift + P` | Capture fullscreen screenshot |
+| `Super + Shift + P` | Capture fullscreen screenshot (`screenshot.sh --fullscreen`) |
 | `Super + Ctrl + Shift + P` | Start screen recording |
 | `Super + V` | Open clipboard history menu |
 | `Super + Alt + C` | Cycle to next Waybar theme preset |
@@ -194,11 +226,80 @@ MangoWM is a dynamic tiling Wayland compositor built on the **Scroller layout** 
 | `Super + Shift + I` | Restore minimized window |
 | `Super + 1..9` | Switch to Workspace / Tag 1 through 9 |
 
-### 🔒 Hyprland Utilities (`config/hypr/`)
+### 🔒 Hyprland Utilities & Power Management (`config/hypr/`)
 - **`hypridle.conf`**: Context-aware power-saving daemon:
   - **On Battery**: Lock at 2 min (`120s`), turn display off (DPMS) at 3 min (`180s`), suspend at 5 min (`300s`), and automatically wake up via hardware RTC to power off at 1 hour (`3600s`) if undisturbed.
   - **On AC / Charging**: Lock at 3 min (`180s`), turn display off at 10 min (`600s`), suspend at 20 min (`1200s`), and automatically wake up via hardware RTC to power off at 3 hours (`10800s`) if undisturbed.
-- **`hyprlock.conf`**: Refined lockscreen rendering a 2-pass blurred snapshot of the active desktop, extra-bold golden hour / white minute typography, date label, and a minimalist password input box with auth feedback dots.
+- **`awake` Utility (`nixos/scripts/awake`)**:
+  - Caffeine CLI that inhibits sleep, screen lock, DPMS timeouts, and poweroff during presentations, downloads, or builds.
+  - When disabled, automatically restarts `hypridle` to immediately refresh inactivity listeners.
+- **`hyprlock.conf`**: Refined lockscreen rendering a 3-pass blurred snapshot of the active desktop, extra-bold golden hour / white minute typography, date label, and a minimalist password input box with auth feedback dots.
+
+---
+
+## 🧰 Interactive Rofi Control Menus (`nixos/scripts/`)
+
+All custom system scripts are wrapped directly into NixOS binaries via `nixos/modules/pkgs.nix`:
+
+| Menu Command | Backend Script | Purpose & Description |
+| :--- | :--- | :--- |
+| `wifi-menu` | [`wifi_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/wifi_menu.sh) | Interactive Wi-Fi network scanner, connection manager, and password prompter using NetworkManager (`nmcli`). |
+| `bluetooth-menu` | [`bluetooth_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/bluetooth_menu.sh) | Interactive Bluetooth device manager: toggle power, scan, pair, trust, and connect audio devices & peripherals. |
+| `audio-menu` | [`audio_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/audio_menu.sh) | PipeWire audio output sink and input source selector with instant volume level adjustments. |
+| `process-menu` | [`process_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/process_menu.sh) | Top process monitor with CPU/memory consumption stats, search filter, and interactive `SIGTERM` / `SIGKILL` signals. |
+| `disk-menu` | [`disk_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/disk_menu.sh) | Graphical disk usage inspector showing used/free space per mount point with direct `ncdu` / file manager launch. |
+| `clean-menu` | [`clean_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/clean_menu.sh) | One-click system maintenance: delete old Nix generations, run `nix-store --gc`, clean user cache, and journal logs. |
+| `config-menu` | [`config_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/config_menu.sh) | Rapid configuration file selector opening dotfiles or NixOS modules directly in `$EDITOR`. |
+| `gtk-theme-menu` | [`gtk_theme_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/gtk_theme_menu.sh) | Live GTK theme and icon theme switcher for desktop consistency. |
+
+---
+
+## 🐚 Shell, Multiplexer & Terminal Workflow
+
+### 🐱 Kitty Terminal (`config/kitty/kitty.conf`)
+- **Theme**: Gruvbox Dark with `0.9` background opacity and 20px window margins.
+- **Font**: `JetBrainsMono Nerd Font Mono` (size 12).
+- **Cursor**: Beam cursor with dynamic trailing decay (`cursor_trail 2`, `cursor_trail_decay 0.1 0.4`).
+- **Features**: Unix control socket (`unix:/tmp/kitty`) enabled for programmatic tab and script control.
+
+### 🪟 Tmux Multiplexer (`config/tmux/`)
+- **Configuration (`tmux.conf`)**:
+  - Vi-mode copy/paste keybindings, custom statusbar formatting with clean window lists, active window highlight, and clock.
+  - Seamless pane splitting (`|` and `-`), navigation, and window resizing.
+- **Cheat Sheet (`cheatsheet.sh`)**:
+  - Interactive popup cheat sheet summarizing essential Tmux shortcuts for session, window, and pane manipulation.
+
+### 📂 Yazi Terminal File Manager (`config/yazi/`)
+- **Configuration (`yazi.toml`, `keymap.toml`)**:
+  - Clean `1:4:3` ratio three-column layout (parent, current, preview).
+  - High-performance image and media previews via `ueberzugpp`.
+- **Fish Shell Integration (`config/fish/config.fish`)**:
+  - Smart `y` wrapper function that automatically changes the shell working directory (`cd`) to Yazi's last active directory upon exiting.
+  - Global `Ctrl + O` hotkey to summon Yazi instantly from anywhere on the command line.
+
+### 🐟 Fish Shell (`config/fish/config.fish`)
+Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
+
+| Category | Abbreviation / Command | Target Action |
+| :--- | :--- | :--- |
+| **System** | `nixreb` | Sync dotfiles & rebuild NixOS flake (`nixreb.sh`) |
+| **System** | `nc` | Delete old Nix generations & run garbage collection |
+| **System** | `addchans` | Set up nixos-unstable and home-manager channels |
+| **Tmux** | `t` / `ta` / `tls` / `tn` / `tk` | `tmux`, attach, list sessions, new session, kill session |
+| **File Manager**| `y` / `Ctrl + O` | Launch Yazi with auto-`cd` on exit |
+| **Menus** | `menu` | Launch Rofi application menu (`rofi -show drun`) |
+| **Automation** | `epic` | Launch or manage Epic Games freebies claimer (`start`/`stop`/`status`) |
+| **Automation** | `twitch` / `tdrops` | Launch or manage DST Twitch Drops claimer (`start`/`stop`/`status`) |
+| **AI / Tokens** | `tokens` / `agy tokens` | Run live Antigravity token quota and reset timer report |
+| **Power** | `awake on` / `awake off` | Inhibit or resume screen lock, display sleep, and poweroff |
+| **Gaming** | `gfn` / `roblox` | Launch GeForce NOW / Roblox (Sober) Flatpaks |
+| **Git** | `lg`, `gs`, `gd`, `ga`, `gc`, `gp`, `gl` | `lazygit`, status, diff, add, commit, push, log |
+| **Listing** | `l`, `ll`, `la`, `lla` | `eza --icons --group-directories-first` aliases |
+
+### 🚀 Starship Prompt (`config/starship.toml`)
+- A modern, two-line connected prompt:
+  - **Line 1**: User `@` Hostname, working directory with folder icon, Git branch & status badge, trailing line fill, command execution duration (if >2s), and clock.
+  - **Line 2**: Status arrow (`▶︎` on success, `✘` on error) and active Nix development shell indicator.
 
 ---
 
@@ -216,48 +317,11 @@ The repository contains **over 80 modular Waybar themes** that can be cycled dyn
 ### 🔔 Sway Notification Center (`config/swaync/`)
 - Sleek 420px slide-out control center with volume level sliders, Do-Not-Disturb toggle, quick action buttons, and a media player widget styled with GTK CSS.
 
-### 🚀 Rofi Application Launcher (`config/rofi/`)
-- Configured with `JetBrainsMono Nerd Font`, displaying application icons and sidebar mode for switching between `Apps`, `Run`, and `Window` modes. Offers `vertical.rasi`, `horizontal.rasi`, and `less-rounded.rasi` theme variants.
-
 ### 🐾 Bongo Cat Desktop Pet (`config/bongocat/`)
 - `wayland-vpet` interactive overlay running at 60 FPS across a 950px roaming width.
 - Listens to `/dev/input/` keyboard and mouse event devices to animate typing and wake-up.
 - Triggers active "Working / Running" emotes when CPU usage spikes above 25%, and "Happy" emotes when typing speed exceeds 50 KPM.
-- Includes sprite catalogs for **Digimon** (Dodomon, Agumon, Alphamon) and **Pokemon** (Mystery Dungeon sprites).
-
----
-
-## 🐚 Shell & Terminal Workflow
-
-### 🐱 Kitty Terminal (`config/kitty/kitty.conf`)
-- **Theme**: Gruvbox Dark with `0.9` background opacity and 20px window margins.
-- **Font**: `JetBrainsMono Nerd Font Mono` (size 12).
-- **Cursor**: Beam cursor with dynamic trailing decay (`cursor_trail 2`, `cursor_trail_decay 0.1 0.4`).
-- **Features**: Unix control socket (`unix:/tmp/kitty`) enabled for programmatic tab and script control.
-
-### 🐟 Fish Shell (`config/fish/config.fish`)
-Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
-
-| Category | Abbreviation / Command | Target Action |
-| :--- | :--- | :--- |
-| **System** | `nixreb` | Sync dotfiles & rebuild NixOS flake (`nixreb.sh`) |
-| **System** | `addchans` | Set up nixos-unstable and home-manager channels |
-| **System** | `nc` / `delgar` | Delete old Nix generations & garbage collect |
-| **System** | `pacsize` / `pacsizefull` | Analyze installed package sizes |
-| **Automation** | `epic` | Launch or manage Epic Games freebies claimer |
-| **Automation** | `twitch` / `tdrops` | Launch or manage DST Twitch Drops claimer |
-| **AI / Tokens** | `tokens` / `agy-tokens` | Run live Antigravity token quota report |
-| **AI / AGY** | `agy tokens` | Intercepted by `agy` function to display quota |
-| **Gaming** | `gfn` | Launch GeForce NOW Flatpak |
-| **Gaming** | `roblox` | Launch Roblox via Sober Flatpak |
-| **Fun** | `pet` | Launch Wayland virtual desktop pet |
-| **Git** | `lg`, `gs`, `gd`, `ga`, `gc`, `gp`, `gl` | `lazygit`, status, diff, add, commit, push, log |
-| **Listing** | `l`, `ll`, `la`, `lla` | `eza --icons --group-directories-first` aliases |
-
-### 🚀 Starship Prompt (`config/starship.toml`)
-- A modern, two-line connected prompt:
-  - **Line 1**: User `@` Hostname, working directory with folder icon, Git branch & status badge, trailing line fill, command execution duration (if >2s), and clock.
-  - **Line 2**: Status arrow (`▶︎` on success, `✘` on error) and active Nix development shell indicator.
+- Patched via `wayland-vpet-fullscreen.patch` to stay visible without being hidden during fullscreen activities.
 
 ---
 
@@ -276,29 +340,40 @@ nixreb
 ```
 Syncs the repository configuration to `/etc/nixos/` using `rsync` and executes `nixos-rebuild switch --flake /etc/nixos#nixos` with 8 build cores and impure evaluation.
 
-### 2. `epic` & `epic-games-claimer.user.js` (Epic Games Freebies Claimer)
+### 2. `screenshot.sh` (Enhanced Wayland Screen Capture)
+```bash
+screenshot.sh              # Interactive region capture with slurp
+screenshot.sh --fullscreen # Fullscreen capture
+```
+Captures the screen to `~/Pictures/Screenshots/`, automatically copies the image to the Wayland clipboard (`wl-copy`), and dispatches a desktop notification with thumbnail preview (`notify-send`).
+
+### 3. `awake` (Caffeine & Wake Lock Tool)
+```bash
+awake on     # Inhibit screen lock, display DPMS sleep, and auto-poweroff
+awake off    # Resume standard idle timers and restart hypridle
+awake status # Inspect active caffeine state
+```
+
+### 4. `epic` & `epic-games-claimer.user.js` (Epic Games Freebies Claimer)
 An in-browser weekly auto-claimer that runs inside native logged-in Firefox:
 - **Zero Captchas:** Utilizes the authenticated browser session directly.
 - **Calm Paced Checkout:** Navigates store free games, handles mature content prompts, and clicks "Place Order" without aggressive bot patterns.
 - **Floating HUD:** Features in-browser `⏹ Stop` and `▶ Resume` buttons to instantly pause or resume checkout.
 - **CLI Commands:** `epic start`, `epic stop`, `epic status`.
 
-### 3. `twitch` & `twitch-drops-claimer.user.js` (Twitch Drops Auto-Claimer)
+### 5. `twitch` & `twitch-drops-claimer.user.js` (Twitch Drops Auto-Claimer)
 An in-browser auto-claimer tailored for **Don't Starve Together** (DST) Twitch Drops:
 - **Ultra-Eco Mode:** Automatically locks stream quality to 160p, mutes audio, and disables low-latency mode.
 - **Channel Routing:** Filters out Russian-tagged channels, connects to the highest-viewed valid streamer, tracks progress timers, claims tier rewards, and closes the tab when all DST campaigns are completed.
 - **CLI Commands:** `twitch start`, `twitch stop`, `twitch status` (also aliased as `tdrops`).
 
-### 4. `agy-tokens.py` (Antigravity Token & Quota Reporter)
+### 6. `agy-tokens.py` (Antigravity Token & Quota Reporter)
 Displays real-time token quotas, tier usage progress bars, and countdown timers across AI model families (Gemini, Claude, GPT):
 ```bash
 tokens
 # or
 agy tokens
 ```
-
-### 5. `screenshot.sh`
-Interactive screen area selection using `slurp` and `grim`, automatically copying the resulting image to the Wayland clipboard (`wl-copy`) and dispatching a desktop notification (`notify-send`).
 
 ---
 
@@ -313,7 +388,7 @@ This repository maintains an active codebase knowledge graph generated by [Graph
 ### Updating the Knowledge Graph
 Whenever modifying NixOS modules, scripts, or configurations, update the graph using:
 ```bash
-graphify .
+graphify . --code-only
 ```
 
 ---
