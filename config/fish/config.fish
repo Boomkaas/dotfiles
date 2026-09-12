@@ -2,9 +2,8 @@ if status is-interactive
     # Starship custom prompt
     command -v starship &> /dev/null && starship init fish | source
 
-    # Direnv + Zoxide
+    # Direnv + Zoxide (--cmd cd makes 'cd' smart; provides z/zi aliases too)
     command -v direnv &> /dev/null && direnv hook fish | source
-    command -v zoxide &> /dev/null && zoxide init fish | source
     command -v zoxide &> /dev/null && zoxide init fish --cmd cd | source
 
     # Better ls
@@ -55,19 +54,14 @@ if status is-interactive
     abbr nrb 'sudo nixos-rebuild switch'
     abbr nd 'cd /etc/nixos'
 
-    # NixOS & Custom Shortcuts (migrated from Zsh)
-    abbr awake '/home/peng/Code/Dotfiles/nixos/scripts/awake'
-    abbr nixreb '/home/peng/Code/Dotfiles/nixos/scripts/nixreb.sh'
+    # NixOS & Custom Shortcuts
+    # Note: awake, nixreb, epic, twitch, gfn, roblox are managed by Nix wrappers — use them directly.
     abbr addchans '/home/peng/Code/Dotfiles/nixos/scripts/channels.sh'
-    abbr epic '/home/peng/Code/Dotfiles/nixos/scripts/epic'
-    abbr twitch '/home/peng/Code/Dotfiles/nixos/scripts/twitch'
-    abbr tdrops '/home/peng/Code/Dotfiles/nixos/scripts/twitch'
+    abbr tdrops 'twitch'  # alias to the twitch Nix wrapper
     abbr tokens '/home/peng/Code/Dotfiles/nixos/scripts/agy-tokens.py'
     abbr agy-tokens '/home/peng/Code/Dotfiles/nixos/scripts/agy-tokens.py'
     abbr pet 'wayland-vpet'
     abbr delgar 'sudo nix-collect-garbage --delete-older-than 1d'
-    abbr gfn 'nohup flatpak run com.nvidia.geforcenow > /dev/null 2>&1 &'
-    abbr roblox 'nohup flatpak run org.vinegarhq.Sober > /dev/null 2>&1 &'
 
     # Tmux Shortcuts
     abbr t 'tmux'

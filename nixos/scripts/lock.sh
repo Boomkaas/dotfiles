@@ -91,22 +91,6 @@ if pidof hyprlock >/dev/null 2>&1; then
     exit 0
 fi
 
-ensure_lock_wallpaper() {
-    local state_dir="$HOME/.local/state/haku_theme"
-    mkdir -p "$state_dir"
-    local wall=""
-    if [[ -f "$state_dir/current_wallpaper" ]]; then
-        wall=$(cat "$state_dir/current_wallpaper" 2>/dev/null)
-    fi
-    if [[ -z "$wall" || ! -f "$wall" ]]; then
-        local wall_dir="${WALL_DIR:-$HOME/Pictures/Wallpapers}"
-        wall=$(find "$wall_dir" -type f \( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.webp" \) 2>/dev/null | head -n 1)
-    fi
-    if [[ -n "$wall" && -f "$wall" ]]; then
-        ln -sfn "$wall" "$state_dir/lock_wallpaper.jpg" 2>/dev/null || true
-    fi
-}
-
 # Main execution
 get_resolution
 
@@ -117,9 +101,6 @@ if [[ -z "$WIDTH" || -z "$HEIGHT" ]]; then
     echo "Could not determine monitor resolution. How it could be..."
     notify-send "Lock screen" "Could not determine monitor resolution. How it could be..."
 fi
-
-# Ensure wallpaper symlink for hyprlock is ready
-ensure_lock_wallpaper
 
 # Suspend visual processes right before locking the screen
 suspend_visual_processes

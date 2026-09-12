@@ -44,10 +44,25 @@
   security.polkit = {
     enable = true;
     extraConfig = ''
+    // Grant wheel members passwordless access to common desktop actions only.
+    // Scoped to: disk management, flatpak, power/suspend, network, colord.
+    // For anything else, polkit will prompt for the user's own password as normal.
     polkit.addRule(function(action, subject) {
-      if (subject.isInGroup("wheel"))
-        return polkit.Result.YES;
-      });
+      var allowed = [
+        "org.freedesktop.udisks2.",
+        "org.freedesktop.login1.",
+        "org.freedesktop.NetworkManager.",
+        "org.freedesktop.flatpak.",
+        "org.freedesktop.color-manager.",
+        "org.freedesktop.packagekit.",
+      ];
+      if (subject.isInGroup("wheel")) {
+        for (var i = 0; i < allowed.length; i++) {
+          if (action.id.indexOf(allowed[i]) === 0)
+            return polkit.Result.YES;
+        }
+      }
+    });
     '';
   };
   security.rtkit.enable = true;

@@ -235,8 +235,8 @@ MangoWM is a dynamic tiling Wayland compositor built on the **Scroller layout** 
   - Caffeine CLI that inhibits sleep, screen lock, DPMS timeouts, and poweroff during presentations, downloads, or builds.
   - When disabled, automatically restarts `hypridle` to immediately refresh inactivity listeners.
 - **`dpms_handler.sh`**: Dynamic DPMS display sleep/wake dispatcher across MangoWM (with dynamic monitor name resolution via `wlr-randr`), Hyprland, Niri, and Labwc.
-- **`lock.sh`**: Pre-lock visual process suspension and wallpaper caching (`~/.local/state/haku_theme/lock_wallpaper.jpg`).
-- **`hyprlock.conf`**: Refined lockscreen rendering the active wallpaper with 3-pass blur, extra-bold golden hour / white minute typography, date label, and a minimalist password input box with auth feedback dots.
+- **`lock.sh`**: Pre-lock visual process suspension (live wallpapers, desktop pets) right before locking the screen with Hyprlock.
+- **`hyprlock.conf`**: Refined lockscreen rendering a blurred screenshot of the desktop with 3-pass blur, extra-bold golden hour / white minute typography, date label, and a minimalist password input box with auth feedback dots.
 
 ---
 

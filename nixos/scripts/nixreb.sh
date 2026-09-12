@@ -13,6 +13,6 @@ sudo rsync -av --delete \
 echo "==> Rebuilding NixOS system..."
 sudo nixos-rebuild switch --flake "$TARGET_DIR#nixos" \
   --option trusted-public-keys "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" \
-  --cores 8 --impure
+  --cores 4 --impure
 
 echo "==> Done! Rebuilt NixOS successfully."

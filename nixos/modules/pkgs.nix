@@ -317,8 +317,7 @@ in
     gtk-layer-shell
     gobject-introspection
     vte
-    gtk3
-    glib
+    # gtk3 and glib are declared below in the GTK/Theming section
     pango
     gdk-pixbuf
     ffmpegthumbnailer
@@ -379,9 +378,7 @@ in
     qt6.qtdeclarative
     qt6.qtsvg
     qt6.qt5compat
-    nerd-fonts.jetbrains-mono
-    nerd-fonts.symbols-only
-    font-awesome
+    # nerd-fonts and font-awesome declared in system.nix fonts.packages (canonical NixOS font location)
 
     # Office & Media
     libreoffice-fresh

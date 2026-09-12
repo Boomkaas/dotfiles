@@ -27,9 +27,11 @@
     ensureDatabases = [ "mydatabase" ];
     authentication = pkgs.lib.mkOverride 10 ''
       #type database  DBuser  auth-method
-      local all       all     trust
-      host  all       all     127.0.0.1/32   trust
-      host  all       all     ::1/128        trust
+      # peer: Unix socket — OS user must match DB user (peng→peng works, no password needed)
+      local all       all     peer
+      # scram-sha-256: TCP loopback — set passwords via: sudo -u postgres psql -c "ALTER USER <name> PASSWORD '<pw>'"
+      host  all       all     127.0.0.1/32   scram-sha-256
+      host  all       all     ::1/128        scram-sha-256
     '';
   };
 
@@ -51,7 +53,8 @@
         "path" = "/home/peng/Code";
         "browseable" = "yes";
         "read only" = "no";
-        "guest ok" = "yes";
+        "guest ok" = "no";        # was "yes" — unauthenticated LAN access to ~/Code removed
+        "valid users" = "peng";   # run: sudo smbpasswd -a peng  (after rebuild)
         "create mask" = "0644";
         "directory mask" = "0755";
         "force user" = "peng";
@@ -86,20 +89,6 @@
       Persistent = false;
     };
   };
-
-  # Ensure hypridle systemd user service includes bash, utilities, and compositor tools in PATH
-  systemd.user.services.hypridle.path = [
-    pkgs.bash
-    pkgs.coreutils
-    pkgs.procps
-    pkgs.findutils
-    pkgs.gnugrep
-    pkgs.gnused
-    pkgs.systemd
-    pkgs.gawk
-    pkgs.jq
-    pkgs.libnotify
-    pkgs.util-linux
-  ];
+  # hypridle PATH is set via Service.Environment in configuration.nix (single source of truth)
 }
 

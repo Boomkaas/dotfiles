@@ -27,7 +27,8 @@ ${Y}╚════════════════════════�
 
   ${B}─── 󰖯 WINDOWS (Tabs) ────────────────────────────────────────────────────────${R}
     ${G}Prefix + c${R}          Create new window (in current directory)
-    ${G}Alt + 1 .. 9${R}        Switch directly to window 1–9 ${D}(NO PREFIX!)${R}
+    ${G}Alt + 0 .. 9${R}        Switch to or create window 0–9 ${D}(NO PREFIX!)${R}
+    ${G}Shift+Alt + 0 .. 9${R}  Move current window to slot 0–9 ${D}(NO PREFIX!)${R}
     ${G}Shift + Left/Right${R}  Cycle to previous / next window ${D}(NO PREFIX!)${R}
     ${G}Prefix + Tab${R}        Jump to last active window
     ${G}Prefix + ,${R}          Rename current window

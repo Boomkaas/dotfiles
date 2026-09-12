@@ -247,6 +247,7 @@
         ExecStart = "${pkgs_unstable.hypridle}/bin/hypridle";
         Restart = "always";
         RestartSec = "2s";
+        # PATH consolidated here — replaces xdg.configFile drop-in and services.nix .path injection
         Environment = [
           "PATH=/run/current-system/sw/bin:/etc/profiles/per-user/peng/bin:/home/peng/.local/bin:/run/wrappers/bin:/usr/bin:/bin"
         ];
@@ -255,13 +256,7 @@
         WantedBy = [ "graphical-session.target" ];
       };
     };
-
-    xdg.configFile."systemd/user/hypridle.service.d/zz-path.conf".text = ''
-      [Service]
-      Restart=always
-      RestartSec=2s
-      Environment="PATH=/run/current-system/sw/bin:/etc/profiles/per-user/peng/bin:/home/peng/.local/bin:/run/wrappers/bin:/usr/bin:/bin"
-    '';
+    # xdg.configFile hypridle drop-in removed: was redundantly setting the same PATH as Service.Environment above
   };
 }
 
