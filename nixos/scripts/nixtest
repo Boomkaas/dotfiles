@@ -52,21 +52,21 @@ check_warn() {
 # has FILE PATTERN — pass if grep matches
 has() {
   local desc="$1" file="$2" pattern="$3"
-  if grep -qP "$pattern" "$file" 2>/dev/null; then _pass "$desc"
+  if grep -qP -- "$pattern" "$file" 2>/dev/null; then _pass "$desc"
   else _fail "$desc  ${BOLD}[pattern: $pattern]${RESET}"; fi
 }
 
 # hasnt FILE PATTERN — pass if grep does NOT match
 hasnt() {
   local desc="$1" file="$2" pattern="$3"
-  if ! grep -qP "$pattern" "$file" 2>/dev/null; then _pass "$desc"
+  if ! grep -qP -- "$pattern" "$file" 2>/dev/null; then _pass "$desc"
   else _fail "$desc  ${BOLD}[unwanted: $pattern]${RESET}"; fi
 }
 
 # count FILE PATTERN EXPECTED — pass if grep count = expected
 count_eq() {
   local desc="$1" file="$2" pattern="$3" expected="$4"
-  local n; n=$(grep -cP "$pattern" "$file" 2>/dev/null || true)
+  local n; n=$(grep -cP -- "$pattern" "$file" 2>/dev/null || true)
   if [[ "$n" -eq "$expected" ]]; then _pass "$desc  (×$n)"
   else _fail "$desc  (expected ×$expected, got ×$n)"; fi
 }
@@ -270,8 +270,8 @@ mod_bluetooth() {
     "$NIXOS_DIR/modules/core/connections.nix" 'unblock-bluetooth'
 
   svc_active "Live: bluetooth.service running" "bluetooth"
-  check_warn "Live: blueman-applet running (tray, not a systemd unit)" \
-    systemctl --user is-active blueman-applet
+  check_warn "Live: blueman-applet process running" \
+    pgrep -f blueman-applet
 
   # Journal: type error count since boot
   local errs; errs=$(journalctl -u bluetooth -b --no-pager -q 2>/dev/null \
@@ -532,8 +532,9 @@ mod_scripts() {
   fi
 
   # nixreb: --impure flag documented
-  has "nixreb.sh: set -euo pipefail" "$SCRIPTS_DIR/nixreb.sh" 'set -euo pipefail'
-  has "nixreb.sh: rsync to /etc/nixos" "$SCRIPTS_DIR/nixreb.sh" 'rsync.*\/etc\/nixos'
+  has "nixreb.sh: set -euo pipefail"   "$SCRIPTS_DIR/nixreb.sh" 'set -euo pipefail'
+  has "nixreb.sh: syncs to /etc/nixos" "$SCRIPTS_DIR/nixreb.sh" 'TARGET_DIR="\/etc\/nixos"'
+  has "nixreb.sh: rsync command used"  "$SCRIPTS_DIR/nixreb.sh" 'rsync\s+-av'
 
   # idle_sleep_poweroff: key safety features
   has "idle_sleep_poweroff: flock singleton guard"   "$SCRIPTS_DIR/idle_sleep_poweroff.sh" 'flock -n'
@@ -556,12 +557,12 @@ mod_services() {
   module_start "⚙️  services — systemd units, timers, and service health"
 
   # System services
-  for svc in NetworkManager bluetooth postgresql upower udisks2 gvfs samba-wsdd; do
+  for svc in NetworkManager bluetooth postgresql upower udisks2 samba-wsdd; do
     svc_active "System: $svc" "$svc"
   done
 
   # User services
-  for svc in hypridle awww-daemon pipewire wireplumber pipewire-pulse dbus; do
+  for svc in hypridle awww-daemon pipewire wireplumber pipewire-pulse dbus gvfs-daemon; do
     svc_active "User: $svc" "$svc" "--user"
   done
 
@@ -754,17 +755,25 @@ mod_configs() {
     fi
   done
 
-  # Waybar JSON theme configs
+  # Waybar JSON/JSONC theme configs (Waybar natively supports // and /* */ comments)
   local wok=0 wfail=0
   while IFS= read -r -d '' f; do
-    if python3 -m json.tool "$f" &>/dev/null; then
+    if python3 -c '
+import sys, re, json
+with open(sys.argv[1]) as fp:
+    c = fp.read()
+c = re.sub(r"//.*", "", c)
+c = re.sub(r"/\*.*?\*/", "", c, flags=re.DOTALL)
+c = re.sub(r",\s*([\]}])", r"\1", c)
+json.loads(c)
+' "$f" &>/dev/null; then
       wok=$(( wok + 1 ))
     else
-      _fail "Waybar JSON invalid: $(dirname "$f" | xargs basename)"
+      _fail "Waybar JSONC invalid: $(dirname "$f" | xargs basename)"
       wfail=$(( wfail + 1 ))
     fi
   done < <(find "$CONFIG_DIR/waybar" -name "config" -print0 2>/dev/null)
-  [[ $wok -gt 0 && $wfail -eq 0 ]] && _pass "Waybar: $wok theme config(s) valid JSON"
+  [[ $wok -gt 0 && $wfail -eq 0 ]] && _pass "Waybar: $wok theme config(s) valid JSON/JSONC"
   [[ $wfail -gt 0 ]] && _fail "Waybar: $wfail invalid theme config(s)"
 
   # TOML
