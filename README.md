@@ -25,6 +25,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 | **Browser Theme** | Custom Firefox `userChrome.css` | Glassmorphic dark translucent panels & AMOLED gold startpage |
 | **Desktop Pet** | [Wayland-VPet](https://github.com/Boomkaas/dotfiles) (Bongo Cat) | Hardware input & CPU-reactive overlay pet with Digimon/Pokemon sprites (patched fullscreen behavior) |
 | **Knowledge Graph** | [Graphify](https://github.com/safishamsi/graphify) | AST + semantic codebase knowledge graph & interactive HTML |
+| **System Test Suite** | [nixtest](file:///home/peng/Code/Dotfiles/nixos/scripts/nixtest) | Modular 14-subsystem verification suite (~150+ checks) covering Nix evaluation, security, power, and audio |
 
 ---
 
@@ -120,6 +121,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── idle_sleep_poweroff.sh      # RTC hardware wake timer and dual-tier idle sleep/shutdown daemon
 │   │   ├── lock.sh                     # Multi-compositor screen lock script
 │   │   ├── nixreb.sh                   # Dotfiles sync to /etc/nixos and system rebuild helper (`nixreb`)
+│   │   ├── nixtest                     # Modular NixOS system verification test suite (14 modules, ~150+ checks)
 │   │   ├── process_menu.sh             # Rofi interactive process monitor and signal sender (`process-menu`)
 │   │   ├── roblox.sh                   # Roblox launcher via Sober Flatpak
 │   │   ├── screenshot.sh               # Region (slurp) and fullscreen screenshot utility with clipboard & notifications
@@ -140,6 +142,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   ├── GRAPH_REPORT.md                 # Analysis report detailing god nodes, community cohesion, and architecture
 │   └── graph.json                      # Raw graph dataset (nodes, AST symbols, dependencies, communities)
 │
+├── AGENTS.md                           # AI Agent workspace guidelines & test coordination protocols
 ├── GEMINI.md                           # AI Agent workspace guidelines & Graphify-first indexing rules
 └── README.md                           # Complete documentation for all files and directories
 ```
@@ -153,9 +156,11 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 ### 1. Core Modules (`nixos/modules/core/`)
 - **`system.nix`**:
   - **Bootloader**: `systemd-boot` with EFI variables and a 5-generation configuration limit.
-  - **Kernel Parameters**:
+  - **Kernel & VM Sysctl Parameters**:
     - `mem_sleep_default=deep`: Ensures deep sleep (`s3`) power saving during suspend.
     - `i915.enable_psr=0`: Disables Intel Panel Self Refresh to eliminate display stutter/flicker on mobile Intel UHD graphics.
+    - `vm.swappiness=10`: Keeps application pages in RAM and minimizes premature disk paging.
+    - `vm.vfs_cache_pressure=50`: Favors retaining directory and inode caches for snappy filesystem responsiveness.
   - **Localization**: Timezone set to `Europe/Kyiv`, default locale `en_US.UTF-8`, console keymap `ua-utf`.
   - **Keyboard Layout**: `us,ua` switching via `Win + Space` (`grp:win_space_toggle`).
   - **Binary Compatibility (`nix-ld`)**: Enables running unpatched foreign dynamically-linked binaries (prebuilt language servers, CLI binaries, IDE tooling).
@@ -164,12 +169,13 @@ The NixOS configuration is built on flakes with a modular separation of concerns
   - **Sound Server**: PipeWire with ALSA (including 32-bit support), PulseAudio replacement, and JACK.
   - **ASUS ALC256 Audio Fix**: Injects kernel module option `snd-hda-intel model=alc256-asus-mic` to resolve internal and headset microphone pin routing on ASUS VivoBook laptops (e.g. X409FA).
 - **`connections.nix`**:
-  - **Networking**: NetworkManager enabled with open TCP firewall ports `8080` (web dev) and `5432` (PostgreSQL).
-  - **Bluetooth**: Auto-powered on boot, Dual Controller Mode, FastConnectable, experimental features, `blueman` integration, and a systemd service running `rfkill unblock bluetooth`.
+  - **Networking & Firewall**: NetworkManager enabled with open TCP firewall port `8080` (web dev). PostgreSQL port 5432 is strictly bound to localhost for security.
+  - **Bluetooth**: Auto-powered on boot, Dual Controller Mode, FastConnectable, `EnableAdvMonInterleaveScan = 1` integer type, `blueman` integration, and a systemd service running `rfkill unblock bluetooth`.
   - **Wireshark**: `programs.wireshark` enabled with full package (`pkgs.wireshark`) and packet capture capabilities for user `peng`.
 - **`services.nix`**:
   - **Virtualization**: Docker daemon and Libvirt / KVM with SPICE USB redirection and `virt-manager`.
-  - **Database**: PostgreSQL 16 server pre-configured with `mydatabase` and local trust authentication.
+  - **Database Hardening**: PostgreSQL 16 server pre-configured with `mydatabase`, enforced `peer` authentication for local sockets, and `scram-sha-256` for TCP connections.
+  - **Samba & Polkit**: Restricted Samba workspace sharing (`guest ok = no`, `valid users = peng`) and scoped Polkit permissions for specific desktop actions (udisks2, login1, networkmanager, flatpak).
   - **Power & System**: UPower, `power-profiles-daemon`, UDisks2, GVFS, CUPS printing, and Android udev permissions.
 - **`user.nix`**:
   - User `peng` configured with default shell `pkgs.fish` and membership in `networkmanager`, `wheel`, `video`, `docker`, `libvirtd`, `input`, `uinput`, and `wireshark`.
@@ -182,6 +188,7 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 
 ### 3. Package Management & System Menu Wrappers (`nixos/modules/pkgs.nix`)
 - Declares development toolchains, desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), and custom binary wrappers:
+  - System test suite: `nixtest` (modular 14-subsystem verification suite).
   - System menus: `wifi-menu`, `bluetooth-menu`, `audio-menu`, `process-menu`, `disk-menu`, `clean-menu`, `config-menu`, `gtk-theme-menu`.
   - Core helpers: `nixreb`, `awake`, `controlbot`, `epic`, `twitch` (`tdrops`), `gfn`, `roblox`.
 
@@ -228,7 +235,7 @@ MangoWM is a dynamic tiling Wayland compositor built on the **Scroller layout** 
 | `Super + 1..9` | Switch to Workspace / Tag 1 through 9 |
 
 ### 🔒 Hyprland Utilities & Power Management (`config/hypr/`)
-- **`hypridle.conf`**: Context-aware power-saving daemon:
+- **`hypridle.conf`**: Context-aware power-saving daemon respecting native DBus and systemd idle inhibitors (media players, browser video playback, games):
   - **On Battery**: Lock at 2 min (`120s`), turn display off (DPMS) at 3 min (`180s`), suspend at 5 min (`300s`), and automatically wake up via hardware RTC to power off at 1 hour (`3600s`) if undisturbed.
   - **On AC / Charging**: Lock at 3 min (`180s`), turn display off at 10 min (`600s`), suspend at 20 min (`1200s`), and automatically wake up via hardware RTC to power off at 3 hours (`10800s`) if undisturbed.
 - **`awake` Utility (`nixos/scripts/awake`)**:
@@ -288,6 +295,7 @@ Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
 | **System** | `nixreb` | Sync dotfiles & rebuild NixOS flake (`nixreb.sh`) |
 | **System** | `nc` | Delete old Nix generations & run garbage collection |
 | **System** | `addchans` | Set up nixos-unstable and home-manager channels |
+| **Testing** | `nixtest` | Run modular NixOS verification test suite (`all`, `modules`, or `<module>`) |
 | **Tmux** | `t` / `ta` / `tls` / `tn` / `tk` | `tmux`, attach, list sessions, new session, kill session |
 | **File Manager**| `y` / `Ctrl + O` | Launch Yazi with auto-`cd` on exit |
 | **Menus** | `menu` | Launch Rofi application menu (`rofi -show drun`) |
@@ -341,7 +349,7 @@ The repository contains **over 80 modular Waybar themes** that can be cycled dyn
 ```bash
 nixreb
 ```
-Syncs the repository configuration to `/etc/nixos/` using `rsync` and executes `nixos-rebuild switch --flake /etc/nixos#nixos` with 8 build cores and impure evaluation.
+Syncs the repository configuration to `/etc/nixos/` using `rsync` and executes `nixos-rebuild switch --flake /etc/nixos#nixos` with 4 build cores (matching hardware CPU threads) and impure evaluation.
 
 ### 2. `screenshot.sh` (Enhanced Wayland Screen Capture)
 ```bash
@@ -386,6 +394,38 @@ Performs reliable desktop unlocking across Wayland compositors:
 - **Display Wakeup**: Powers on monitors across MangoWM, Hyprland, Niri, and Sway.
 - **Automated Authentication**: Enters passwords into `hyprlock` via `wtype` with sub-second feedback verification.
 - **Fail-Safe Session Recovery**: Detects gray-screen lock freezes in MangoWM (when `hyprlock` crashes or terminates unexpectedly) and directly resets `locked_bg` scene nodes via `gdb`.
+
+### 8. `nixtest` (Modular NixOS System Verification Test Suite)
+```bash
+nixtest all              # Run all 14 test modules (~150+ checks)
+nixtest modules          # List available test modules
+nixtest <module>         # Run specific module (e.g. nixtest nix, nixtest security)
+nixtest <m1> <m2> ...    # Run multiple specific modules
+```
+A 100% read-only, non-destructive verification suite designed to validate the NixOS system state, security hardening, service health, and configuration integrity before and after any modification.
+
+---
+
+## 🧪 System Test Suite (`nixtest`)
+
+This repository enforces a strict **Test Coordination Protocol** (defined in [`GEMINI.md`](file:///home/peng/Code/Dotfiles/GEMINI.md) and [`AGENTS.md`](file:///home/peng/Code/Dotfiles/AGENTS.md)). Any modification to system code, scripts, configurations, or packages must be coordinated with and verified by `nixtest`:
+
+| Module | Test Command | Scope & Checks Description |
+| :--- | :--- | :--- |
+| **`nix`** | `nixtest nix` | Flake dry-build evaluation (`nixos-rebuild dry-build`), syntax evaluation (`nix-instantiate --parse`), garbage collection options |
+| **`security`** | `nixtest security` | PostgreSQL local peer & TCP scram-sha-256 auth, closed port 5432, Samba valid users, Polkit scoped desktop actions, `nix-ld` |
+| **`network`** | `nixtest network` | NetworkManager state, TCP/VM sysctl tunables (`swappiness`, `vfs_cache_pressure`), Wireshark permissions, internet connectivity |
+| **`bluetooth`** | `nixtest bluetooth` | Bluetoothd config integer types (`EnableAdvMonInterleaveScan`), journal error detection, rfkill status, service health |
+| **`audio`** | `nixtest audio` | PipeWire sound stack, ALSA 32-bit, PulseAudio emulation, JACK, Realtek ALC256 microphone pin routing quirk |
+| **`power`** | `nixtest power` | `hypridle` native DBus/systemd inhibitor adherence, AC/Battery thresholds, S3 deep sleep, logind sleep parameters |
+| **`display`** | `nixtest display` | Waybar JSON/JSONC comment-stripped syntax, wallpaper daemon (`awww`), Hyprlock PAM config, DPMS dispatcher, SwayNC |
+| **`shell`** | `nixtest shell` | Fish shell environment, Starship prompt, Zoxide single-init, Tmux abbreviations, Yazi shell wrapper, CLI tools presence |
+| **`scripts`** | `nixtest scripts` | Syntax validation (`bash -n` / `fish -n`) and executable permissions for all 31+ shell and Python scripts |
+| **`services`** | `nixtest services` | Active systemd system & user units, timer states, Docker/Libvirt virtualisation daemons, failed unit detection |
+| **`storage`** | `nixtest storage` | Root/boot disk space thresholds, RAM/swap pressure metrics, Nix store garbage collection configuration |
+| **`kernel`** | `nixtest kernel` | Bootloader generation limits, Intel CPU/GPU drivers, kernel parameters (`mem_sleep_default`, `i915.enable_psr`), environment |
+| **`configs`** | `nixtest configs` | JSON/JSONC/TOML syntax integrity (Kitty, Rofi, Tmux, Yazi, MangoWM, Hyprland, SwayNC, Starship) |
+| **`packages`** | `nixtest packages` | Package deduplication (GTK/GLib/Fonts), insecure packages whitelist, essential development & desktop tools |
 
 ---
 
