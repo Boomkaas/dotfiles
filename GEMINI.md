@@ -1,22 +1,26 @@
-# Dotfiles Rule: Test Coordination Protocol
+# Dotfiles: Test Coordination Reference
 
-**Scope:** This rule applies exclusively to the `/home/peng/Code/Dotfiles` workspace and all its subdirectories (`nixos/`, `config/`, etc.).
-
-Whenever making changes, updates, upgrades, removals, or refactors to any system code, configuration, script, service, or package in this repository, you **MUST** coordinate the change with the test suite (`nixos/scripts/nixtest`).
+> **Subordinated to Global Rule:** [`~/.gemini/config/rules/test-coordination.md`](file:///home/peng/.gemini/config/rules/test-coordination.md).
+> All testing workflows in this workspace follow the global Test Coordination & Granular Verification Rule.
 
 ---
 
-## 1. Core Principles
+## 1. Core Directives for Dotfiles
 
-1. **Test-Coordinated Changes:** Every change to the dotfiles must have a matching verification step using `nixtest`.
-2. **Synchronized Test Assertions:** If you add, modify, rename, or remove a feature, configuration, script, wrapper, or service, you must also update the corresponding check in `nixos/scripts/nixtest`. Never leave obsolete test assertions that cause false failures or leave new features untested.
-3. **Zero Regressions:** Never conclude a task with failing tests in `nixtest`. All affected modules must report 0 failures.
+1. **Granular / Module-Level Testing ONLY**:
+   - When modifying files in this workspace, run **ONLY the matching module test** (e.g. `nixtest network` for network changes).
+   - **NEVER run `nixtest all`** for small features or localized changes.
+   - Run `nixtest all` **ONLY when explicitly requested by the user**.
+2. **Shutdown Notification Testing**:
+   - When testing the shutdown notification (`night_presence_check.sh`, `nixtest power`, etc.), **automatically press the "I am here" button** (via `(sleep 0.5 && swaync-client -a 0 >/dev/null 2>&1) &` or action invoke). Never leave it waiting for user intervention.
+3. **Synchronize Affected Test Assertions**:
+   - If adding, modifying, or removing a script, wrapper, package, or config option, update the matching check in `nixos/scripts/nixtest` so the module passes with 0 failures.
+4. **Nix Evaluation on `.nix` Edits**:
+   - If `.nix` files are touched, verify `nixtest nix` (checks `nix-instantiate --parse` and `nixos-rebuild dry-build`).
 
 ---
 
 ## 2. Module Mapping Reference
-
-Select the relevant module(s) based on the files being modified:
 
 | Subsystem / Files Changed | Test Command | Description |
 |---------------------------|--------------|-------------|
@@ -34,37 +38,3 @@ Select the relevant module(s) based on the files being modified:
 | Bootloader, Intel CPU/GPU, kernel params, env vars | `nixtest kernel` | Kernel parameters, hardware graphics, and system boot |
 | Config files (`config/kitty/`, `rofi/`, `tmux/`, `yazi/`, `mango/`, JSON/TOML) | `nixtest configs` | JSON/JSONC/TOML syntax and config file integrity |
 | `nixos/modules/pkgs.nix`, fonts, packages | `nixtest packages` | Package deduplication, font placement, insecure pkgs |
-
----
-
-## 3. Workflow for Any Modification
-
-### Step 1: Pre-Change Baseline
-Before modifying code, run the target module(s) to verify current state:
-```bash
-nixtest <module>
-```
-
-### Step 2: Implement Code Change & Update Tests
-- Apply the code modification in `nixos/` or `config/`.
-- **Coordinate with `nixtest`:**
-  - If a service, script, package, or config option was **added**: Add an appropriate check to the corresponding module in `nixos/scripts/nixtest`.
-  - If a service, script, package, or config option was **modified**: Update the pattern or expectation in `nixos/scripts/nixtest` to reflect the new behavior.
-  - If a service, script, package, or config option was **removed**: Remove or replace the corresponding check in `nixos/scripts/nixtest`.
-
-### Step 3: Post-Change Verification
-Run the module test(s) to verify the change:
-```bash
-nixtest <module>
-```
-If multiple subsystems were touched, or before completing a major task or rebuild:
-```bash
-nixtest all
-```
-Ensure the result is `✅ 0 failed`.
-
-### Step 4: Nix Evaluation Check (for `.nix` edits)
-If any `.nix` file was touched, always verify that `nix-instantiate --parse` and `nixos-rebuild dry-build` pass:
-```bash
-nixtest nix
-```

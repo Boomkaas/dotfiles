@@ -363,7 +363,8 @@ mod_power() {
   check "idle_sleep_poweroff --dry-run --ac: exits 0" \
     "$SCRIPTS_DIR/idle_sleep_poweroff.sh" --dry-run --ac
 
-  # night_presence_check dry-run
+  # night_presence_check dry-run (auto-press "I am here" button via swaync-client)
+  (sleep 0.5 && swaync-client -a 0 >/dev/null 2>&1) &
   check "night_presence_check --dry-run: exits 0" \
     "$SCRIPTS_DIR/night_presence_check.sh" --dry-run
 
