@@ -72,7 +72,6 @@ return {
       { "<C-f>", "<cmd>Telescope current_buffer_fuzzy_find<CR>", desc = "Find in Buffer (IDE)" },
       { "<C-S-o>", "<cmd>Telescope lsp_document_symbols<CR>", desc = "Go to Symbol in File (IDE)" },
       { "<C-t>", "<cmd>Telescope lsp_workspace_symbols<CR>", desc = "Go to Symbol in Workspace (IDE)" },
-      { "<C-h>", "<cmd>Telescope keymaps<CR>", desc = "List All Hotkeys (IDE)" },
     },
     opts = {
       defaults = {
@@ -161,9 +160,10 @@ return {
       vim.g.VM_maps = {
         ["Find Under"] = "<C-d>",
         ["Find Subword Under"] = "<C-d>",
-        ["Select All"] = "<C-M-d>",
+        ["Select All"] = "<C-S-l>",
         ["Add Cursor Down"] = "<C-M-Down>",
         ["Add Cursor Up"] = "<C-M-Up>",
+        ["Undo"] = "<C-u>",
       }
     end,
   },

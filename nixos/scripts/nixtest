@@ -802,6 +802,10 @@ json.loads(c)
   # mango
   file_exists "Config dir exists: mango/" "$CONFIG_DIR/mango"
 
+  # Neovim
+  file_exists "Config exists: nvim/init.lua" "$CONFIG_DIR/nvim/init.lua"
+  check       "Neovim config: syntax & startup check" nvim --headless -c "qa!"
+
   module_end
 }
 

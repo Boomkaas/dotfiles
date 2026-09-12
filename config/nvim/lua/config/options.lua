@@ -12,6 +12,16 @@ opt.expandtab = true
 opt.autoindent = true
 opt.smartindent = true
 
+-- Backspace & Line Navigation (VS Code behavior: delete across indents, line breaks, insert starts)
+opt.backspace = { "indent", "eol", "start" }
+opt.whichwrap = "b,s,<,>,[,],h,l"
+opt.virtualedit = "onemore"
+
+-- Selection & Cursor (Shift+Arrow selection and mouse like VS Code)
+opt.keymodel = { "startsel", "stopsel" }
+opt.selection = "inclusive"
+opt.selectmode = { "mouse", "key" }
+
 -- Line wrapping
 opt.wrap = false
 
