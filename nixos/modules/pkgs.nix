@@ -40,6 +40,9 @@ let
   config-menu = pkgs.writeShellScriptBin "config-menu" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/config_menu.sh "$@"
   '';
+  nixtest = pkgs.writeShellScriptBin "nixtest" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
+  '';
   gfn = pkgs.writeShellScriptBin "gfn" ''
     nohup flatpak run com.nvidia.geforcenow > /dev/null 2>&1 &
   '';
@@ -409,6 +412,7 @@ in
     disk-menu
     clean-menu
     config-menu
+    nixtest
 
     # Archive
     zip
