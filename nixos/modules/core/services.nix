@@ -59,6 +59,16 @@
         "directory mask" = "0755";
         "force user" = "peng";
       };
+      "Test" = {
+        "path" = "/home/peng/Code/Test";
+        "browseable" = "yes";
+        "read only" = "no";
+        "guest ok" = "no";
+        "valid users" = "peng";
+        "create mask" = "0644";
+        "directory mask" = "0755";
+        "force user" = "peng";
+      };
     };
   };
 

@@ -172,8 +172,8 @@ mod_security() {
     "$NIXOS_DIR/modules/core/connections.nix" '\b5432\b(?!\s*removed|\s*#)'
   has   "Firewall: firewall block enabled" \
     "$NIXOS_DIR/modules/core/connections.nix" 'networking\.firewall'
-  has   "Firewall: hamachi0 in trustedInterfaces" \
-    "$NIXOS_DIR/modules/core/connections.nix" 'trustedInterfaces.*hamachi0'
+  has   "Firewall: ham0/hamachi0 in trustedInterfaces" \
+    "$NIXOS_DIR/modules/core/connections.nix" 'trustedInterfaces.*ham0'
 
   # Samba
   hasnt 'Samba: guest ok = yes removed' \
@@ -184,6 +184,8 @@ mod_security() {
     "$NIXOS_DIR/modules/core/services.nix" '"valid users"'
   has   "Samba: hosts allow restricts access" \
     "$NIXOS_DIR/modules/core/services.nix" 'hosts allow'
+  has   "Samba: Test share configured" \
+    "$NIXOS_DIR/modules/core/services.nix" '"Test"'
 
   # Polkit
   hasnt "Polkit: no blanket YES for all actions (isInGroup check only)" \
