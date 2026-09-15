@@ -40,6 +40,9 @@ let
   config-menu = pkgs.writeShellScriptBin "config-menu" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/config_menu.sh "$@"
   '';
+  share-menu = pkgs.writeShellScriptBin "share-menu" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/share_menu.sh "$@"
+  '';
   nixtest = pkgs.writeShellScriptBin "nixtest" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
   '';
@@ -412,6 +415,7 @@ in
     disk-menu
     clean-menu
     config-menu
+    share-menu
     nixtest
 
     # Archive
