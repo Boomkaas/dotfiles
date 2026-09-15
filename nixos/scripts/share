@@ -2,6 +2,7 @@
 # ==============================================================================
 # share - Terminal Share & Network Connection Manager (CLI & fzf TUI)
 # Manage LogMeIn Hamachi VPN, Samba folder sharing, and CIFS mounts via terminal.
+# All administrative actions run with sudo for reliable privilege elevation.
 # ==============================================================================
 
 # Colors
@@ -30,6 +31,22 @@ else
 fi
 
 # ------------------------------------------------------------------------------
+# Privilege Elevation Helper
+# ------------------------------------------------------------------------------
+
+ensure_sudo() {
+    if ! sudo -n true 2>/dev/null; then
+        echo -e "${YELLOW}${BOLD}[sudo]${RESET} Privilege required for network/service operations."
+        if [ -c /dev/tty ]; then
+            sudo -v < /dev/tty || return 1
+        else
+            sudo -v || return 1
+        fi
+    fi
+    return 0
+}
+
+# ------------------------------------------------------------------------------
 # State Getters
 # ------------------------------------------------------------------------------
 
@@ -41,6 +58,14 @@ get_hamachi_svc() {
 
 get_hamachi_ip() {
     ip -4 addr show dev ham0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1 || echo ""
+}
+
+get_hamachi_nick() {
+    grep -oP '^Nickname\s+\K.*' /var/lib/logmein-hamachi/h2-engine.ini 2>/dev/null || echo "peng"
+}
+
+get_hamachi_net() {
+    grep -oP '^NetState\s+\K[^,]+' /var/lib/logmein-hamachi/h2-engine.ini 2>/dev/null || echo ""
 }
 
 get_samba_svc() {
@@ -76,15 +101,29 @@ cmd_preview() {
             echo -e "  ${BOLD}Service:${RESET}     $([ "$ham_svc" = "active" ] && echo -e "${GREEN}Active (Running)${RESET}" || echo -e "${RED}Inactive (Stopped)${RESET}")"
             echo -e "  ${BOLD}Interface:${RESET}   ham0"
             echo -e "  ${BOLD}Virtual IP:${RESET}  ${CYAN}${ham_ip:-(no IP assigned)}${RESET}"
+            local hnick hnet
+            hnick=$(get_hamachi_nick)
+            hnet=$(get_hamachi_net)
+            [ -n "$hnick" ] && echo -e "  ${BOLD}Nickname:${RESET}    $hnick"
+            [ -n "$hnet" ] && echo -e "  ${BOLD}Network:${RESET}     $hnet"
             echo ""
             echo -e "  ${BOLD}Quick Actions:${RESET}"
             echo -e "   • Login / Connect:  ${DIM}sudo hamachi login${RESET}"
             echo -e "   • Logout:           ${DIM}sudo hamachi logout${RESET}"
+            echo -e "   • Status & Peers:   ${DIM}sudo hamachi${RESET}"
             echo -e "   • Service toggle:   ${DIM}sudo systemctl start|stop logmein-hamachi${RESET}"
             echo ""
             if [ "$ham_svc" = "active" ]; then
                 echo -e "${BOLD}Daemon Status:${RESET}"
-                hamachi 2>&1 | head -n 8 | sed 's/^/   /' || echo "   (Hamachi running, root permissions may be required)"
+                if sudo -n true 2>/dev/null; then
+                    sudo -n hamachi 2>&1 | head -n 8 | sed 's/^/   /'
+                elif [ -n "$ham_ip" ]; then
+                    echo -e "   Status:   ${GREEN}Online (${ham_ip})${RESET}"
+                    echo -e "   ${DIM}(Select 'Show Hamachi Status & Peers' to view full peer list)${RESET}"
+                else
+                    echo -e "   Status:   ${YELLOW}Offline / Logged out${RESET}"
+                    echo -e "   ${DIM}(Select 'Log in to Hamachi' to authenticate)${RESET}"
+                fi
             fi
             ;;
         samba_shared|shared_share)
@@ -161,32 +200,122 @@ cmd_status() {
 
 cmd_hamachi() {
     local action="${1:-status}"
+    shift || true
     case "$action" in
         on|start)
-            echo -e "${YELLOW}Starting LogMeIn Hamachi service...${RESET}"
+            echo -e "${YELLOW}Starting LogMeIn Hamachi daemon...${RESET}"
+            ensure_sudo || return 1
             sudo systemctl start logmein-hamachi
             sleep 1
-            echo -e "${GREEN}Hamachi started.${RESET}"
+            echo -e "${GREEN}Hamachi daemon started.${RESET}"
             ;;
         off|stop)
-            echo -e "${YELLOW}Stopping LogMeIn Hamachi service...${RESET}"
+            echo -e "${YELLOW}Stopping LogMeIn Hamachi daemon...${RESET}"
+            ensure_sudo || return 1
+            sudo hamachi logout 2>/dev/null || true
             sudo systemctl stop logmein-hamachi
             sleep 1
-            echo -e "${GREEN}Hamachi stopped.${RESET}"
+            echo -e "${GREEN}Hamachi daemon stopped.${RESET}"
+            ;;
+        restart)
+            echo -e "${YELLOW}Restarting LogMeIn Hamachi daemon...${RESET}"
+            ensure_sudo || return 1
+            sudo systemctl restart logmein-hamachi
+            sleep 1.5
+            echo -e "${GREEN}Hamachi daemon restarted.${RESET}"
             ;;
         login|connect)
-            echo -e "${YELLOW}Logging into Hamachi...${RESET}"
+            ensure_sudo || return 1
+            if [ "$(get_hamachi_svc)" != "active" ]; then
+                echo -e "${YELLOW}Starting Hamachi daemon first...${RESET}"
+                sudo systemctl start logmein-hamachi
+                sleep 1.5
+            fi
+            echo -e "${YELLOW}Logging into Hamachi network (sudo)...${RESET}"
             sudo hamachi login
+            sleep 1
+            local new_ip
+            new_ip=$(get_hamachi_ip)
+            if [ -n "$new_ip" ]; then
+                echo -e "${GREEN}✓ Logged in successfully! IP: ${BOLD}${CYAN}${new_ip}${RESET}"
+            else
+                echo -e "${YELLOW}Login dispatched. Hamachi status:${RESET}"
+                sudo hamachi 2>&1 || true
+            fi
             ;;
         logout|disconnect)
-            echo -e "${YELLOW}Logging out of Hamachi...${RESET}"
+            echo -e "${YELLOW}Logging out of Hamachi (sudo)...${RESET}"
+            ensure_sudo || return 1
             sudo hamachi logout
+            echo -e "${GREEN}Logged out.${RESET}"
             ;;
         status|info)
+            ensure_sudo || return 1
+            echo -e "${BOLD}${CYAN}=== Hamachi Status ===${RESET}"
             sudo hamachi
             ;;
+        list|peers)
+            ensure_sudo || return 1
+            echo -e "${BOLD}${CYAN}=== Hamachi Peers & Networks ===${RESET}"
+            sudo hamachi list
+            ;;
+        join)
+            ensure_sudo || return 1
+            local net_id="${1:-}"
+            local net_pwd="${2:-}"
+            if [ -z "$net_id" ]; then
+                read -rp "Hamachi Network ID: " net_id < /dev/tty || net_id=""
+            fi
+            if [ -z "$net_pwd" ]; then
+                read -rsp "Hamachi Network Password (optional, press Enter if none): " net_pwd < /dev/tty || net_pwd=""
+                echo ""
+            fi
+            if [ -n "$net_id" ]; then
+                echo -e "${YELLOW}Joining network $net_id...${RESET}"
+                if [ -n "$net_pwd" ]; then
+                    sudo hamachi join "$net_id" "$net_pwd"
+                else
+                    sudo hamachi join "$net_id"
+                fi
+            else
+                echo -e "${RED}Network ID cannot be empty.${RESET}"
+            fi
+            ;;
+        leave)
+            ensure_sudo || return 1
+            local net_id="${1:-}"
+            if [ -z "$net_id" ]; then
+                read -rp "Hamachi Network ID to leave: " net_id < /dev/tty || net_id=""
+            fi
+            if [ -n "$net_id" ]; then
+                echo -e "${YELLOW}Leaving network $net_id...${RESET}"
+                sudo hamachi leave "$net_id"
+            fi
+            ;;
+        nick|set-nick)
+            ensure_sudo || return 1
+            local nick="${1:-}"
+            if [ -z "$nick" ]; then
+                read -rp "New Hamachi Nickname: " nick < /dev/tty || nick=""
+            fi
+            if [ -n "$nick" ]; then
+                echo -e "${YELLOW}Setting Hamachi nickname to '$nick'...${RESET}"
+                sudo hamachi set-nick "$nick"
+            fi
+            ;;
+        attach)
+            ensure_sudo || return 1
+            local email="${1:-}"
+            if [ -z "$email" ]; then
+                read -rp "LogMeIn Account Email: " email < /dev/tty || email=""
+            fi
+            if [ -n "$email" ]; then
+                echo -e "${YELLOW}Attaching to LogMeIn account $email...${RESET}"
+                sudo hamachi attach "$email"
+            fi
+            ;;
         *)
-            echo -e "${RED}Usage: share hamachi [on|off|login|logout|status]${RESET}"
+            echo -e "${RED}Usage: share hamachi [on|off|restart|login|logout|status|list|join|leave|nick|attach]${RESET}"
             ;;
     esac
 }
@@ -196,26 +325,33 @@ cmd_samba() {
     case "$action" in
         on|start)
             echo -e "${YELLOW}Starting Samba file sharing...${RESET}"
+            ensure_sudo || return 1
             sudo systemctl start samba-smbd samba-wsdd
             sleep 1
             echo -e "${GREEN}Samba started.${RESET}"
             ;;
         off|stop)
             echo -e "${YELLOW}Stopping Samba file sharing...${RESET}"
+            ensure_sudo || return 1
             sudo systemctl stop samba-smbd samba-wsdd
             sleep 1
             echo -e "${GREEN}Samba stopped.${RESET}"
             ;;
         restart|reload)
             echo -e "${YELLOW}Restarting Samba...${RESET}"
+            ensure_sudo || return 1
             sudo systemctl restart samba-smbd samba-wsdd
             sleep 1
             echo -e "${GREEN}Samba restarted.${RESET}"
             ;;
         status|info)
-            systemctl status samba-smbd --no-pager
+            ensure_sudo || return 1
+            echo -e "${BOLD}${CYAN}=== Samba Service Status ===${RESET}"
+            sudo systemctl status samba-smbd --no-pager
             ;;
         passwd|password)
+            ensure_sudo || return 1
+            echo -e "${YELLOW}Updating Samba password for user 'peng':${RESET}"
             sudo smbpasswd -a peng
             ;;
         *)
@@ -234,6 +370,7 @@ cmd_mount() {
         [ -z "$target_ip" ] && target_ip="25.6.89.170"
     fi
 
+    ensure_sudo || return 1
     sudo mkdir -p /mnt
     echo -e "${CYAN}Mounting //${target_ip}/${share_name} to /mnt...${RESET}"
     sudo mount -t cifs "//${target_ip}/${share_name}" /mnt \
@@ -242,6 +379,7 @@ cmd_mount() {
 }
 
 cmd_umount() {
+    ensure_sudo || return 1
     echo -e "${YELLOW}Unmounting /mnt...${RESET}"
     if sudo umount /mnt 2>/dev/null || sudo umount -l /mnt 2>/dev/null; then
         echo -e "${GREEN}/mnt unmounted.${RESET}"
@@ -255,14 +393,14 @@ cmd_help() {
 ${BOLD}share${RESET} - Terminal Share & Network Connection Manager (Hamachi & Samba)
 
 ${BOLD}USAGE:${RESET}
-    share                         Launch interactive fzf menu
-    share status | s              Display current connection & share status
-    share hamachi [on|off|login|logout|status]  Manage Hamachi VPN
-    share samba [on|off|restart|passwd|status]  Manage Samba folder sharing
-    share mount [IP] [share]      Mount remote CIFS share to /mnt
-    share umount                  Unmount /mnt
-    share preview <target>        Internal preview generator for fzf
-    share help | -h               Show this help message
+    share                                       Launch interactive fzf menu
+    share status | s                            Display current connection & share status
+    share hamachi [on|off|restart|login|logout|status|list|join|nick]  Manage Hamachi VPN (sudo)
+    share samba [on|off|restart|passwd|status]  Manage Samba folder sharing (sudo)
+    share mount [IP] [share] [user]             Mount remote CIFS share to /mnt (sudo)
+    share umount                                Unmount /mnt (sudo)
+    share preview <target>                      Internal preview generator for fzf
+    share help | -h                             Show this help message
 
 EOF
 }
@@ -292,7 +430,13 @@ cmd_interactive() {
         mounts=$(get_cifs_mount)
 
         local ham_label="OFF"
-        [ "$ham_svc" = "active" ] && ham_label="ONLINE (${ham_ip:-no IP})"
+        if [ "$ham_svc" = "active" ]; then
+            if [ -n "$ham_ip" ]; then
+                ham_label="ONLINE (${ham_ip})"
+            else
+                ham_label="LOGGED OUT"
+            fi
+        fi
 
         local smb_label="OFF"
         [ "$smb_svc" = "active" ] && smb_label="ACTIVE (${smb_clients} clients)"
@@ -306,16 +450,24 @@ cmd_interactive() {
 
         # Section: Hamachi VPN
         if [ "$ham_svc" = "active" ]; then
-            menu+=("$(printf "✓ 󰌘  Hamachi: ONLINE (%s)\thamachi_info" "${ham_ip:-ham0}")")
+            if [ -n "$ham_ip" ]; then
+                menu+=("$(printf "✓ 󰌘  Hamachi: ONLINE (%s)\thamachi_info" "$ham_ip")")
+            else
+                menu+=("$(printf "○ 󰌙  Hamachi: LOGGED OUT (Daemon running)\thamachi_info")")
+            fi
+            menu+=("$(printf "  󰒍  Log in to Hamachi\thamachi_login")")
             menu+=("$(printf "  󰒎  Log Out of Hamachi Network\thamachi_logout")")
+            menu+=("$(printf "  󰌘  Join a Hamachi Network\thamachi_join")")
+            menu+=("$(printf "  󰒍  Set Hamachi Nickname\thamachi_nick")")
+            menu+=("$(printf "  󰑓  Restart Hamachi Daemon\thamachi_restart")")
             menu+=("$(printf "  󰌙  Turn Hamachi OFF (Stop Service)\thamachi_off")")
         else
-            menu+=("$(printf "○ 󰌙  Hamachi: STOPPED\thamachi_info")")
+            menu+=("$(printf "○ 󰌙  Hamachi: STOPPED (Service inactive)\thamachi_info")")
+            menu+=("$(printf "  󰒍  Log in to Hamachi (Start & Connect)\thamachi_login")")
             menu+=("$(printf "  󰌘  Turn Hamachi ON (Start Service)\thamachi_on")")
-            menu+=("$(printf "  󰒍  Log In to Hamachi Network\thamachi_login")")
         fi
+        menu+=("$(printf "  󰍹  Show Hamachi Status & Peers\thamachi_info")")
         menu+=("$(printf "    Launch Haguichi GUI\thamachi_haguichi")")
-        menu+=("$(printf "  󰍹  Show Hamachi Peers & Info\thamachi_info")")
 
         menu+=("$(printf "─────────────────────────────────────────\tsep1")")
 
@@ -365,29 +517,47 @@ cmd_interactive() {
             hamachi_on)
                 cmd_hamachi on
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
-                read -r
+                read -r < /dev/tty || read -r
                 ;;
             hamachi_off)
                 cmd_hamachi off
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
-                read -r
+                read -r < /dev/tty || read -r
+                ;;
+            hamachi_restart)
+                cmd_hamachi restart
+                echo -e "\n${DIM}Press enter to continue...${RESET}"
+                read -r < /dev/tty || read -r
                 ;;
             hamachi_login)
                 cmd_hamachi login
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
-                read -r
+                read -r < /dev/tty || read -r
                 ;;
             hamachi_logout)
                 cmd_hamachi logout
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
-                read -r
+                read -r < /dev/tty || read -r
                 ;;
             hamachi_info)
                 clear 2>/dev/null || true
-                echo -e "${BOLD}${CYAN}=== Hamachi Peers & Info ===${RESET}\n"
-                sudo hamachi 2>&1 || true
+                cmd_hamachi status
+                echo ""
+                cmd_hamachi list
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
-                read -r
+                read -r < /dev/tty || read -r
+                ;;
+            hamachi_join)
+                clear 2>/dev/null || true
+                cmd_hamachi join
+                echo -e "\n${DIM}Press enter to continue...${RESET}"
+                read -r < /dev/tty || read -r
+                ;;
+            hamachi_nick)
+                clear 2>/dev/null || true
+                cmd_hamachi set-nick
+                echo -e "\n${DIM}Press enter to continue...${RESET}"
+                read -r < /dev/tty || read -r
                 ;;
             hamachi_haguichi)
                 if command -v haguichi >/dev/null 2>&1; then
@@ -401,22 +571,28 @@ cmd_interactive() {
             samba_start)
                 cmd_samba on
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
-                read -r
+                read -r < /dev/tty || read -r
                 ;;
             samba_stop)
                 cmd_samba off
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
-                read -r
+                read -r < /dev/tty || read -r
                 ;;
             samba_restart)
                 cmd_samba restart
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
-                read -r
+                read -r < /dev/tty || read -r
+                ;;
+            samba_info)
+                clear 2>/dev/null || true
+                cmd_samba status
+                echo -e "\n${DIM}Press enter to continue...${RESET}"
+                read -r < /dev/tty || read -r
                 ;;
             samba_passwd)
                 cmd_samba passwd
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
-                read -r
+                read -r < /dev/tty || read -r
                 ;;
             samba_open)
                 mkdir -p "$HOME/Shared"
@@ -465,28 +641,35 @@ cmd_interactive() {
                     *"Restart Samba"*)
                         cmd_samba restart
                         echo -e "\n${DIM}Press enter to continue...${RESET}"
-                        read -r
+                        read -r < /dev/tty || read -r
                         ;;
                 esac
                 ;;
             cifs_mount)
                 local default_ip="${ham_ip:-25.6.89.170}"
                 echo -e "${BOLD}${CYAN}=== Mount Remote CIFS Share ===${RESET}"
-                read -rp "Target Host IP [default: $default_ip]: " tip
+                read -rp "Target Host IP [default: $default_ip]: " tip < /dev/tty || tip="$default_ip"
                 tip="${tip:-$default_ip}"
-                read -rp "Share Name [default: Shared]: " sname
+                read -rp "Share Name [default: Shared]: " sname < /dev/tty || sname="Shared"
                 sname="${sname:-Shared}"
-                read -rp "Username [default: peng]: " uname
+                read -rp "Username [default: peng]: " uname < /dev/tty || uname="peng"
                 uname="${uname:-peng}"
 
                 cmd_mount "$tip" "$sname" "$uname"
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
-                read -r
+                read -r < /dev/tty || read -r
                 ;;
             cifs_umount)
                 cmd_umount
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
-                read -r
+                read -r < /dev/tty || read -r
+                ;;
+            cifs_mounts)
+                clear 2>/dev/null || true
+                echo -e "${BOLD}${CYAN}=== Remote CIFS Mounts ===${RESET}\n"
+                get_cifs_mount
+                echo -e "\n${DIM}Press enter to continue...${RESET}"
+                read -r < /dev/tty || read -r
                 ;;
             sep*)
                 ;;
