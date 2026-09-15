@@ -355,21 +355,21 @@ cmd_samba() {
         on|start)
             echo -e "${YELLOW}Starting Samba file sharing...${RESET}"
             ensure_sudo || return 1
-            sudo systemctl start samba-smbd samba-wsdd
+            sudo systemctl start samba.target samba-smbd samba-wsdd
             sleep 1
             echo -e "${GREEN}Samba started.${RESET}"
             ;;
         off|stop)
             echo -e "${YELLOW}Stopping Samba file sharing...${RESET}"
             ensure_sudo || return 1
-            sudo systemctl stop samba-smbd samba-wsdd
+            sudo systemctl stop samba.target samba-smbd samba-nmbd samba-winbindd samba-wsdd
             sleep 1
             echo -e "${GREEN}Samba stopped.${RESET}"
             ;;
         restart|reload)
             echo -e "${YELLOW}Restarting Samba...${RESET}"
             ensure_sudo || return 1
-            sudo systemctl restart samba-smbd samba-wsdd
+            sudo systemctl restart samba.target samba-smbd samba-wsdd
             sleep 1
             echo -e "${GREEN}Samba restarted.${RESET}"
             ;;

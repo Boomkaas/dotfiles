@@ -75,7 +75,15 @@
     "f+ /var/lib/logmein-hamachi/h2-engine-override.cfg 0644 root root - Ipc.User peng\n"
   ];
 
+  # Disable boot autostart for Hamachi & Samba — operated on-demand via 'share' menu
+  systemd.targets.samba.wantedBy = pkgs.lib.mkForce [ ];
+  systemd.services.samba-smbd.wantedBy = pkgs.lib.mkForce [ ];
+  systemd.services.samba-nmbd.wantedBy = pkgs.lib.mkForce [ ];
+  systemd.services.samba-winbindd.wantedBy = pkgs.lib.mkForce [ ];
+  systemd.services.samba-wsdd.wantedBy = pkgs.lib.mkForce [ ];
+
   systemd.services.logmein-hamachi = {
+    wantedBy = pkgs.lib.mkForce [ ];
     preStart = ''
       mkdir -p /var/lib/logmein-hamachi
       echo "Ipc.User peng" > /var/lib/logmein-hamachi/h2-engine-override.cfg
