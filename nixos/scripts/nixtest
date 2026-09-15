@@ -517,7 +517,7 @@ mod_scripts() {
   done < <(find "$SCRIPTS_DIR" -name "*.sh" -print0 2>/dev/null)
 
   # Scripts without extension
-  for name in awake bluetooth wifi setting theme epic twitch; do
+  for name in awake bluetooth wifi setting theme epic twitch share; do
     local f="$SCRIPTS_DIR/$name"
     [[ -f "$f" ]] && check "bash -n: $name" bash -n "$f"
   done
