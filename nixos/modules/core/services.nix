@@ -70,6 +70,19 @@
   services.logmein-hamachi.enable = true;
   programs.haguichi.enable = true;
 
+  systemd.tmpfiles.rules = [
+    "d /var/lib/logmein-hamachi 0755 root root -"
+    "f+ /var/lib/logmein-hamachi/h2-engine-override.cfg 0644 root root - Ipc.User peng\n"
+  ];
+
+  systemd.services.logmein-hamachi = {
+    preStart = ''
+      mkdir -p /var/lib/logmein-hamachi
+      echo "Ipc.User peng" > /var/lib/logmein-hamachi/h2-engine-override.cfg
+      chmod 0644 /var/lib/logmein-hamachi/h2-engine-override.cfg
+    '';
+  };
+
   # Automated hardware-waking night presence check (01:00 - 08:00)
   systemd.services.night-presence-check = {
     description = "Check user presence between 01:00 and 08:00 before auto-shutdown";

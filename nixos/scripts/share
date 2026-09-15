@@ -31,7 +31,7 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# Privilege Elevation Helper
+# Privilege Elevation & Daemon Permission Helpers
 # ------------------------------------------------------------------------------
 
 ensure_sudo() {
@@ -42,6 +42,22 @@ ensure_sudo() {
         else
             sudo -v || return 1
         fi
+    fi
+    return 0
+}
+
+ensure_hamachi_ipc_user() {
+    local cfg="/var/lib/logmein-hamachi/h2-engine-override.cfg"
+    if [ ! -f "$cfg" ] || ! grep -q "Ipc.User.*peng" "$cfg" 2>/dev/null; then
+        echo -e "${YELLOW}Configuring Hamachi IPC permissions for user 'peng'...${RESET}"
+        ensure_sudo || return 1
+        sudo mkdir -p /var/lib/logmein-hamachi
+        echo "Ipc.User peng" | sudo tee "$cfg" >/dev/null
+        sudo chmod 0644 "$cfg"
+        echo -e "${YELLOW}Restarting LogMeIn Hamachi daemon to apply permissions...${RESET}"
+        sudo systemctl restart logmein-hamachi
+        sleep 1.5
+        echo -e "${GREEN}✓ Hamachi IPC permissions granted to user 'peng'.${RESET}"
     fi
     return 0
 }
@@ -115,14 +131,21 @@ cmd_preview() {
             echo ""
             if [ "$ham_svc" = "active" ]; then
                 echo -e "${BOLD}Daemon Status:${RESET}"
-                if sudo -n true 2>/dev/null; then
-                    sudo -n hamachi 2>&1 | head -n 8 | sed 's/^/   /'
+                local daemon_out=""
+                if [ -f /var/lib/logmein-hamachi/h2-engine-override.cfg ] && grep -q "Ipc.User.*peng" /var/lib/logmein-hamachi/h2-engine-override.cfg 2>/dev/null; then
+                    daemon_out=$(hamachi 2>&1 | head -n 8) || true
+                elif sudo -n true 2>/dev/null; then
+                    daemon_out=$(sudo -n hamachi 2>&1 | head -n 8) || true
+                fi
+
+                if [ -n "$daemon_out" ] && ! echo "$daemon_out" | grep -qi "permission to control"; then
+                    echo "$daemon_out" | sed 's/^/   /'
                 elif [ -n "$ham_ip" ]; then
                     echo -e "   Status:   ${GREEN}Online (${ham_ip})${RESET}"
                     echo -e "   ${DIM}(Select 'Show Hamachi Status & Peers' to view full peer list)${RESET}"
                 else
-                    echo -e "   Status:   ${YELLOW}Offline / Logged out${RESET}"
-                    echo -e "   ${DIM}(Select 'Log in to Hamachi' to authenticate)${RESET}"
+                    echo -e "   Status:   ${YELLOW}Daemon running${RESET}"
+                    echo -e "   ${DIM}(Select 'Log in to Hamachi' to authenticate & connect)${RESET}"
                 fi
             fi
             ;;
@@ -205,6 +228,7 @@ cmd_hamachi() {
         on|start)
             echo -e "${YELLOW}Starting LogMeIn Hamachi daemon...${RESET}"
             ensure_sudo || return 1
+            ensure_hamachi_ipc_user || true
             sudo systemctl start logmein-hamachi
             sleep 1
             echo -e "${GREEN}Hamachi daemon started.${RESET}"
@@ -220,12 +244,14 @@ cmd_hamachi() {
         restart)
             echo -e "${YELLOW}Restarting LogMeIn Hamachi daemon...${RESET}"
             ensure_sudo || return 1
+            ensure_hamachi_ipc_user || true
             sudo systemctl restart logmein-hamachi
             sleep 1.5
             echo -e "${GREEN}Hamachi daemon restarted.${RESET}"
             ;;
         login|connect)
             ensure_sudo || return 1
+            ensure_hamachi_ipc_user || true
             if [ "$(get_hamachi_svc)" != "active" ]; then
                 echo -e "${YELLOW}Starting Hamachi daemon first...${RESET}"
                 sudo systemctl start logmein-hamachi
@@ -248,6 +274,9 @@ cmd_hamachi() {
             ensure_sudo || return 1
             sudo hamachi logout
             echo -e "${GREEN}Logged out.${RESET}"
+            ;;
+        fix-ipc|permissions)
+            ensure_hamachi_ipc_user
             ;;
         status|info)
             ensure_sudo || return 1
@@ -315,7 +344,7 @@ cmd_hamachi() {
             fi
             ;;
         *)
-            echo -e "${RED}Usage: share hamachi [on|off|restart|login|logout|status|list|join|leave|nick|attach]${RESET}"
+            echo -e "${RED}Usage: share hamachi [on|off|restart|login|logout|status|list|join|leave|nick|attach|fix-ipc]${RESET}"
             ;;
     esac
 }
@@ -395,7 +424,7 @@ ${BOLD}share${RESET} - Terminal Share & Network Connection Manager (Hamachi & Sa
 ${BOLD}USAGE:${RESET}
     share                                       Launch interactive fzf menu
     share status | s                            Display current connection & share status
-    share hamachi [on|off|restart|login|logout|status|list|join|nick]  Manage Hamachi VPN (sudo)
+    share hamachi [on|off|restart|login|logout|status|list|join|nick|fix-ipc]  Manage Hamachi VPN (sudo)
     share samba [on|off|restart|passwd|status]  Manage Samba folder sharing (sudo)
     share mount [IP] [share] [user]             Mount remote CIFS share to /mnt (sudo)
     share umount                                Unmount /mnt (sudo)
@@ -466,6 +495,12 @@ cmd_interactive() {
             menu+=("$(printf "  󰒍  Log in to Hamachi (Start & Connect)\thamachi_login")")
             menu+=("$(printf "  󰌘  Turn Hamachi ON (Start Service)\thamachi_on")")
         fi
+
+        # Check if IPC permission override is present
+        if [ ! -f /var/lib/logmein-hamachi/h2-engine-override.cfg ] || ! grep -q "Ipc.User.*peng" /var/lib/logmein-hamachi/h2-engine-override.cfg 2>/dev/null; then
+            menu+=("$(printf "  󰌆  Fix Daemon Permissions (grant user access)\thamachi_fix_ipc")")
+        fi
+
         menu+=("$(printf "  󰍹  Show Hamachi Status & Peers\thamachi_info")")
         menu+=("$(printf "    Launch Haguichi GUI\thamachi_haguichi")")
 
@@ -536,6 +571,12 @@ cmd_interactive() {
                 ;;
             hamachi_logout)
                 cmd_hamachi logout
+                echo -e "\n${DIM}Press enter to continue...${RESET}"
+                read -r < /dev/tty || read -r
+                ;;
+            hamachi_fix_ipc)
+                clear 2>/dev/null || true
+                ensure_hamachi_ipc_user
                 echo -e "\n${DIM}Press enter to continue...${RESET}"
                 read -r < /dev/tty || read -r
                 ;;
