@@ -87,35 +87,25 @@ cmd_preview() {
                 hamachi 2>&1 | head -n 8 | sed 's/^/   /' || echo "   (Hamachi running, root permissions may be required)"
             fi
             ;;
-        samba_test|test_share)
-            echo -e "${BOLD}${CYAN}=== Samba Share: [Test] ===${RESET}"
-            echo -e "  ${BOLD}Directory:${RESET}   ${BOLD}/home/peng/Code/Test${RESET}"
+        samba_shared|shared_share)
+            echo -e "${BOLD}${CYAN}=== Samba Share: [Shared] ===${RESET}"
+            echo -e "  ${BOLD}Directory:${RESET}   ${BOLD}/home/peng/Shared${RESET}"
             echo -e "  ${BOLD}Samba Daemon:${RESET}$([ "$smb_svc" = "active" ] && echo -e "${GREEN}Active (Sharing)${RESET}" || echo -e "${RED}Stopped${RESET}")"
             echo -e "  ${BOLD}Valid Users:${RESET}  peng (password required)"
             echo -e "  ${BOLD}Active Clients:${RESET}$smb_clients"
             echo ""
             echo -e "${BOLD}Network Paths:${RESET}"
-            echo -e "  ${BOLD}Windows:${RESET}     ${GREEN}\\\\\\\\${ham_ip:-25.6.89.170}\\\\Test${RESET}"
-            echo -e "  ${BOLD}Linux / Mac:${RESET} ${GREEN}smb://${ham_ip:-25.6.89.170}/Test${RESET}"
+            echo -e "  ${BOLD}Windows:${RESET}     ${GREEN}\\\\\\\\${ham_ip:-25.6.89.170}\\\\Shared${RESET}"
+            echo -e "  ${BOLD}Linux / Mac:${RESET} ${GREEN}smb://${ham_ip:-25.6.89.170}/Shared${RESET}"
             echo ""
             echo -e "${BOLD}Mount Command (Linux):${RESET}"
-            echo -e "  ${DIM}sudo mount -t cifs //${ham_ip:-25.6.89.170}/Test /mnt -o username=peng,uid=\$(id -u),gid=\$(id -g)${RESET}"
-            ;;
-        samba_workspace|workspace_share)
-            echo -e "${BOLD}${CYAN}=== Samba Share: [workspace] ===${RESET}"
-            echo -e "  ${BOLD}Directory:${RESET}   ${BOLD}/home/peng/Code${RESET}"
-            echo -e "  ${BOLD}Samba Daemon:${RESET}$([ "$smb_svc" = "active" ] && echo -e "${GREEN}Active (Sharing)${RESET}" || echo -e "${RED}Stopped${RESET}")"
-            echo -e "  ${BOLD}Valid Users:${RESET}  peng (password required)"
-            echo ""
-            echo -e "${BOLD}Network Paths:${RESET}"
-            echo -e "  ${BOLD}Windows:${RESET}     ${GREEN}\\\\\\\\${ham_ip:-25.6.89.170}\\\\workspace${RESET}"
-            echo -e "  ${BOLD}Linux / Mac:${RESET} ${GREEN}smb://${ham_ip:-25.6.89.170}/workspace${RESET}"
+            echo -e "  ${DIM}sudo mount -t cifs //${ham_ip:-25.6.89.170}/Shared /mnt -o username=peng,uid=\$(id -u),gid=\$(id -g)${RESET}"
             ;;
         samba*|sharing)
             echo -e "${BOLD}${CYAN}=== Samba File Sharing ===${RESET}"
             echo -e "  ${BOLD}Service:${RESET}     $([ "$smb_svc" = "active" ] && echo -e "${GREEN}Active (Running)${RESET}" || echo -e "${RED}Inactive (Stopped)${RESET}")"
             echo -e "  ${BOLD}Active Clients:${RESET}$smb_clients"
-            echo -e "  ${BOLD}Shares:${RESET}      Test (~/Code/Test), workspace (~/Code)"
+            echo -e "  ${BOLD}Shares:${RESET}      Shared (~/Shared)"
             echo -e "  ${BOLD}Firewall:${RESET}    Ports 139, 445 (TCP) & 137, 138 (UDP) open"
             echo -e "  ${BOLD}Trusted IF:${RESET}  ham0, hamachi0"
             echo ""
@@ -165,7 +155,7 @@ cmd_status() {
     echo -e "  ${BOLD}Hamachi IP:${RESET}      ${CYAN}${ham_ip:-(none)}${RESET} (interface: ham0)"
     echo -e "  ${BOLD}Samba Service:${RESET}   $([ "$smb_svc" = "active" ] && echo -e "${GREEN}Active (ON)${RESET}" || echo -e "${RED}Inactive (OFF)${RESET}")"
     echo -e "  ${BOLD}Active Clients:${RESET}  $smb_clients connection(s)"
-    echo -e "  ${BOLD}Exported Shares:${RESET} Test (/home/peng/Code/Test), workspace (/home/peng/Code)"
+    echo -e "  ${BOLD}Exported Shares:${RESET} Shared (/home/peng/Shared)"
     echo -e "  ${BOLD}Remote Mounts:${RESET}   ${mounts:-None}"
 }
 
@@ -236,7 +226,7 @@ cmd_samba() {
 
 cmd_mount() {
     local target_ip="${1:-}"
-    local share_name="${2:-Test}"
+    local share_name="${2:-Shared}"
     local smb_user="${3:-peng}"
 
     if [ -z "$target_ip" ]; then
@@ -332,17 +322,16 @@ cmd_interactive() {
         # Section: Samba Sharing
         if [ "$smb_svc" = "active" ]; then
             menu+=("$(printf "✓ 󰉋  Samba Sharing: ACTIVE (%s clients)\tsamba_info" "$smb_clients")")
-            menu+=("$(printf "  📂  Share: Test (~/Code/Test)\tsamba_test")")
-            menu+=("$(printf "  📂  Share: workspace (~/Code)\tsamba_workspace")")
+            menu+=("$(printf "  📂  Share: Shared (~/Shared)\tsamba_shared")")
             menu+=("$(printf "  󰉌  Stop Samba Sharing (Disconnect all)\tsamba_stop")")
             menu+=("$(printf "  󰑓  Restart Samba Service\tsamba_restart")")
         else
             menu+=("$(printf "○ 󰉌  Samba Sharing: STOPPED\tsamba_info")")
             menu+=("$(printf "  󰉋  Start Samba Sharing\tsamba_start")")
-            menu+=("$(printf "  📂  Share: Test (~/Code/Test)\tsamba_test")")
+            menu+=("$(printf "  📂  Share: Shared (~/Shared)\tsamba_shared")")
         fi
         menu+=("$(printf "  󰌆  Set / Change Samba Password (peng)\tsamba_passwd")")
-        menu+=("$(printf "  󰝰  Open ~/Code/Test in File Manager\tsamba_open")")
+        menu+=("$(printf "  󰝰  Open ~/Shared in File Manager\tsamba_open")")
 
         menu+=("$(printf "─────────────────────────────────────────\tsep2")")
 
@@ -430,17 +419,16 @@ cmd_interactive() {
                 read -r
                 ;;
             samba_open)
-                mkdir -p "$HOME/Code/Test"
+                mkdir -p "$HOME/Shared"
                 if command -v thunar >/dev/null 2>&1; then
-                    ( thunar "$HOME/Code/Test" >/dev/null 2>&1 & )
+                    ( thunar "$HOME/Shared" >/dev/null 2>&1 & )
                 elif command -v xdg-open >/dev/null 2>&1; then
-                    ( xdg-open "$HOME/Code/Test" >/dev/null 2>&1 & )
+                    ( xdg-open "$HOME/Shared" >/dev/null 2>&1 & )
                 fi
                 sleep 0.5
                 ;;
-            samba_test|samba_workspace)
-                local share_target="Test"
-                [ "$action_key" = "samba_workspace" ] && share_target="workspace"
+            samba_shared)
+                local share_target="Shared"
                 local win_path="\\\\${ham_ip:-25.6.89.170}\\${share_target}"
                 local mac_path="smb://${ham_ip:-25.6.89.170}/${share_target}"
 
@@ -469,8 +457,7 @@ cmd_interactive() {
                         sleep 1
                         ;;
                     *"Open Local Folder"*)
-                        local local_dir="$HOME/Code"
-                        [ "$share_target" = "Test" ] && local_dir="$HOME/Code/Test"
+                        local local_dir="$HOME/Shared"
                         mkdir -p "$local_dir"
                         ( thunar "$local_dir" >/dev/null 2>&1 & )
                         sleep 0.5
@@ -487,8 +474,8 @@ cmd_interactive() {
                 echo -e "${BOLD}${CYAN}=== Mount Remote CIFS Share ===${RESET}"
                 read -rp "Target Host IP [default: $default_ip]: " tip
                 tip="${tip:-$default_ip}"
-                read -rp "Share Name [default: Test]: " sname
-                sname="${sname:-Test}"
+                read -rp "Share Name [default: Shared]: " sname
+                sname="${sname:-Shared}"
                 read -rp "Username [default: peng]: " uname
                 uname="${uname:-peng}"
 

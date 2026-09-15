@@ -49,18 +49,8 @@
         "guest account" = "nobody";
         "map to guest" = "bad user";
       };
-      "workspace" = {
-        "path" = "/home/peng/Code";
-        "browseable" = "yes";
-        "read only" = "no";
-        "guest ok" = "no";        # was "yes" — unauthenticated LAN access to ~/Code removed
-        "valid users" = "peng";   # run: sudo smbpasswd -a peng  (after rebuild)
-        "create mask" = "0644";
-        "directory mask" = "0755";
-        "force user" = "peng";
-      };
-      "Test" = {
-        "path" = "/home/peng/Code/Test";
+      "Shared" = {
+        "path" = "/home/peng/Shared";
         "browseable" = "yes";
         "read only" = "no";
         "guest ok" = "no";

@@ -184,7 +184,13 @@ mod_security() {
     "$NIXOS_DIR/modules/core/services.nix" '"valid users"'
   has   "Samba: hosts allow restricts access" \
     "$NIXOS_DIR/modules/core/services.nix" 'hosts allow'
-  has   "Samba: Test share configured" \
+  has   "Samba: Shared share configured" \
+    "$NIXOS_DIR/modules/core/services.nix" '"Shared"'
+  has   "Samba: path set to /home/peng/Shared" \
+    "$NIXOS_DIR/modules/core/services.nix" '"/home/peng/Shared"'
+  hasnt "Samba: workspace share removed" \
+    "$NIXOS_DIR/modules/core/services.nix" '"workspace"'
+  hasnt "Samba: Test share removed" \
     "$NIXOS_DIR/modules/core/services.nix" '"Test"'
 
   # Polkit
