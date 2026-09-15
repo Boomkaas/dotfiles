@@ -16,10 +16,12 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 | **Notification Center**| [SwayNC](https://github.com/ErikReider/SwayNotificationCenter) | GTK-based control center with quick toggles, sliders, and media widget |
 | **App Launcher & Menus**| [Rofi](https://github.com/davatorium/rofi) (Wayland) | Multi-mode launcher + interactive submenus (Wi-Fi, Bluetooth, Audio, Processes, Disk, Clean, Config) |
 | **Terminal & Multiplexer**| [Kitty](https://sw.kovidgoyal.net/kitty/) + [Tmux](https://github.com/tmux/tmux) | GPU-accelerated terminal (Gruvbox Dark) + Tmux patched for 100MB buffer limit |
+| **Code Editor** | [Neovim](https://neovim.io/) | Full-featured IDE experience powered by LazyVim starter suite |
 | **File Managers** | [Yazi](https://github.com/sxyazi/yazi) + [Thunar](https://docs.xfce.org/xfce/thunar/start) | Lightning-fast TUI file manager with Ueberzug++ previews & shell cd integration + GUI fallback |
 | **Shell** | [Fish](https://fishshell.com/) + [Starship](https://starship.rs/) | Interactive shell with Zoxide, Direnv, Eza, Yazi `Ctrl+O` hotkey, and smart `agy` token wrapper |
 | **Audio Stack** | [PipeWire](https://pipewire.org/) | PipeWire + ALSA + Pulse + JACK + Realtek ALC256 ASUS mic pin routing |
 | **Network & Diagnostics**| NetworkManager + Wireshark | System-wide packet capturing (GUI & CLI `wireshark`, `termshark`) with user permissions |
+| **VPN & File Sharing** | Hamachi + Samba | LogMeIn Hamachi (Haguichi GUI) & Samba LAN share (`~/Shared`) managed via `share` CLI |
 | **Virtualization** | Docker, KVM / Libvirt | Container and virtual machine virtualization with SPICE USB redirection |
 | **Media & Images** | Viewnior + Swappy + VLC | Lightweight image viewer (`viewnior`), Wayland snapshot annotator (`swappy`), and media player |
 | **Browser Theme** | Custom Firefox `userChrome.css` | Glassmorphic dark translucent panels & AMOLED gold startpage |
@@ -62,6 +64,10 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── rule.conf                   # Tag/workspace layout bindings and layer animation exceptions
 │   │   ├── settings.conf               # Hot corners, cursor theme (Bibata-Modern-Ice), and XWayland persistence
 │   │   └── pkg-mango.txt               # Package dependencies list (mangowm-git, gammastep, xdg-desktop-portal-wlr)
+│   ├── nvim/                           # Neovim configuration powered by LazyVim starter
+│   │   ├── init.lua                    # Neovim entrypoint
+│   │   ├── lazy-lock.json              # Locked plugin dependencies
+│   │   └── lua/config/                 # LazyVim options, keymaps, autocmds, lazy plugin loader
 │   ├── rofi/                           # Rofi application launcher and menu themes
 │   │   ├── config.rasi                 # Master configuration (drun & Processes modes, keyboard navigation bindings)
 │   │   ├── horizontal.rasi             # Horizontal card layout theme variant
@@ -126,6 +132,8 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── roblox.sh                   # Roblox launcher via Sober Flatpak
 │   │   ├── screenshot.sh               # Region (slurp) and fullscreen screenshot utility with clipboard & notifications
 │   │   ├── setting                     # System settings dispatcher
+│   │   ├── share                       # Interactive FZF/CLI manager for Hamachi VPN & Samba sharing (`share`)
+│   │   ├── share_menu.sh               # Interactive TUI menu wrapper for network sharing (`share-menu`)
 │   │   ├── theme                       # Theme switcher and style setter
 │   │   ├── twitch                      # CLI launcher for native in-browser Twitch Drops claimer (`twitch` / `tdrops`)
 │   │   ├── twitch-drops-claimer.user.js# Userscript for Don't Starve Together Twitch Drops (160p eco, auto-claim)
@@ -170,12 +178,15 @@ The NixOS configuration is built on flakes with a modular separation of concerns
   - **ASUS ALC256 Audio Fix**: Injects kernel module option `snd-hda-intel model=alc256-asus-mic` to resolve internal and headset microphone pin routing on ASUS VivoBook laptops (e.g. X409FA).
 - **`connections.nix`**:
   - **Networking & Firewall**: NetworkManager enabled with open TCP firewall port `8080` (web dev). PostgreSQL port 5432 is strictly bound to localhost for security.
+  - **Trusted Interfaces**: `ham0` (LogMeIn Hamachi VPN adapter) added to `networking.firewall.trustedInterfaces` for seamless LAN gaming and file transfers.
   - **Bluetooth**: Auto-powered on boot, Dual Controller Mode, FastConnectable, `EnableAdvMonInterleaveScan = 1` integer type, `blueman` integration, and a systemd service running `rfkill unblock bluetooth`.
   - **Wireshark**: `programs.wireshark` enabled with full package (`pkgs.wireshark`) and packet capture capabilities for user `peng`.
 - **`services.nix`**:
   - **Virtualization**: Docker daemon and Libvirt / KVM with SPICE USB redirection and `virt-manager`.
   - **Database Hardening**: PostgreSQL 16 server pre-configured with `mydatabase`, enforced `peer` authentication for local sockets, and `scram-sha-256` for TCP connections.
-  - **Samba & Polkit**: Restricted Samba workspace sharing (`guest ok = no`, `valid users = peng`) and scoped Polkit permissions for specific desktop actions (udisks2, login1, networkmanager, flatpak).
+  - **Samba LAN Sharing**: Dedicated `[Shared]` folder restricted exclusively to `/home/peng/Shared` (`valid users = peng`, `guest ok = no`). Autostart on boot is disabled (`wantedBy = []`) for zero idle resource drain; invoked on-demand via `share`.
+  - **Hamachi VPN**: LogMeIn Hamachi daemon (`logmein-hamachi`) with IPC user `peng`. Autostart on boot disabled (`wantedBy = []`) for on-demand launch via `share` or Haguichi GUI.
+  - **Polkit**: Scoped permissions for specific desktop actions (udisks2, login1, networkmanager, flatpak).
   - **Power & System**: UPower, `power-profiles-daemon`, UDisks2, GVFS, CUPS printing, and Android udev permissions.
 - **`user.nix`**:
   - User `peng` configured with default shell `pkgs.fish` and membership in `networkmanager`, `wheel`, `video`, `docker`, `libvirtd`, `input`, `uinput`, and `wireshark`.
@@ -187,10 +198,10 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 - **Default Image Applications**: Default image associations (PNG, JPEG, WebP, SVG, BMP, ICO) mapped to lightweight [Viewnior](https://github.com/hellnest/viewnior) with [Swappy](https://github.com/jtheoof/swappy) for annotations.
 
 ### 3. Package Management & System Menu Wrappers (`nixos/modules/pkgs.nix`)
-- Declares development toolchains, desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), and custom binary wrappers:
+- Declares development toolchains, desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), network tools (`haguichi`, `cifs-utils`), and custom binary wrappers:
   - System test suite: `nixtest` (modular 14-subsystem verification suite).
-  - System menus: `wifi-menu`, `bluetooth-menu`, `audio-menu`, `process-menu`, `disk-menu`, `clean-menu`, `config-menu`, `gtk-theme-menu`.
-  - Core helpers: `nixreb`, `awake`, `controlbot`, `epic`, `twitch` (`tdrops`), `gfn`, `roblox`.
+  - System menus: `wifi-menu`, `bluetooth-menu`, `audio-menu`, `process-menu`, `disk-menu`, `clean-menu`, `config-menu`, `gtk-theme-menu`, `share-menu`.
+  - Core helpers: `share`, `nixreb`, `awake`, `controlbot`, `epic`, `twitch` (`tdrops`), `gfn`, `roblox`.
 
 ---
 
@@ -261,6 +272,7 @@ All custom system scripts are wrapped directly into NixOS binaries via `nixos/mo
 | `clean-menu` | [`clean_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/clean_menu.sh) | One-click system maintenance: delete old Nix generations, run `nix-store --gc`, clean user cache, and journal logs. |
 | `config-menu` | [`config_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/config_menu.sh) | Rapid configuration file selector opening dotfiles or NixOS modules directly in `$EDITOR`. |
 | `gtk-theme-menu` | [`gtk_theme_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/gtk_theme_menu.sh) | Live GTK theme and icon theme switcher for desktop consistency. |
+| `share-menu` | [`share_menu.sh`](file:///home/peng/Code/Dotfiles/nixos/scripts/share_menu.sh) | Interactive TUI network sharing menu for LogMeIn Hamachi VPN status/networks and Samba `/home/peng/Shared` management. |
 
 ---
 
@@ -271,6 +283,14 @@ All custom system scripts are wrapped directly into NixOS binaries via `nixos/mo
 - **Font**: `JetBrainsMono Nerd Font Mono` (size 12).
 - **Cursor**: Beam cursor with dynamic trailing decay (`cursor_trail 2`, `cursor_trail_decay 0.1 0.4`).
 - **Features**: Unix control socket (`unix:/tmp/kitty`) enabled for programmatic tab and script control.
+
+### ⚡ Neovim & LazyVim (`config/nvim/`)
+- **Starter Architecture**: Powered by the official [LazyVim](https://www.lazyvim.org/) starter configuration for rapid startup, robust LSP diagnostics, syntax highlighting, and modular plugin management.
+- **Configuration Structure**:
+  - `init.lua`: Master Neovim entrypoint.
+  - `lua/config/lazy.lua`: Lazy.nvim plugin manager bootstrap.
+  - `lua/config/options.lua`, `keymaps.lua`, `autocmds.lua`: User settings, keybindings, and custom autocommands.
+  - `lazy-lock.json`: Locked dependency revisions ensuring identical reproduction across rebuilds.
 
 ### 🪟 Tmux Multiplexer (`config/tmux/`)
 - **Configuration (`tmux.conf`)**:
@@ -296,6 +316,7 @@ Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
 | **System** | `nc` | Delete old Nix generations & run garbage collection |
 | **System** | `addchans` | Set up nixos-unstable and home-manager channels |
 | **Testing** | `nixtest` | Run modular NixOS verification test suite (`all`, `modules`, or `<module>`) |
+| **Sharing** | `share` / `share-menu` | Interactive Hamachi VPN & Samba network file sharing manager |
 | **Tmux** | `t` / `ta` / `tls` / `tn` / `tk` | `tmux`, attach, list sessions, new session, kill session |
 | **File Manager**| `y` / `Ctrl + O` | Launch Yazi with auto-`cd` on exit |
 | **Menus** | `menu` | Launch Rofi application menu (`rofi -show drun`) |
@@ -403,6 +424,16 @@ nixtest <module>         # Run specific module (e.g. nixtest nix, nixtest securi
 nixtest <m1> <m2> ...    # Run multiple specific modules
 ```
 A 100% read-only, non-destructive verification suite designed to validate the NixOS system state, security hardening, service health, and configuration integrity before and after any modification.
+
+### 9. `share` & `share_menu.sh` (Network File Sharing & Hamachi VPN Manager)
+```bash
+share                   # Interactive TUI/FZF manager matching wifi & bluetooth style
+share status            # Show Hamachi VPN & Samba service and network status
+share-menu              # Terminal-based quick control menu
+```
+Unified network sharing controller:
+- **Hamachi VPN**: On-demand service startup, account login, join/leave mesh networks, peer listing, and nickname assignment.
+- **Samba LAN Sharing**: On-demand daemon startup, manage `/home/peng/Shared`, set SMB user passwords, and mount remote network shares into `/mnt` via `cifs-utils`.
 
 ---
 
