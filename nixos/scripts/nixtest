@@ -172,6 +172,8 @@ mod_security() {
     "$NIXOS_DIR/modules/core/connections.nix" '\b5432\b(?!\s*removed|\s*#)'
   has   "Firewall: firewall block enabled" \
     "$NIXOS_DIR/modules/core/connections.nix" 'networking\.firewall'
+  has   "Firewall: hamachi0 in trustedInterfaces" \
+    "$NIXOS_DIR/modules/core/connections.nix" 'trustedInterfaces.*hamachi0'
 
   # Samba
   hasnt 'Samba: guest ok = yes removed' \
@@ -590,9 +592,11 @@ mod_services() {
   has "services.nix: WakeSystem = true on night timer" \
     "$NIXOS_DIR/modules/core/services.nix" 'WakeSystem\s*=\s*true'
 
-  # virtualisation
+  # virtualisation & VPN
   has  "Docker: enabled" "$NIXOS_DIR/modules/core/services.nix" 'docker\.enable\s*=\s*true'
   has  "libvirtd: enabled" "$NIXOS_DIR/modules/core/services.nix" 'libvirtd\.enable\s*=\s*true'
+  has  "Hamachi: enabled" "$NIXOS_DIR/modules/core/services.nix" 'services\.logmein-hamachi\.enable\s*=\s*true'
+  has  "Haguichi: enabled" "$NIXOS_DIR/modules/core/services.nix" 'programs\.haguichi\.enable\s*=\s*true'
 
   # libvirtd orphan pool check
   if virsh pool-list --all 2>/dev/null | grep -q "WindowsVM\|pool"; then

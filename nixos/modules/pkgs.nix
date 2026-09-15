@@ -423,6 +423,7 @@ in
     # System / Misc
     jq
     gparted
+    cifs-utils
     postman
     pgadmin4-desktopmode
     glib

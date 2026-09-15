@@ -6,6 +6,7 @@
   networking.firewall = {
     enable = true;
     allowedTCPPorts = [ 8080 ]; # 5432 removed: PostgreSQL is localhost-only, no firewall exposure needed
+    trustedInterfaces = [ "hamachi0" ];
   };
 
   boot.kernel.sysctl = {
