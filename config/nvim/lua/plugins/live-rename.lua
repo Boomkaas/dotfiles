@@ -3,19 +3,20 @@ return {
   opts = {},
   keys = {
     {
-      "<leader>cr",
+      "<C-F2>",
       function()
         require("live-rename").rename()
       end,
-      desc = "Live Rename",
+      mode = { "n", "x", "i" },
+      desc = "Live Rename (Ctrl+F2)",
     },
     {
-      "r",
+      "<C-M-r>",
       function()
         require("live-rename").rename()
       end,
-      mode = "x",
-      desc = "Live Rename Selection",
+      mode = { "n", "x", "i" },
+      desc = "Live Rename (Ctrl+Alt+R)",
     },
   },
 }

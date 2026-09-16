@@ -22,11 +22,28 @@ return {
   end,
   keys = {
     {
-      "<leader><space>",
+      "<C-p>",
       function()
         require("telescope").extensions.smart_open.smart_open()
       end,
-      desc = "Smart Open (Telescope)",
+      mode = { "n", "i", "v" },
+      desc = "Smart Open (Ctrl+P)",
+    },
+    {
+      "<C-o>",
+      function()
+        require("telescope").extensions.smart_open.smart_open()
+      end,
+      mode = { "n", "i", "v" },
+      desc = "Smart Open (Ctrl+O)",
+    },
+    {
+      "<C-Space>",
+      function()
+        require("telescope").extensions.smart_open.smart_open()
+      end,
+      mode = { "n", "i", "v" },
+      desc = "Smart Open (Ctrl+Space)",
     },
   },
 }

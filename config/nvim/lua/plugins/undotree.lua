@@ -3,6 +3,7 @@ return {
   lazy = false,
   cmd = "UndotreeToggle",
   keys = {
-    { "<leader>ut", "<cmd>UndotreeToggle<cr>", desc = "Toggle Undotree" },
+    { "<C-M-u>", "<cmd>UndotreeToggle<cr>", mode = { "n", "i", "x" }, desc = "Toggle Undotree (Ctrl+Alt+U)" },
+    { "<C-S-u>", "<cmd>UndotreeToggle<cr>", mode = { "n", "i", "x" }, desc = "Toggle Undotree (Ctrl+Shift+U)" },
   },
 }

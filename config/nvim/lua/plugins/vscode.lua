@@ -640,6 +640,22 @@ return {
       -------------------------------------------------------------------------------
       map({ "n", "i", "v" }, "<C-k><C-s>", toggle_cheatsheet, { desc = "Toggle Shortcuts Cheatsheet (IDE: Ctrl+K Ctrl+S)" })
       map("n", "<leader>?", toggle_cheatsheet, { desc = "Toggle Shortcuts Cheatsheet" })
+
+      -------------------------------------------------------------------------------
+      -- 13. MODE SWITCHING VIA CTRL SHORTCUTS
+      -------------------------------------------------------------------------------
+      map("n", "<C-S-v>", "v", { desc = "Switch to Visual Mode (Ctrl+Shift+V)" })
+      map("n", "<C-S-l>", "V", { desc = "Switch to Visual Line Mode (Ctrl+Shift+L)" })
+      map("n", "<C-S-b>", "<C-v>", { desc = "Switch to Visual Block Mode (Ctrl+Shift+B)" })
+      map({ "v", "x", "s" }, "<C-S-v>", "<Esc>", { desc = "Exit to Normal Mode (Ctrl+Shift+V)" })
+      map({ "v", "x", "s", "i" }, "<C-[>", "<Esc>", { desc = "Switch to Normal Mode (Ctrl+[)" })
+
+      -------------------------------------------------------------------------------
+      -- 14. SAFETY UNMAPS (Prevent accidental bare-key triggers)
+      -------------------------------------------------------------------------------
+      -- Disable LazyVim bare H and L buffer switching
+      pcall(vim.keymap.del, "n", "H")
+      pcall(vim.keymap.del, "n", "L")
     end,
   },
 }
