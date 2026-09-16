@@ -116,6 +116,24 @@ return {
         end
       end
 
+      --- Show ALL Keybinds in Neovim (F1)
+      local function show_all_keymaps()
+        local ok_snacks, snacks = pcall(require, "snacks")
+        if ok_snacks and snacks.picker then
+          snacks.picker.keymaps({
+            global = true,
+            ["local"] = true,
+            modes = { "n", "v", "x", "s", "o", "i", "c", "t" },
+          })
+          return
+        end
+        local ok_tel, tel = pcall(require, "telescope.builtin")
+        if ok_tel then
+          tel.keymaps({ modes = { "n", "i", "c", "v", "x", "s", "o", "t" } })
+          return
+        end
+      end
+
       --- Toggle Primary Sidebar / Explorer (Ctrl+B)
       local function toggle_explorer()
         local ok_snacks, snacks = pcall(require, "snacks")
@@ -254,8 +272,9 @@ return {
           " ╚════════════════════════════════════════════════════════════════════════════════════╝",
           "",
           " 📁 FILE & PROJECT OPERATIONS",
+          "   F1                       Show ALL-ALL-ALL Keybinds in Neovim (Interactive)",
+          "   Ctrl + Shift + P         Command Palette (Search all commands)",
           "   Ctrl + P / Ctrl + O      Quick Open file by name (Smart Open / Telescope)",
-          "   Ctrl + Shift + P / F1    Command Palette (Search all commands)",
           "   Ctrl + S / Ctrl+Shift+S  Save file / Save file As",
           "   Ctrl + W / Ctrl+K W      Close active editor tab / Close all editor tabs",
           "   Ctrl + N                 New empty file / buffer",
@@ -428,7 +447,7 @@ return {
       map({ "n", "i", "v" }, "<C-p>", quick_open, { desc = "Quick Open File (IDE: Ctrl+P)" })
       map({ "n", "i", "v" }, "<C-o>", quick_open, { desc = "Open File (IDE: Ctrl+O)" })
       map({ "n", "i", "v" }, "<C-S-p>", command_palette, { desc = "Command Palette (IDE: Ctrl+Shift+P)" })
-      map({ "n", "i", "v" }, "<F1>", command_palette, { desc = "Command Palette (IDE: F1)" })
+      map({ "n", "i", "v", "x", "s", "t" }, "<F1>", show_all_keymaps, { desc = "Show ALL Keybinds in Neovim (F1)" })
 
       -- Sidebar / File Explorer & Splits
       map({ "n", "i", "v" }, "<C-b>", toggle_explorer, { desc = "Toggle Sidebar / Explorer (IDE: Ctrl+B)" })
