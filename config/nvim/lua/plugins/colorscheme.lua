@@ -94,6 +94,23 @@ return {
         hl.BlinkCmpSignatureHelp = { bg = "#000000" }
         hl.BlinkCmpSignatureHelpBorder = { bg = "#000000", fg = "#333338" }
         hl.SupermavenSuggestion = { fg = "#6c7086", italic = true }
+
+        -- Added / Removed / Changed Code Highlights (Antigravity diffs)
+        hl.GitSignsAdd = { fg = "#50fa7b", bg = "#000000" }
+        hl.GitSignsAddNr = { fg = "#50fa7b", bold = true }
+        hl.GitSignsAddLn = { bg = "#0d2b14" }
+        hl.GitSignsAddInline = { bg = "#1b4d27", fg = "#ffffff", bold = true }
+
+        hl.GitSignsChange = { fg = "#8be9fd", bg = "#000000" }
+        hl.GitSignsChangeNr = { fg = "#8be9fd", bold = true }
+        hl.GitSignsChangeLn = { bg = "#102138" }
+        hl.GitSignsChangeInline = { bg = "#203a5c", fg = "#ffffff", bold = true }
+
+        hl.GitSignsDelete = { fg = "#ff5555", bg = "#000000" }
+        hl.GitSignsDeleteNr = { fg = "#ff5555", bold = true }
+        hl.GitSignsDeleteLn = { bg = "#331215", fg = "#ff5555", strikethrough = true }
+        hl.GitSignsDeleteVirtLn = { bg = "#2a0f12", fg = "#ff6b6b", strikethrough = true }
+        hl.GitSignsDeleteVirtLnInline = { bg = "#47151a", fg = "#ffffff", strikethrough = true, bold = true }
       end,
     },
   },
