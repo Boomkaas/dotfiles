@@ -16,7 +16,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 | **Notification Center**| [SwayNC](https://github.com/ErikReider/SwayNotificationCenter) | GTK-based control center with quick toggles, sliders, and media widget |
 | **App Launcher & Menus**| [Rofi](https://github.com/davatorium/rofi) (Wayland) | Multi-mode launcher + interactive submenus (Wi-Fi, Bluetooth, Audio, Processes, Disk, Clean, Config) |
 | **Terminal & Multiplexer**| [Kitty](https://sw.kovidgoyal.net/kitty/) + [Tmux](https://github.com/tmux/tmux) | GPU-accelerated terminal (Gruvbox Dark) + Tmux patched for 100MB buffer limit |
-| **Code Editor** | [Neovim](https://neovim.io/) | Full-featured IDE experience powered by LazyVim starter suite |
+| **Code Editor** | [Neovim](https://neovim.io/) | LazyVim IDE with OLED #000000 theme, full VS Code key parity, & Antigravity AI |
 | **File Managers** | [Yazi](https://github.com/sxyazi/yazi) + [Thunar](https://docs.xfce.org/xfce/thunar/start) | Lightning-fast TUI file manager with Ueberzug++ previews & shell cd integration + GUI fallback |
 | **Shell** | [Fish](https://fishshell.com/) + [Starship](https://starship.rs/) | Interactive shell with Zoxide, Direnv, Eza, Yazi `Ctrl+O` hotkey, and smart `agy` token wrapper |
 | **Audio Stack** | [PipeWire](https://pipewire.org/) | PipeWire + ALSA + Pulse + JACK + Realtek ALC256 ASUS mic pin routing |
@@ -67,7 +67,10 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   ├── nvim/                           # Neovim configuration powered by LazyVim starter
 │   │   ├── init.lua                    # Neovim entrypoint
 │   │   ├── lazy-lock.json              # Locked plugin dependencies
-│   │   └── lua/config/                 # LazyVim options, keymaps, autocmds, lazy plugin loader
+│   │   ├── lazyvim.json                # LazyVim extra configuration and settings
+│   │   └── lua/
+│   │       ├── config/                 # LazyVim options, keymaps, autocmds, and lazy.nvim bootstrap
+│   │       └── plugins/                # Antigravity AI, OLED black theme, VS Code keys, glance, undotree
 │   ├── rofi/                           # Rofi application launcher and menu themes
 │   │   ├── config.rasi                 # Master configuration (drun & Processes modes, keyboard navigation bindings)
 │   │   ├── horizontal.rasi             # Horizontal card layout theme variant
@@ -198,7 +201,7 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 - **Default Image Applications**: Default image associations (PNG, JPEG, WebP, SVG, BMP, ICO) mapped to lightweight [Viewnior](https://github.com/hellnest/viewnior) with [Swappy](https://github.com/jtheoof/swappy) for annotations.
 
 ### 3. Package Management & System Menu Wrappers (`nixos/modules/pkgs.nix`)
-- Declares development toolchains, desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), network tools (`haguichi`, `cifs-utils`), and custom binary wrappers:
+- Declares development toolchains (`lazygit`, `git`, `neovim`), desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), network tools (`haguichi`, `cifs-utils`), and custom binary wrappers:
   - System test suite: `nixtest` (modular 14-subsystem verification suite).
   - System menus: `wifi-menu`, `bluetooth-menu`, `audio-menu`, `process-menu`, `disk-menu`, `clean-menu`, `config-menu`, `gtk-theme-menu`, `share-menu`.
   - Core helpers: `share`, `nixreb`, `awake`, `controlbot`, `epic`, `twitch` (`tdrops`), `gfn`, `roblox`.
@@ -285,17 +288,36 @@ All custom system scripts are wrapped directly into NixOS binaries via `nixos/mo
 - **Features**: Unix control socket (`unix:/tmp/kitty`) enabled for programmatic tab and script control.
 
 ### ⚡ Neovim & LazyVim (`config/nvim/`)
-- **Starter Architecture**: Powered by the official [LazyVim](https://www.lazyvim.org/) starter configuration for rapid startup, robust LSP diagnostics, syntax highlighting, and modular plugin management.
-- **Configuration Structure**:
-  - `init.lua`: Master Neovim entrypoint.
-  - `lua/config/lazy.lua`: Lazy.nvim plugin manager bootstrap.
-  - `lua/config/options.lua`, `keymaps.lua`, `autocmds.lua`: User settings, keybindings, and custom autocommands.
-  - `lazy-lock.json`: Locked dependency revisions ensuring identical reproduction across rebuilds.
+- **Starter Architecture**: Powered by the official [LazyVim](https://www.lazyvim.org/) starter configuration for ultra-fast startup, robust LSP diagnostics, syntax highlighting, and modular plugin management.
+- **Visual Design & OLED Theme (`lua/plugins/colorscheme.lua`)**:
+  - **Total Black OLED Theme**: Pure pitch-black (`#000000`) background across all normal windows, floating dialogues, statuslines, sidebars, telescope pickers, and gutter columns.
+  - Transparent floating borders and subtle contrast highlights tuned for high-contrast readability.
+- **VS Code Key Parity (`lua/plugins/vscode.lua`)**:
+  - Full IDE keymap parity matching VS Code muscle memory seamlessly across Normal, Insert, Visual, and Select modes:
+    - **Editing & Deletion**: True `Backspace` and `Delete` behavior in all modes (deleting character left/right, joining lines, clearing selections without register pollution), `Ctrl+Backspace` / `Ctrl+Delete` (word deletion).
+    - **Navigation & Selection**: `Shift + Arrows` (visual selection), `Ctrl + Arrows` (subword/word jump), `Home` / `End`, `Shift + Home` / `Shift + End`.
+    - **Clipboard & History**: `Ctrl+S` (save file), `Ctrl+Z` (undo), `Ctrl+Y` / `Ctrl+Shift+Z` (redo), `Ctrl+C` / `Ctrl+X` / `Ctrl+V` (system clipboard sync).
+    - **Search & Replace**: `Ctrl+F` (buffer find), `Ctrl+H` (find & replace modal), `Ctrl+P` (fast file finder), `Ctrl+Shift+P` (command palette).
+    - **Lines & Comments**: `Alt+Up/Down` (move lines), `Shift+Alt+Up/Down` (duplicate lines), `Ctrl+/` (toggle comment).
+    - **LSP & Modals**: `F2` (live symbol rename), `F1` (interactive full keymap picker across all modes), `Ctrl+B` (toggle Neo-tree), `Ctrl+~` (toggle terminal).
+- **Antigravity AI Copilot (`lua/plugins/antigravity.lua`, `completion.lua`)**:
+  - Integrated with local `antigravity-cli` for context-aware inline code suggestions and ghost text generation.
+  - Dedicated keybindings: `Ctrl + Alt + A` to trigger completions, `<Tab>` to accept, and `<Esc><Esc>` to dismiss without compositor or terminal interference.
+- **Enhanced Productivity & Git Plugins**:
+  - **Glance (`glance.nvim`)**: VS Code-style peek windows for definitions (`gpd`), references (`gpr`), implementations (`gpi`), and type definitions (`gpt`).
+  - **Undotree (`undotree.lua`)**: Visual interactive undo-history tree view (`<leader>u`).
+  - **Smart Open (`smart-open.nvim`)**: Advanced frecency algorithm combining recency, frequency, and Git status for lightning-fast file jumping.
+  - **Highlight Undo (`highlight-undo.nvim`)**: Visual flashes highlighting modified lines during undo/redo operations.
+  - **Hlslens (`nvim-hlslens`)**: Search lens showing total matches, current match index, and offscreen indicators.
+  - **Spider (`nvim-spider`)**: CamelCase and snake_case subword motions replacing standard `w`/`e`/`b`.
+  - **Flash (`flash.nvim`)**: Two-character bidirectional jump navigation for fast hopping across open buffers.
+  - **Git Suite & Lazygit (`lua/plugins/gitsigns.lua`, `pkgs.nix`)**: `<leader>gg` opens Lazygit in a floating terminal, alongside `<leader>g` hunks staging, resets, inline diffs, and blame previews.
 
 ### 🪟 Tmux Multiplexer (`config/tmux/`)
 - **Configuration (`tmux.conf`)**:
   - Vi-mode copy/paste keybindings, custom statusbar formatting with clean window lists, active window highlight, and clock.
   - Seamless pane splitting (`|` and `-`), navigation, and window resizing.
+  - **Extended Keys (`extended-keys on`)**: `terminal-features 'xterm*:extkeys'` enabled to forward complex key combinations (e.g. `Ctrl+Alt+A`) to Neovim and shell processes reliably.
 - **Cheat Sheet (`cheatsheet.sh`)**:
   - Interactive popup cheat sheet summarizing essential Tmux shortcuts for session, window, and pane manipulation.
 
