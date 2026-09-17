@@ -218,8 +218,8 @@ MangoWM is a dynamic tiling Wayland compositor built on the **Scroller layout** 
 
 | Hotkey | Action |
 | :--- | :--- |
-| `Super + Q` | Open Kitty terminal running **Tmux** in fullscreen |
-| `Super + Shift + Q` | Open standalone clean Kitty terminal |
+| `Super + Q` | Open standalone clean Kitty terminal |
+| `Super + Shift + Q` | Open Kitty terminal running **Tmux** in fullscreen |
 | `Super + R` | Launch **Antigravity IDE** (`antigravity-ide`) |
 | `Super + TAB` | Open Rofi application launcher (`rofi -show drun`) |
 | `Super + Shift + TAB` | Open Rofi interactive process monitor (`rofi -show Processes`) |
