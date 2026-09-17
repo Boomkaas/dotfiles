@@ -246,6 +246,7 @@ in
 
     # Dev Tools
     git
+    lazygit
     neovim
     codex
     go
