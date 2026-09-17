@@ -85,6 +85,15 @@ return {
         hl.GlanceBorder = { bg = "#000000", fg = "#333338" }
         hl.GlanceListNormal = { bg = "#000000" }
         hl.GlancePreviewNormal = { bg = "#000000" }
+
+        -- Blink.cmp & Supermaven
+        hl.BlinkCmpMenu = { bg = "#000000" }
+        hl.BlinkCmpMenuBorder = { bg = "#000000", fg = "#333338" }
+        hl.BlinkCmpDoc = { bg = "#000000" }
+        hl.BlinkCmpDocBorder = { bg = "#000000", fg = "#333338" }
+        hl.BlinkCmpSignatureHelp = { bg = "#000000" }
+        hl.BlinkCmpSignatureHelpBorder = { bg = "#000000", fg = "#333338" }
+        hl.SupermavenSuggestion = { fg = "#6c7086", italic = true }
       end,
     },
   },
