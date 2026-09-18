@@ -91,6 +91,15 @@ let
   tasks-cmd = pkgs.writeShellScriptBin "tasks" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/task "$@"
   '';
+  conf-cmd = pkgs.writeShellScriptBin "conf" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/conf "$@"
+  '';
+  configs-cmd = pkgs.writeShellScriptBin "configs" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/conf "$@"
+  '';
+  config-cmd = pkgs.writeShellScriptBin "config" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/conf "$@"
+  '';
   nixtest = pkgs.writeShellScriptBin "nixtest" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
   '';
@@ -482,6 +491,9 @@ in
     services-cmd
     task-cmd
     tasks-cmd
+    conf-cmd
+    configs-cmd
+    config-cmd
     nixtest
 
     # Archive

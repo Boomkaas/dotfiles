@@ -1,0 +1,780 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# conf - Terminal Dotfiles & Config Picker with Syntax Preview (CLI & fzf TUI)
+# Browse, preview, diff, and edit configs across NixOS, Wayland, Shells & Apps.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/Code/Dotfiles}"
+HAKUSPACE_DIR="${HAKUSPACE_DIR:-$HOME/hakuspace-control}"
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-preferences-system}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+open_in_editor() {
+    local target="$1"
+    if [ -z "$target" ]; then return 1; fi
+    if [ -n "${EDITOR:-}" ]; then
+        "$EDITOR" "$target"
+    elif command -v nvim >/dev/null 2>&1; then
+        nvim "$target"
+    elif command -v nano >/dev/null 2>&1; then
+        nano "$target"
+    elif command -v vi >/dev/null 2>&1; then
+        vi "$target"
+    else
+        xdg-open "$target" 2>/dev/null &
+    fi
+}
+
+open_in_ide() {
+    local target="$1"
+    if [ -z "$target" ]; then return 1; fi
+    if command -v antigravity-ide >/dev/null 2>&1; then
+        antigravity-ide "$target" >/dev/null 2>&1 &
+        notify "normal" "antigravity" "Config IDE" "Opened in Antigravity IDE: $(basename "$target")"
+    elif command -v codex >/dev/null 2>&1; then
+        codex "$target" >/dev/null 2>&1 &
+        notify "normal" "codex" "Config IDE" "Opened in Codex: $(basename "$target")"
+    elif command -v code >/dev/null 2>&1; then
+        code "$target" >/dev/null 2>&1 &
+        notify "normal" "code" "Config IDE" "Opened in VS Code: $(basename "$target")"
+    else
+        xdg-open "$target" >/dev/null 2>&1 &
+        notify "normal" "preferences-system" "Config Manager" "Opened: $(basename "$target")"
+    fi
+}
+
+open_in_fm() {
+    local target="$1"
+    local dir="$target"
+    [ -f "$target" ] && dir="$(dirname "$target")"
+    if [ ! -d "$dir" ]; then return 1; fi
+
+    if command -v yazi >/dev/null 2>&1; then
+        yazi "$dir"
+    elif command -v thunar >/dev/null 2>&1; then
+        thunar "$dir" >/dev/null 2>&1 &
+    else
+        xdg-open "$dir" >/dev/null 2>&1 &
+    fi
+}
+
+copy_to_clipboard() {
+    local text="$1"
+    if command -v wl-copy >/dev/null 2>&1; then
+        echo -n "$text" | wl-copy
+        notify "normal" "edit-copy" "Clipboard" "Copied to clipboard: $text"
+        echo -e "${GREEN}✔ Copied to clipboard:${RESET} $text"
+    elif command -v xclip >/dev/null 2>&1; then
+        echo -n "$text" | xclip -selection clipboard
+        notify "normal" "edit-copy" "Clipboard" "Copied to clipboard: $text"
+        echo -e "${GREEN}✔ Copied to clipboard:${RESET} $text"
+    else
+        echo -e "${YELLOW}Clipboard utility (wl-copy/xclip) not found.${RESET}"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Inventory Definition
+# ------------------------------------------------------------------------------
+# Format per entry: CATEGORY | ICON | TITLE | PATH
+# Categories: nixos, desktop, shell, custom, repo
+get_config_catalog() {
+    cat <<EOF
+nixos| |NixOS Flake Definition|$DOTFILES_DIR/nixos/flake.nix
+nixos| |NixOS Package Manifest (pkgs.nix)|$DOTFILES_DIR/nixos/modules/pkgs.nix
+nixos| |NixOS Modules Root (default.nix)|$DOTFILES_DIR/nixos/modules/default.nix
+nixos| |NixOS Audio & PipeWire Quirk|$DOTFILES_DIR/nixos/modules/core/audio.nix
+nixos| |NixOS Connections & Firewall|$DOTFILES_DIR/nixos/modules/core/connections.nix
+nixos| |NixOS System Services|$DOTFILES_DIR/nixos/modules/core/services.nix
+nixos| |NixOS Base System Settings|$DOTFILES_DIR/nixos/modules/core/system.nix
+nixos| |NixOS User Accounts & Privileges|$DOTFILES_DIR/nixos/modules/core/user.nix
+nixos| |NixOS Hardware Configuration|$DOTFILES_DIR/nixos/system/hardware-configuration.nix
+nixos| |NixOS System Configuration|$DOTFILES_DIR/nixos/system/configuration.nix
+nixos| |NixOS Script Test Suite (nixtest)|$DOTFILES_DIR/nixos/scripts/nixtest
+nixos| |NixOS Core Shell Scripts Folder|$DOTFILES_DIR/nixos/scripts
+nixos| |NixOS TUI Tools Directory|$DOTFILES_DIR/nixos/scripts/tui
+desktop|󰒓 |Waybar Main Config (JSONC)|$DOTFILES_DIR/config/waybar/config.jsonc
+desktop|󰒓 |Waybar Active Stylesheet (CSS)|$DOTFILES_DIR/config/waybar/style.css
+desktop|󰒓 |Waybar Configuration Directory|$DOTFILES_DIR/config/waybar
+desktop|󰒓 |Mango Compositor Main Config|$DOTFILES_DIR/config/mango/config.conf
+desktop|󰒓 |Mango Keybindings (bind.conf)|$DOTFILES_DIR/config/mango/bind.conf
+desktop|󰒓 |Mango Core Settings (settings.conf)|$DOTFILES_DIR/config/mango/settings.conf
+desktop|󰒓 |Mango Autostart Services|$DOTFILES_DIR/config/mango/autostart.conf
+desktop|󰒓 |Mango Window Rules (rule.conf)|$DOTFILES_DIR/config/mango/rule.conf
+desktop|󰒓 |Mango Visual Effects (effect.conf)|$DOTFILES_DIR/config/mango/effect.conf
+desktop|󰒓 |Mango Window Layouts (layout.conf)|$DOTFILES_DIR/config/mango/layout.conf
+desktop|󰒓 |Mango Animations (animation.conf)|$DOTFILES_DIR/config/mango/animation.conf
+desktop|󰒓 |Mango Environment Vars (env.conf)|$DOTFILES_DIR/config/mango/env.conf
+desktop|󰒓 |Mango Config Directory|$DOTFILES_DIR/config/mango
+desktop|󰒓 |Hyprland Idle Watchdog (hypridle)|$DOTFILES_DIR/config/hypr/hypridle.conf
+desktop|󰒓 |Hyprland Screen Lock (hyprlock)|$DOTFILES_DIR/config/hypr/hyprlock.conf
+desktop|󰒓 |Hyprland Config Directory|$DOTFILES_DIR/config/hypr
+desktop|󰒓 |SwayNC Notification Settings|$DOTFILES_DIR/config/swaync/config.json
+desktop|󰒓 |SwayNC Notification CSS|$DOTFILES_DIR/config/swaync/style.css
+desktop|󰒓 |SwayNC Config Directory|$DOTFILES_DIR/config/swaync
+desktop|󰒓 |Kitty Terminal Config|$DOTFILES_DIR/config/kitty/kitty.conf
+desktop|󰒓 |Kitty Config Directory|$DOTFILES_DIR/config/kitty
+desktop|󰒓 |Rofi Launcher Main Config|$DOTFILES_DIR/config/rofi/config.rasi
+desktop|󰒓 |Rofi Themes & Config Directory|$DOTFILES_DIR/config/rofi
+desktop|󰒓 |BongoCat Virtual Pet Config|$DOTFILES_DIR/config/bongocat/bongocat.conf
+desktop|󰒓 |BongoCat Config Directory|$DOTFILES_DIR/config/bongocat
+desktop|󰒓 |Thunar Custom Actions (UCA XML)|$DOTFILES_DIR/config/Thunar/uca.xml
+shell|󰈺 |Fish Shell Config (config.fish)|$DOTFILES_DIR/config/fish/config.fish
+shell|󰈺 |Fish Functions & Config Folder|$DOTFILES_DIR/config/fish
+shell|🚀|Starship Prompt Configuration|$DOTFILES_DIR/config/starship.toml
+shell| |Tmux Multiplexer Config|$DOTFILES_DIR/config/tmux/tmux.conf
+shell| |Tmux Config Directory|$DOTFILES_DIR/config/tmux
+shell|󰇥 |Yazi Main Config (yazi.toml)|$DOTFILES_DIR/config/yazi/yazi.toml
+shell|󰇥 |Yazi Keybindings (keymap.toml)|$DOTFILES_DIR/config/yazi/keymap.toml
+shell|󰇥 |Yazi Config Directory|$DOTFILES_DIR/config/yazi
+shell| |Neovim Init (init.lua)|$DOTFILES_DIR/config/nvim/init.lua
+shell| |Neovim Config Directory|$DOTFILES_DIR/config/nvim
+shell|󰖟 |PinchTab Automation Config|$DOTFILES_DIR/config/pinchtab/config.json
+shell|󰖟 |PinchTab Directory|$DOTFILES_DIR/config/pinchtab
+custom|󰒓 |Hakuspace Main Setting Script|$HAKUSPACE_DIR/main_setting.sh
+custom|󰒓 |Hakuspace Menu Custom Script|$HAKUSPACE_DIR/hakumenu-general-custom.sh
+custom|󰒓 |Hakuspace Mango Custom Config|$HAKUSPACE_DIR/mango-custom.conf
+custom|󰒓 |Hakuspace Hyprland Custom Lua|$HAKUSPACE_DIR/hyprland-custom.lua
+custom|󰒓 |Hakuspace Dockbar App Pins|$HAKUSPACE_DIR/dockbar_pin_apps
+custom|󰒓 |Hakuspace Niri Custom KDL|$HAKUSPACE_DIR/niri-custom.kdl
+custom|󱁤 |Hakuspace Control Root Directory|$HAKUSPACE_DIR
+repo| |Dotfiles Git Repository Root|$DOTFILES_DIR
+EOF
+}
+
+# Returns git status map in associative array: REL_PATH -> STATUS_CODE
+get_git_status_map() {
+    if [ -d "$DOTFILES_DIR/.git" ]; then
+        git -C "$DOTFILES_DIR" status --porcelain 2>/dev/null
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# CLI Commands
+# ------------------------------------------------------------------------------
+
+cmd_list() {
+    local target_scope="${1:-all}"
+    echo -e "${BOLD}Dotfiles & Configuration Registry:${RESET}"
+    echo -e "${DIM}Base directory: $DOTFILES_DIR${RESET}\n"
+
+    printf "%-10s %-38s %s\n" "CATEGORY" "CONFIG TARGET" "PATH"
+    echo "─────────────────────────────────────────────────────────────────────────────────────────"
+
+    while IFS='|' read -r cat icon title path; do
+        [ -z "$cat" ] && continue
+        if [ "$target_scope" != "all" ] && [ "$target_scope" != "$cat" ]; then
+            continue
+        fi
+
+        local exists="${GREEN}✔${RESET}"
+        if [ ! -e "$path" ]; then
+            exists="${RED}✘${RESET}"
+        fi
+
+        printf "%-10s %s %-36s %s %s\n" "[$cat]" "$icon" "$title" "$exists" "$path"
+    done < <(get_config_catalog)
+}
+
+cmd_status() {
+    echo -e "${BOLD}${CYAN}Dotfiles Git Repository Status:${RESET} ${DOTFILES_DIR}"
+    if [ ! -d "$DOTFILES_DIR/.git" ]; then
+        echo -e "${YELLOW}No git repository found at $DOTFILES_DIR${RESET}"
+        return 1
+    fi
+
+    echo ""
+    git -C "$DOTFILES_DIR" status --short
+    echo ""
+    local branch
+    branch=$(git -C "$DOTFILES_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    local commits_ahead
+    commits_ahead=$(git -C "$DOTFILES_DIR" rev-list --count @{u}..HEAD 2>/dev/null || echo "0")
+    echo -e "${BOLD}Current Branch:${RESET} $branch (${commits_ahead} commits ahead of upstream)"
+}
+
+cmd_diff() {
+    local target="$1"
+    if [ ! -d "$DOTFILES_DIR/.git" ]; then
+        echo -e "${YELLOW}No git repository found at $DOTFILES_DIR${RESET}"
+        return 1
+    fi
+
+    if [ -n "$target" ]; then
+        if [ -e "$target" ]; then
+            git -C "$DOTFILES_DIR" diff HEAD -- "$target"
+        else
+            # Try searching in catalog
+            local matched_path=""
+            while IFS='|' read -r _ _ title path; do
+                if [[ "${title,,}" =~ ${target,,} ]] || [[ "${path,,}" =~ ${target,,} ]]; then
+                    matched_path="$path"
+                    break
+                fi
+            done < <(get_config_catalog)
+
+            if [ -n "$matched_path" ]; then
+                git -C "$DOTFILES_DIR" diff HEAD -- "$matched_path"
+            else
+                git -C "$DOTFILES_DIR" diff HEAD -- "$target"
+            fi
+        fi
+    else
+        git -C "$DOTFILES_DIR" diff HEAD
+    fi
+}
+
+cmd_edit() {
+    local query="$1"
+    if [ -z "$query" ]; then
+        cmd_interactive
+        return 0
+    fi
+
+    local matched=()
+    while IFS='|' read -r _ _ title path; do
+        if [[ "${title,,}" =~ ${query,,} ]] || [[ "${path,,}" =~ ${query,,} ]]; then
+            [ -e "$path" ] && matched+=("$path")
+        fi
+    done < <(get_config_catalog)
+
+    if [ ${#matched[@]} -eq 1 ]; then
+        open_in_editor "${matched[0]}"
+    elif [ ${#matched[@]} -gt 1 ]; then
+        echo -e "${CYAN}Multiple configs matched '$query'. Select one to edit:${RESET}"
+        local selected
+        selected=$(printf "%s\n" "${matched[@]}" | fzf --height=40% --reverse --prompt="Edit > ") || return 0
+        [ -n "$selected" ] && open_in_editor "$selected"
+    else
+        # Direct file check
+        if [ -e "$query" ]; then
+            open_in_editor "$query"
+        elif [ -e "$DOTFILES_DIR/$query" ]; then
+            open_in_editor "$DOTFILES_DIR/$query"
+        elif [ -e "$HOME/.config/$query" ]; then
+            open_in_editor "$HOME/.config/$query"
+        else
+            echo -e "${RED}✘ No configuration matched:${RESET} $query"
+            return 1
+        fi
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# FZF Live Preview Handler
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="$1"
+
+    if [ -z "$target" ]; then
+        echo -e "${DIM}Select a configuration target to inspect details and preview content.${RESET}"
+        return 0
+    fi
+
+    # Handle special action items
+    case "$target" in
+        action:toggle_scope)
+            cat <<EOF
+${BOLD}${CYAN}Scope Filtering${RESET}
+Cycle through configuration categories:
+  • ${BOLD}all${RESET}      - All registered configuration files & directories
+  • ${BOLD}nixos${RESET}    - NixOS Flake, system modules, scripts & nixtest
+  • ${BOLD}desktop${RESET}  - Waybar, Mango, Hyprland, SwayNC, Kitty, Rofi
+  • ${BOLD}shell${RESET}    - Fish shell, Starship, Tmux, Yazi, Neovim
+  • ${BOLD}custom${RESET}   - Hakuspace custom scripts & desktop controllers
+  • ${BOLD}modified${RESET} - Files with uncommitted changes in git repository
+
+${DIM}Shortcut:${RESET} Press ${BOLD}TAB${RESET} at any time in the main list.
+EOF
+            return 0
+            ;;
+
+        action:git_status)
+            echo -e "${BOLD}${CYAN}Dotfiles Git Repository Status${RESET}"
+            echo -e "${DIM}Path: $DOTFILES_DIR${RESET}\n"
+            if [ -d "$DOTFILES_DIR/.git" ]; then
+                git -C "$DOTFILES_DIR" status --short
+                echo ""
+                echo -e "${BOLD}Recent Commits:${RESET}"
+                git -C "$DOTFILES_DIR" log -n 5 --oneline --color=always 2>/dev/null
+            else
+                echo -e "${YELLOW}Git repository not found.${RESET}"
+            fi
+            return 0
+            ;;
+
+        action:browse_dotfiles)
+            echo -e "${BOLD}${CYAN}Dotfiles File Manager${RESET}"
+            echo -e "${DIM}Browse full dotfiles repository in terminal file manager (yazi).${RESET}\n"
+            if command -v eza >/dev/null 2>&1; then
+                eza --tree --level=2 --icons --color=always "$DOTFILES_DIR" | head -n 45
+            else
+                ls -la "$DOTFILES_DIR" | head -n 40
+            fi
+            return 0
+            ;;
+
+        action:open_ide_dotfiles)
+            echo -e "${BOLD}${CYAN}IDE Project Workspace${RESET}"
+            echo -e "${DIM}Open entire dotfiles repo in graphical IDE.${RESET}\n"
+            echo "Available IDEs on system:"
+            command -v antigravity-ide >/dev/null 2>&1 && echo "  ✔ Antigravity IDE (/run/current-system/sw/bin/antigravity-ide)"
+            command -v codex >/dev/null 2>&1 && echo "  ✔ Codex IDE (/run/current-system/sw/bin/codex)"
+            command -v code >/dev/null 2>&1 && echo "  ✔ VS Code (/run/current-system/sw/bin/code)"
+            return 0
+            ;;
+    esac
+
+    # Real file / directory preview
+    if [ ! -e "$target" ]; then
+        echo -e "${RED}${BOLD}✘ Target Does Not Exist${RESET}"
+        echo -e "${DIM}Path: $target${RESET}"
+        return 0
+    fi
+
+    local is_git=0
+    local git_rel=""
+    if [ -d "$DOTFILES_DIR/.git" ] && [[ "$target" == "$DOTFILES_DIR"* ]]; then
+        is_git=1
+        git_rel="${target#$DOTFILES_DIR/}"
+    fi
+
+    if [ -f "$target" ]; then
+        local sz lines modified perms
+        sz=$(stat -c '%s' "$target" 2>/dev/null || echo "0")
+        lines=$(wc -l < "$target" 2>/dev/null || echo "0")
+        modified=$(date -r "$target" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "unknown")
+        perms=$(stat -c '%a' "$target" 2>/dev/null || echo "644")
+
+        local hr_sz
+        if command -v numfmt >/dev/null 2>&1; then
+            hr_sz=$(numfmt --to=iec-i --suffix=B "$sz" 2>/dev/null || echo "${sz}B")
+        else
+            hr_sz="${sz}B"
+        fi
+
+        local git_badge="${GREEN}Clean${RESET}"
+        if [ "$is_git" -eq 1 ]; then
+            local gstat
+            gstat=$(git -C "$DOTFILES_DIR" status --porcelain -- "$target" 2>/dev/null)
+            if [ -n "$gstat" ]; then
+                git_badge="${YELLOW}${BOLD}Modified (${gstat:0:2})${RESET}"
+            fi
+        fi
+
+        echo -e "${BOLD}📄 File:${RESET}       $(basename "$target")"
+        echo -e "${BOLD}📂 Path:${RESET}       $target"
+        echo -e "${BOLD}📊 Stats:${RESET}      ${lines} lines | ${hr_sz} | perms ${perms} | modified: ${modified}"
+        echo -e "${BOLD}  Git:${RESET}        $git_badge"
+        echo "─────────────────────────────────────────────────────────────────────────────"
+
+        # Show Git Diff if modified
+        if [ "$is_git" -eq 1 ]; then
+            local diff_out
+            diff_out=$(git -C "$DOTFILES_DIR" diff HEAD -- "$target" 2>/dev/null)
+            if [ -n "$diff_out" ]; then
+                echo -e "${YELLOW}${BOLD}── Git Diff (Uncommitted Changes) ─────────────────────────${RESET}"
+                git -C "$DOTFILES_DIR" diff --color=always HEAD -- "$target" | head -n 35
+                echo -e "${CYAN}${BOLD}── File Contents ──────────────────────────────────────────${RESET}"
+            fi
+        fi
+
+        # Syntax Highlighted File View
+        if command -v bat >/dev/null 2>&1; then
+            bat --color=always --style=numbers,changes --line-range :120 "$target" 2>/dev/null || head -n 120 "$target"
+        else
+            head -n 120 "$target"
+        fi
+
+    elif [ -d "$target" ]; then
+        local count sz
+        count=$(find "$target" -maxdepth 1 2>/dev/null | wc -l || echo "0")
+        (( count > 0 )) && (( count-- )) # omit the dir itself
+        sz=$(du -sh "$target" 2>/dev/null | cut -f1 || echo "0")
+
+        echo -e "${BOLD}📁 Directory:${RESET}  $(basename "$target")"
+        echo -e "${BOLD}📂 Path:${RESET}       $target"
+        echo -e "${BOLD}📊 Content:${RESET}    ${count} entries | total size: ${sz}"
+        echo "─────────────────────────────────────────────────────────────────────────────"
+
+        if [ "$is_git" -eq 1 ]; then
+            local gstat
+            gstat=$(git -C "$DOTFILES_DIR" status --short -- "$target" 2>/dev/null)
+            if [ -n "$gstat" ]; then
+                echo -e "${YELLOW}${BOLD}── Modified in Directory ───────────────────────────────────${RESET}"
+                echo "$gstat"
+                echo ""
+            fi
+        fi
+
+        echo -e "${CYAN}${BOLD}── Directory Tree ──────────────────────────────────────────${RESET}"
+        if command -v eza >/dev/null 2>&1; then
+            eza --tree --level=2 --icons --color=always "$target" 2>/dev/null | head -n 45
+        else
+            ls -la --color=always "$target" 2>/dev/null | head -n 45
+        fi
+
+        # Check for primary config file snippet
+        local primary=""
+        for candidate in "$target/config.jsonc" "$target/config.conf" "$target/settings.conf" "$target/config.fish" "$target/init.lua" "$target/tmux.conf" "$target/kitty.conf" "$target/hypridle.conf" "$target/config.rasi" "$target/flake.nix"; do
+            if [ -f "$candidate" ]; then
+                primary="$candidate"
+                break
+            fi
+        done
+
+        if [ -n "$primary" ]; then
+            echo ""
+            echo -e "${MAGENTA}${BOLD}── Primary Config Snippet ($(basename "$primary")) ─────────────${RESET}"
+            if command -v bat >/dev/null 2>&1; then
+                bat --color=always --style=numbers --line-range :30 "$primary" 2>/dev/null
+            else
+                head -n 30 "$primary"
+            fi
+        fi
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Contextual Action Submenu
+# ------------------------------------------------------------------------------
+
+show_action_menu() {
+    local target="$1"
+    local title="$2"
+
+    local acts=()
+    acts+=("1.   Open in Terminal Editor ($EDITOR / Neovim)")
+    acts+=("2.   Open in Graphical IDE (Antigravity IDE / Codex)")
+    acts+=("3. 󰇥  Open in Terminal File Manager (Yazi)")
+    acts+=("4. 󱁤  Open in GUI File Manager (Thunar)")
+    acts+=("5. 📋 Copy Target Path to Clipboard")
+    if [ -d "$DOTFILES_DIR/.git" ] && [[ "$target" == "$DOTFILES_DIR"* ]]; then
+        acts+=("6.   Show Git Diff for this Target")
+        acts+=("7. 📜 Show Git Commit History")
+    fi
+    acts+=("8. ✘  Cancel")
+
+    local choice
+    choice=$(printf "%s\n" "${acts[@]}" | fzf \
+        --prompt="Action [$(basename "$target")] > " \
+        --height=40% \
+        --reverse \
+        --border=rounded) || return 0
+
+    case "$choice" in
+        1*) open_in_editor "$target" ;;
+        2*) open_in_ide "$target" ;;
+        3*) open_in_fm "$target" ;;
+        4*)
+            local p="$target"
+            [ -f "$target" ] && p="$(dirname "$target")"
+            if command -v thunar >/dev/null 2>&1; then
+                thunar "$p" >/dev/null 2>&1 &
+            else
+                xdg-open "$p" >/dev/null 2>&1 &
+            fi
+            ;;
+        5*) copy_to_clipboard "$target" ;;
+        6*)
+            clear
+            git -C "$DOTFILES_DIR" diff HEAD -- "$target" | (command -v bat >/dev/null 2>&1 && bat --color=always -p -l diff || cat)
+            echo ""
+            echo -ne "${BOLD}Press Enter to return...${RESET}"
+            read -r
+            ;;
+        7*)
+            clear
+            git -C "$DOTFILES_DIR" log -n 20 --stat --color=always -- "$target" | (command -v bat >/dev/null 2>&1 && bat --color=always -p || cat)
+            echo ""
+            echo -ne "${BOLD}Press Enter to return...${RESET}"
+            read -r
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive FZF Dashboard
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    local self_bin
+    self_bin="$(readlink -f "$0")"
+
+    local current_scope="all"
+    local scopes=("all" "modified" "nixos" "desktop" "shell" "custom")
+
+    while true; do
+        clear
+
+        # Load Git modified files
+        declare -A MOD_MAP
+        local mod_count=0
+        if [ -d "$DOTFILES_DIR/.git" ]; then
+            while IFS= read -r line; do
+                [ -z "$line" ] && continue
+                local st="${line:0:2}"
+                local file="${line:3}"
+                # strip quotes if git quoted name
+                file="${file%\"}"
+                file="${file#\"}"
+                local full_p="$DOTFILES_DIR/$file"
+                MOD_MAP["$full_p"]="$st"
+                ((mod_count++))
+            done < <(git -C "$DOTFILES_DIR" status --porcelain 2>/dev/null)
+        fi
+
+        # Scope badge
+        local scope_label
+        case "$current_scope" in
+            all) scope_label="${CYAN}All Categories${RESET}" ;;
+            modified) scope_label="${YELLOW}Modified Files (${mod_count})${RESET}" ;;
+            nixos) scope_label="${MAGENTA}NixOS Modules & System${RESET}" ;;
+            desktop) scope_label="${BLUE}Desktop & Wayland${RESET}" ;;
+            shell) scope_label="${GREEN}Shell & CLI Tools${RESET}" ;;
+            custom) scope_label="${WHITE}Hakuspace Custom Scripts${RESET}" ;;
+        esac
+
+        local changed_badge="${GREEN}0 changed${RESET}"
+        [ "$mod_count" -gt 0 ] && changed_badge="${YELLOW}${BOLD}${mod_count} changed${RESET}"
+
+        local header_info="Scope: $scope_label | Git: $changed_badge"
+
+        # Calculate next scope for Tab shortcut
+        local next_scope="all"
+        for i in "${!scopes[@]}"; do
+            if [ "${scopes[$i]}" = "$current_scope" ]; then
+                local next_idx=$(( (i + 1) % ${#scopes[@]} ))
+                next_scope="${scopes[$next_idx]}"
+                break
+            fi
+        done
+
+        local menu=()
+
+        # Top Control Row
+        menu+=("󰌢  [TAB] Switch Scope (Next: ${next_scope})"$'\t'"action:toggle_scope")
+        menu+=("  [Ctrl-G] Dotfiles Git Status (${mod_count} modified)"$'\t'"action:git_status")
+
+        # Config Items
+        if [ "$current_scope" = "modified" ]; then
+            if [ "$mod_count" -eq 0 ]; then
+                menu+=("✔  Working tree is completely clean (No modified files)"$'\t'"action:git_status")
+            else
+                for mod_file in "${!MOD_MAP[@]}"; do
+                    local st="${MOD_MAP["$mod_file"]}"
+                    local fname
+                    fname=$(basename "$mod_file")
+                    local rel="${mod_file#$DOTFILES_DIR/}"
+                    menu+=("󰈚  [${st}] ${fname} (${rel})"$'\t'"$mod_file")
+                done
+            fi
+        else
+            while IFS='|' read -r cat icon title path; do
+                [ -z "$cat" ] && continue
+                if [ "$current_scope" != "all" ] && [ "$current_scope" != "$cat" ]; then
+                    continue
+                fi
+
+                local badge="   "
+                if [ -n "${MOD_MAP["$path"]+x}" ]; then
+                    badge="[${MOD_MAP["$path"]}]"
+                elif [ -e "$path" ]; then
+                    badge="[✔]"
+                else
+                    badge="[✘]"
+                fi
+
+                # Format row nicely with tab delimiter for preview
+                local label
+                label=$(printf "%s  %-36s %s" "$icon" "$title" "$badge")
+                menu+=("${label}"$'\t'"$path")
+            done < <(get_config_catalog)
+        fi
+
+        # Invoke fzf
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-e,ctrl-d,ctrl-f,ctrl-t,ctrl-o,ctrl-g,ctrl-r,tab \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Config ($current_scope) > " \
+            --header="[$header_info] (Enter: Edit in \$EDITOR | Ctrl-E: IDE | Ctrl-D: Diff | Ctrl-F: Yazi | Ctrl-O: Actions | Tab: Filter | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local target_payload
+        target_payload=$(echo "$choice" | cut -f2)
+
+        # Handle Tab shortcut
+        if [ "$key" = "tab" ] || [ "$target_payload" = "action:toggle_scope" ]; then
+            current_scope="$next_scope"
+            continue
+        fi
+
+        # Handle Git Status shortcut
+        if [ "$key" = "ctrl-g" ] || [ "$target_payload" = "action:git_status" ]; then
+            clear
+            cmd_status
+            echo ""
+            echo -ne "${BOLD}Press Enter to return...${RESET}"
+            read -r
+            continue
+        fi
+
+        # Handle Refresh shortcut
+        if [ "$key" = "ctrl-r" ]; then
+            continue
+        fi
+
+        # Handle Special Actions
+        case "$target_payload" in
+            action:browse_dotfiles)
+                open_in_fm "$DOTFILES_DIR"
+                continue
+                ;;
+            action:open_ide_dotfiles)
+                open_in_ide "$DOTFILES_DIR"
+                continue
+                ;;
+        esac
+
+        # Key-specific handlers for target
+        case "$key" in
+            ctrl-e)
+                open_in_ide "$target_payload"
+                continue
+                ;;
+            ctrl-d)
+                clear
+                if [ -d "$DOTFILES_DIR/.git" ]; then
+                    git -C "$DOTFILES_DIR" diff HEAD -- "$target_payload" | (command -v bat >/dev/null 2>&1 && bat --color=always -p -l diff || cat)
+                else
+                    echo -e "${YELLOW}Git repository not found.${RESET}"
+                fi
+                echo ""
+                echo -ne "${BOLD}Press Enter to return...${RESET}"
+                read -r
+                continue
+                ;;
+            ctrl-f)
+                open_in_fm "$target_payload"
+                continue
+                ;;
+            ctrl-t)
+                local p="$target_payload"
+                [ -f "$target_payload" ] && p="$(dirname "$target_payload")"
+                if command -v thunar >/dev/null 2>&1; then
+                    thunar "$p" >/dev/null 2>&1 &
+                else
+                    xdg-open "$p" >/dev/null 2>&1 &
+                fi
+                continue
+                ;;
+            ctrl-o)
+                show_action_menu "$target_payload" "$(basename "$target_payload")"
+                continue
+                ;;
+        esac
+
+        # Default Enter: Open in $EDITOR
+        if [ -e "$target_payload" ]; then
+            open_in_editor "$target_payload"
+        fi
+    done
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}conf${RESET} - Terminal Dotfiles & Config Picker with Syntax Preview (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    conf                            Launch interactive fzf picker with live preview
+    conf list [scope]               List registered configuration targets (all|nixos|desktop|shell|custom)
+    conf edit <query>               Quick open matching config directly in \$EDITOR
+    conf diff [target]              Show git diff for dotfiles or specific config
+    conf status                     Show git status summary of dotfiles repository
+    conf ide [target]               Open target or dotfiles repository in graphical IDE
+    conf fm [target]                Open target or parent folder in terminal file manager (yazi)
+    conf preview <target>           Internal preview generator for fzf
+    conf help                       Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}       Open target in terminal editor (\$EDITOR / Neovim)
+    ${CYAN}Ctrl-E${RESET}      Open target in graphical IDE (Antigravity IDE / Codex)
+    ${CYAN}Ctrl-D${RESET}      View git diff for target
+    ${CYAN}Ctrl-F${RESET}      Browse folder in terminal file manager (Yazi)
+    ${CYAN}Ctrl-T${RESET}      Browse folder in desktop file manager (Thunar)
+    ${CYAN}Ctrl-O${RESET}      Open contextual actions menu (Options / Clipboard)
+    ${CYAN}Ctrl-G${RESET}      Show repository git status
+    ${CYAN}Ctrl-R${RESET}      Refresh list and git modified status
+    ${CYAN}Tab${RESET}         Cycle scope filter (all -> modified -> nixos -> desktop -> shell -> custom)
+    ${CYAN}Esc / Ctrl-C${RESET} Exit picker
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    list|ls) cmd_list "${2:-all}" ;;
+    edit) cmd_edit "$2" ;;
+    diff) cmd_diff "$2" ;;
+    status) cmd_status ;;
+    ide) open_in_ide "${2:-$DOTFILES_DIR}" ;;
+    fm) open_in_fm "${2:-$DOTFILES_DIR}" ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            cmd_list "all"
+        fi
+        ;;
+esac
