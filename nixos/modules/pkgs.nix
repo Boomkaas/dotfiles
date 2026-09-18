@@ -79,6 +79,12 @@ let
   project = pkgs.writeShellScriptBin "project" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/tm "$@"
   '';
+  service-cmd = pkgs.writeShellScriptBin "service" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/service "$@"
+  '';
+  services-cmd = pkgs.writeShellScriptBin "services" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/service "$@"
+  '';
   nixtest = pkgs.writeShellScriptBin "nixtest" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
   '';
@@ -466,6 +472,8 @@ in
     gens
     tm
     project
+    service-cmd
+    services-cmd
     nixtest
 
     # Archive

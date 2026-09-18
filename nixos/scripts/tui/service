@@ -1,0 +1,603 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# service - Terminal Systemd Service & Daemon Manager (CLI & fzf TUI)
+# Inspect, monitor, restart, and manage user & system systemd services with live logs.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-system-software-update}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Helpers & Parsers
+# ------------------------------------------------------------------------------
+
+# Returns lines: UNIT<TAB>LOAD<TAB>ACTIVE<TAB>SUB<TAB>DESC
+parse_units() {
+    local scope="${1:-user}"
+    local cmd=(systemctl list-units --type=service --all --no-legend)
+    [ "$scope" = "user" ] && cmd=(systemctl --user list-units --type=service --all --no-legend)
+
+    "${cmd[@]}" 2>/dev/null | while read -r bullet unit load active sub desc; do
+        if [ "$bullet" != "●" ]; then
+            desc="$sub $desc"
+            sub="$active"
+            active="$load"
+            load="$unit"
+            unit="$bullet"
+        fi
+        [ "$load" = "not-found" ] && continue
+        [ -z "$unit" ] && continue
+        echo -e "${unit}\t${load}\t${active}\t${sub}\t${desc}"
+    done
+}
+
+get_failed_count() {
+    local scope="${1:-user}"
+    local cmd=(systemctl --failed --no-legend)
+    [ "$scope" = "user" ] && cmd=(systemctl --user --failed --no-legend)
+    "${cmd[@]}" 2>/dev/null | grep -c '\.service' || echo "0"
+}
+
+unit_to_icon() {
+    local active="$1"
+    local sub="$2"
+    if [ "$active" = "failed" ] || [ "$sub" = "failed" ]; then
+        echo "🔴"
+    elif [ "$active" = "active" ] && [ "$sub" = "running" ]; then
+        echo "🟢"
+    elif [ "$active" = "active" ] && [ "$sub" = "exited" ]; then
+        echo "🔵"
+    elif [ "$active" = "inactive" ]; then
+        echo "⚪"
+    else
+        echo "🟡"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Headless CLI Commands
+# ------------------------------------------------------------------------------
+
+cmd_list() {
+    local scope="${1:-user}"
+    echo -e "${BOLD}${CYAN}=== Systemd Services ($scope scope) ===${RESET}\n"
+
+    printf " %-3s %-32s %-16s %s\n" " " "SERVICE UNIT" "STATE" "DESCRIPTION"
+    echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────${RESET}"
+
+    while IFS=$'\t' read -r unit load active sub desc; do
+        [ -z "$unit" ] && continue
+        local icon
+        icon=$(unit_to_icon "$active" "$sub")
+        local color="$RESET"
+        if [ "$active" = "failed" ]; then color="${RED}${BOLD}"
+        elif [ "$sub" = "running" ]; then color="${GREEN}"
+        elif [ "$sub" = "exited" ]; then color="${CYAN}"
+        elif [ "$active" = "inactive" ]; then color="${DIM}"
+        fi
+
+        printf " %-2s ${color}%-32s${RESET} %-16s ${DIM}%s${RESET}\n" "$icon" "$unit" "[$active:$sub]" "$desc"
+    done < <(parse_units "$scope")
+    echo ""
+}
+
+cmd_status() {
+    local unit="$1"
+    local scope="${2:-user}"
+    if [ -z "$unit" ]; then
+        echo -e "${RED}Usage: service status <unit> [--user|--system]${RESET}" >&2
+        return 1
+    fi
+    [[ "$unit" != *.service ]] && unit="${unit}.service"
+
+    local cmd=(systemctl status "$unit" --no-pager)
+    [ "$scope" = "user" ] && cmd=(systemctl --user status "$unit" --no-pager)
+    "${cmd[@]}"
+}
+
+cmd_restart() {
+    local unit="$1"
+    local scope="${2:-user}"
+    if [ -z "$unit" ]; then
+        echo -e "${RED}Usage: service restart <unit> [--user|--system]${RESET}" >&2
+        return 1
+    fi
+    [[ "$unit" != *.service ]] && unit="${unit}.service"
+
+    echo -e "${YELLOW}Restarting $unit ($scope)...${RESET}"
+    if [ "$scope" = "user" ]; then
+        if systemctl --user restart "$unit"; then
+            notify normal "system-software-update" "Service Restarted" "User service $unit restarted"
+            echo -e "${GREEN}Service $unit restarted successfully.${RESET}"
+        else
+            echo -e "${RED}Failed to restart user service $unit.${RESET}" >&2
+            return 1
+        fi
+    else
+        if sudo systemctl restart "$unit"; then
+            notify normal "system-software-update" "Service Restarted" "System service $unit restarted"
+            echo -e "${GREEN}System service $unit restarted successfully.${RESET}"
+        else
+            echo -e "${RED}Failed to restart system service $unit.${RESET}" >&2
+            return 1
+        fi
+    fi
+}
+
+cmd_start() {
+    local unit="$1"
+    local scope="${2:-user}"
+    [[ "$unit" != *.service ]] && unit="${unit}.service"
+
+    echo -e "${YELLOW}Starting $unit ($scope)...${RESET}"
+    if [ "$scope" = "user" ]; then
+        systemctl --user start "$unit" && echo -e "${GREEN}Started $unit.${RESET}"
+    else
+        sudo systemctl start "$unit" && echo -e "${GREEN}Started $unit.${RESET}"
+    fi
+}
+
+cmd_stop() {
+    local unit="$1"
+    local scope="${2:-user}"
+    [[ "$unit" != *.service ]] && unit="${unit}.service"
+
+    echo -e "${YELLOW}Stopping $unit ($scope)...${RESET}"
+    if [ "$scope" = "user" ]; then
+        systemctl --user stop "$unit" && echo -e "${GREEN}Stopped $unit.${RESET}"
+    else
+        sudo systemctl stop "$unit" && echo -e "${GREEN}Stopped $unit.${RESET}"
+    fi
+}
+
+cmd_toggle() {
+    local unit="$1"
+    local scope="${2:-user}"
+    [[ "$unit" != *.service ]] && unit="${unit}.service"
+
+    local is_act=0
+    if [ "$scope" = "user" ]; then
+        systemctl --user is-active --quiet "$unit" 2>/dev/null && is_act=1
+    else
+        systemctl is-active --quiet "$unit" 2>/dev/null && is_act=1
+    fi
+
+    if [ "$is_act" -eq 1 ]; then
+        cmd_stop "$unit" "$scope"
+    else
+        cmd_start "$unit" "$scope"
+    fi
+}
+
+cmd_enable() {
+    local unit="$1"
+    local scope="${2:-user}"
+    [[ "$unit" != *.service ]] && unit="${unit}.service"
+
+    if [ "$scope" = "user" ]; then
+        systemctl --user enable "$unit" && echo -e "${GREEN}Enabled $unit at user boot.${RESET}"
+    else
+        sudo systemctl enable "$unit" && echo -e "${GREEN}Enabled $unit at system boot.${RESET}"
+    fi
+}
+
+cmd_disable() {
+    local unit="$1"
+    local scope="${2:-user}"
+    [[ "$unit" != *.service ]] && unit="${unit}.service"
+
+    if [ "$scope" = "user" ]; then
+        systemctl --user disable "$unit" && echo -e "${GREEN}Disabled $unit.${RESET}"
+    else
+        sudo systemctl disable "$unit" && echo -e "${GREEN}Disabled $unit.${RESET}"
+    fi
+}
+
+cmd_logs() {
+    local unit="$1"
+    local scope="${2:-user}"
+    local follow="${3:-0}"
+    [[ "$unit" != *.service ]] && unit="${unit}.service"
+
+    local f_arg=""
+    [ "$follow" -eq 1 ] && f_arg="-f"
+
+    if [ "$scope" = "user" ]; then
+        journalctl --user -u "$unit" -n 50 $f_arg
+    else
+        journalctl -u "$unit" -n 50 $f_arg
+    fi
+}
+
+cmd_failed() {
+    echo -e "${BOLD}${RED}=== Failed Services ===${RESET}\n"
+    echo -e "${BOLD}User Scope:${RESET}"
+    systemctl --user --failed --no-legend || echo -e "  ${GREEN}No failed user services.${RESET}"
+    echo ""
+    echo -e "${BOLD}System Scope:${RESET}"
+    systemctl --failed --no-legend || echo -e "  ${GREEN}No failed system services.${RESET}"
+}
+
+# ------------------------------------------------------------------------------
+# Preview Function (for fzf side panel)
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="$1"
+    [ -z "$target" ] && return 0
+
+    local scope unit
+    scope="${target%%:*}"
+    unit="${target#*:}"
+
+    case "$scope" in
+        user|system)
+            echo -e "${BOLD}${CYAN}=== Systemd Service: $unit ($scope) ===${RESET}"
+
+            local stat_cmd=(systemctl status "$unit" --no-pager)
+            local log_cmd=(journalctl -u "$unit" -n 14 --no-pager)
+            if [ "$scope" = "user" ]; then
+                stat_cmd=(systemctl --user status "$unit" --no-pager)
+                log_cmd=(journalctl --user -u "$unit" -n 14 --no-pager)
+            fi
+
+            local raw_status
+            raw_status=$("${stat_cmd[@]}" 2>/dev/null)
+
+            local is_active pid uptime memory cpu
+            is_active=$(echo "$raw_status" | grep -oP 'Active:\s*\K[^\n]+' | head -n1)
+            pid=$(echo "$raw_status" | grep -oP 'Main PID:\s*\K[^\n]+' | head -n1)
+            memory=$(echo "$raw_status" | grep -oP 'Memory:\s*\K[^\n]+' | head -n1)
+            cpu=$(echo "$raw_status" | grep -oP 'CPU:\s*\K[^\n]+' | head -n1)
+            uptime=$(echo "$raw_status" | grep -oP 'since\s*\K[^\n]+' | head -n1)
+
+            local badge="${DIM}Inactive${RESET}"
+            if [[ "$is_active" =~ ^active\ \(running ]]; then
+                badge="${GREEN}${BOLD}ACTIVE (Running)${RESET}"
+            elif [[ "$is_active" =~ ^active\ \(exited ]]; then
+                badge="${CYAN}${BOLD}ACTIVE (Exited / Oneshot)${RESET}"
+            elif [[ "$is_active" =~ ^failed ]]; then
+                badge="${RED}${BOLD}FAILED${RESET}"
+            fi
+
+            echo -e "  ${BOLD}State:${RESET}        $badge"
+            [ -n "$pid" ]     && echo -e "  ${BOLD}Main PID:${RESET}     $pid"
+            [ -n "$uptime" ]  && echo -e "  ${BOLD}Uptime:${RESET}       $uptime"
+            [ -n "$memory" ]  && echo -e "  ${BOLD}Memory:${RESET}       $memory"
+            [ -n "$cpu" ]     && echo -e "  ${BOLD}CPU Time:${RESET}     $cpu"
+            echo ""
+
+            echo -e "${BOLD}${CYAN}Recent Journal Logs (last 14 lines):${RESET}"
+            echo -e "${DIM}───────────────────────────────────────────${RESET}"
+            local logs
+            logs=$("${log_cmd[@]}" 2>/dev/null)
+            if [ -n "$logs" ]; then
+                echo -e "${DIM}$logs${RESET}"
+            else
+                echo -e "${DIM}(No log entries found for this unit)${RESET}"
+            fi
+            echo -e "${DIM}───────────────────────────────────────────${RESET}"
+            echo ""
+            echo -e "${BOLD}${WHITE}Actions & Hotkeys:${RESET}"
+            echo -e "  ${CYAN}Enter${RESET}   Open actions submenu (Restart, Stop, Logs, Enable)"
+            echo -e "  ${CYAN}Ctrl-R${RESET}  Instant restart this service"
+            echo -e "  ${CYAN}Ctrl-S${RESET}  Toggle Start / Stop"
+            echo -e "  ${CYAN}Ctrl-L${RESET}  Follow live logs in fullscreen (journalctl -f)"
+            echo -e "  ${CYAN}Tab${RESET}     Switch between User & System services"
+            ;;
+
+        action)
+            case "$unit" in
+                toggle_mode)
+                    echo -e "${BOLD}${CYAN}=== Switch Service Scope ===${RESET}"
+                    echo -e "Toggles view between:"
+                    echo -e "  • ${BOLD}User Services${RESET}   (managed by current user without sudo)"
+                    echo -e "  • ${BOLD}System Services${RESET} (system-level daemons, root privileges)"
+                    echo ""
+                    echo -e "  ${BOLD}Hotkey:${RESET} ${CYAN}Tab${RESET}"
+                    ;;
+                failed)
+                    echo -e "${BOLD}${CYAN}=== Show Failed Services ===${RESET}"
+                    echo -e "Lists all units that have crashed, exited with an error,"
+                    echo -e "or failed health checks across user and system scopes."
+                    echo ""
+                    echo -e "  ${BOLD}Hotkey:${RESET} ${CYAN}Ctrl-F${RESET}"
+                    ;;
+                daemon_reload)
+                    echo -e "${BOLD}${CYAN}=== Daemon Reload ===${RESET}"
+                    echo -e "Reloads systemd manager configuration to scan for new"
+                    echo -e "or modified service unit files."
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive TUI Menu (fzf)
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    if ! command -v fzf >/dev/null 2>&1; then
+        cmd_list "user"
+        return 0
+    fi
+
+    local self_bin="${BASH_SOURCE[0]}"
+    local current_scope="${1:-user}"
+
+    while true; do
+        clear
+        local active_count=0 failed_count=0
+        failed_count=$(get_failed_count "$current_scope")
+
+        local raw_units
+        raw_units=$(parse_units "$current_scope")
+        [ -n "$raw_units" ] && active_count=$(echo "$raw_units" | grep -c $'\tactive\t' || echo "0")
+
+        local scope_label="${CYAN}User Services${RESET}"
+        [ "$current_scope" = "system" ] && scope_label="${MAGENTA}System Services${RESET}"
+
+        local fail_badge="${GREEN}0 failed${RESET}"
+        [ "$failed_count" -gt 0 ] && fail_badge="${RED}${BOLD}${failed_count} FAILED${RESET}"
+
+        local header_info="Scope: $scope_label | Active: $active_count | Failed: $fail_badge"
+
+        local menu=()
+
+        # Navigation Switchers
+        local other_scope="system"
+        local other_label="Switch to System Services"
+        if [ "$current_scope" = "system" ]; then
+            other_scope="user"
+            other_label="Switch to User Services"
+        fi
+        menu+=("󰌢  [TAB] ${other_label}"$'\t'"action:toggle_mode")
+
+        if [ "$failed_count" -gt 0 ]; then
+            menu+=("🔴  [Ctrl-F] Show Failed Services (${failed_count})"$'\t'"action:failed")
+        fi
+
+        # Services
+        while IFS=$'\t' read -r unit load active sub desc; do
+            [ -z "$unit" ] && continue
+            local icon
+            icon=$(unit_to_icon "$active" "$sub")
+            menu+=("${icon}  ${unit} [${active}:${sub}]"$'\t'"${current_scope}:${unit}")
+        done <<< "$raw_units"
+
+        menu+=("󰑓  Reload Systemd Daemon (daemon-reload)"$'\t'"action:daemon_reload")
+
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-r,ctrl-s,ctrl-l,ctrl-f,tab \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Service ($current_scope) > " \
+            --header="[$header_info] (Enter: Select | Ctrl-R: Restart | Ctrl-S: Start/Stop | Ctrl-L: Logs | Tab: Switch Scope | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local sel_arg
+        sel_arg=$(echo "$choice" | cut -f2)
+        local item_type="${sel_arg%%:*}"
+        local item_unit="${sel_arg#*:}"
+
+        # Global Hotkey Handlers
+        case "$key" in
+            tab)
+                [ "$current_scope" = "user" ] && current_scope="system" || current_scope="user"
+                continue
+                ;;
+            ctrl-f)
+                clear
+                cmd_failed
+                echo ""
+                echo -ne "${BOLD}Press Enter to return...${RESET}"
+                read -r
+                continue
+                ;;
+            ctrl-r)
+                if [ "$item_type" = "user" ] || [ "$item_type" = "system" ]; then
+                    clear
+                    cmd_restart "$item_unit" "$item_type"
+                    sleep 1
+                fi
+                continue
+                ;;
+            ctrl-s)
+                if [ "$item_type" = "user" ] || [ "$item_type" = "system" ]; then
+                    cmd_toggle "$item_unit" "$item_type"
+                    sleep 0.8
+                fi
+                continue
+                ;;
+            ctrl-l)
+                if [ "$item_type" = "user" ] || [ "$item_type" = "system" ]; then
+                    clear
+                    echo -e "${BOLD}${CYAN}Streaming live logs for $item_unit (Ctrl-C to stop)...${RESET}\n"
+                    cmd_logs "$item_unit" "$item_type" 1
+                fi
+                continue
+                ;;
+        esac
+
+        # Enter pressed
+        case "$item_type" in
+            user|system)
+                local act
+                act=$(printf "1. Restart Service\n2. Toggle Start / Stop\n3. Follow Live Logs (journalctl -f)\n4. View Full Status Details\n5. Toggle Enable / Disable at Boot\n6. Reload Daemon (daemon-reload)\n7. Cancel" | fzf \
+                    --prompt="Service [$item_unit] > " \
+                    --height=35% \
+                    --reverse \
+                    --border=rounded) || continue
+                case "$act" in
+                    1*)
+                        clear
+                        cmd_restart "$item_unit" "$item_type"
+                        sleep 1
+                        ;;
+                    2*)
+                        cmd_toggle "$item_unit" "$item_type"
+                        sleep 0.8
+                        ;;
+                    3*)
+                        clear
+                        echo -e "${BOLD}${CYAN}Streaming live logs for $item_unit (Ctrl-C to stop)...${RESET}\n"
+                        cmd_logs "$item_unit" "$item_type" 1
+                        ;;
+                    4*)
+                        clear
+                        cmd_status "$item_unit" "$item_type" | ${PAGER:-less}
+                        ;;
+                    5*)
+                        clear
+                        local is_en=0
+                        if [ "$item_type" = "user" ]; then
+                            systemctl --user is-enabled --quiet "$item_unit" 2>/dev/null && is_en=1
+                        else
+                            systemctl is-enabled --quiet "$item_unit" 2>/dev/null && is_en=1
+                        fi
+                        if [ "$is_en" -eq 1 ]; then
+                            cmd_disable "$item_unit" "$item_type"
+                        else
+                            cmd_enable "$item_unit" "$item_type"
+                        fi
+                        echo ""
+                        echo -ne "${BOLD}Press Enter to return...${RESET}"
+                        read -r
+                        ;;
+                    6*)
+                        if [ "$item_type" = "user" ]; then
+                            systemctl --user daemon-reload && echo -e "${GREEN}User daemon reloaded.${RESET}"
+                        else
+                            sudo systemctl daemon-reload && echo -e "${GREEN}System daemon reloaded.${RESET}"
+                        fi
+                        sleep 0.5
+                        ;;
+                esac
+                ;;
+
+            action)
+                case "$item_unit" in
+                    toggle_mode)
+                        [ "$current_scope" = "user" ] && current_scope="system" || current_scope="user"
+                        ;;
+                    failed)
+                        clear
+                        cmd_failed
+                        echo ""
+                        echo -ne "${BOLD}Press Enter to return...${RESET}"
+                        read -r
+                        ;;
+                    daemon_reload)
+                        if [ "$current_scope" = "user" ]; then
+                            systemctl --user daemon-reload && echo -e "${GREEN}User daemon reloaded.${RESET}"
+                        else
+                            sudo systemctl daemon-reload && echo -e "${GREEN}System daemon reloaded.${RESET}"
+                        fi
+                        sleep 0.8
+                        ;;
+                esac
+                ;;
+        esac
+    done
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}service${RESET} - Terminal Systemd Service & Daemon Manager (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    service                         Launch interactive fzf menu with live preview
+    service list [--user|--system]  List active services (default: user)
+    service status <unit>           Show detailed status of service
+    service restart <unit>          Restart service (auto-detects sudo for system)
+    service start <unit>            Start service
+    service stop <unit>             Stop service
+    service toggle <unit>           Toggle start/stop for service
+    service enable <unit>           Enable service at boot
+    service disable <unit>          Disable service from boot
+    service logs <unit> [-f]        View service logs (optional follow mode)
+    service failed                  List failed services across user and system
+    service preview <target>        Internal preview generator for fzf
+    service help                    Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}       Select service / open contextual actions submenu
+    ${CYAN}Ctrl-R${RESET}      Restart selected service immediately
+    ${CYAN}Ctrl-S${RESET}      Toggle Start / Stop on selected service
+    ${CYAN}Ctrl-L${RESET}      Follow live journal logs in fullscreen
+    ${CYAN}Ctrl-F${RESET}      Show all failed services
+    ${CYAN}Tab${RESET}         Switch between User and System services
+    ${CYAN}Esc / Ctrl-C${RESET} Exit menu
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    list|ls) cmd_list "${2:-user}" ;;
+    status) shift; cmd_status "$@" ;;
+    restart) shift; cmd_restart "$@" ;;
+    start) shift; cmd_start "$@" ;;
+    stop) shift; cmd_stop "$@" ;;
+    toggle) shift; cmd_toggle "$@" ;;
+    enable) shift; cmd_enable "$@" ;;
+    disable) shift; cmd_disable "$@" ;;
+    logs|log) shift; cmd_logs "$@" ;;
+    failed) cmd_failed ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive "${1:-user}"
+        else
+            cmd_list "user"
+        fi
+        ;;
+esac
