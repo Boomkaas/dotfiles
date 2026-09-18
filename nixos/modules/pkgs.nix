@@ -67,6 +67,12 @@ let
   audio = pkgs.writeShellScriptBin "audio" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/audio "$@"
   '';
+  nixos-cmd = pkgs.writeShellScriptBin "nixos" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/nixos "$@"
+  '';
+  gens = pkgs.writeShellScriptBin "gens" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/nixos "$@"
+  '';
   nixtest = pkgs.writeShellScriptBin "nixtest" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
   '';
@@ -450,6 +456,8 @@ in
     setting
     settings
     theme
+    nixos-cmd
+    gens
     nixtest
 
     # Archive
