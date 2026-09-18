@@ -1,0 +1,623 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# tm - Terminal Tmux Session & Project Dashboard (CLI & fzf TUI)
+# Manage tmux sessions, jump to code projects, preview live panes & git status.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+CODE_DIRS=(
+    "$HOME/Code"
+    "$HOME/Code/Vault"
+)
+
+CONFIG_DIRS=(
+    "$HOME/.config/hypr"
+    "$HOME/.config/mango"
+    "$HOME/.config/waybar"
+    "$HOME/.config/kitty"
+    "$HOME/.config/fish"
+    "$HOME/.config/rofi"
+    "$HOME/.config/swaync"
+    "$HOME/Code/Dotfiles/nixos"
+)
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-terminal}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Helpers & Discovery
+# ------------------------------------------------------------------------------
+
+detect_project_type() {
+    local d="$1"
+    local tags=()
+    [ -f "$d/flake.nix" ] || [ -f "$d/nixos/flake.nix" ] && tags+=("Nix Flake")
+    [ -f "$d/default.nix" ] && [ ! -f "$d/flake.nix" ] && tags+=("Nix")
+    [ -f "$d/pyproject.toml" ] || [ -f "$d/requirements.txt" ] || [ -d "$d/.venv" ] && tags+=("Python")
+    [ -f "$d/package.json" ] && tags+=("Node/JS")
+    [ -f "$d/Cargo.toml" ] && tags+=("Rust")
+    [ -f "$d/go.mod" ] && tags+=("Go")
+    compgen -G "$d/*.sln" >/dev/null && tags+=(".NET")
+    compgen -G "$d/*.csproj" >/dev/null && tags+=("C#")
+    [ -d "$d/.git" ] && tags+=("Git")
+
+    if [ ${#tags[@]} -gt 0 ]; then
+        local IFS=", "
+        echo "${tags[*]}"
+    else
+        echo "Project"
+    fi
+}
+
+proj_to_icon() {
+    local type="${1,,}"
+    if [[ "$type" =~ (python) ]]; then echo ""
+    elif [[ "$type" =~ (go) ]]; then echo "󰟓"
+    elif [[ "$type" =~ (rust) ]]; then echo ""
+    elif [[ "$type" =~ (node|js) ]]; then echo ""
+    elif [[ "$type" =~ (nix) ]]; then echo ""
+    elif [[ "$type" =~ (\.net|c#) ]]; then echo "󰌛"
+    elif [[ "$type" =~ (git) ]]; then echo ""
+    else echo ""
+    fi
+}
+
+# Returns: NAME<TAB>WINDOWS<TAB>CREATED<TAB>ATTACHED(1/0)
+parse_sessions() {
+    if ! tmux list-sessions >/dev/null 2>&1; then
+        return 0
+    fi
+    tmux list-sessions -F "#{session_name}"$'\t'"#{session_windows}"$'\t'"#{session_created_string}"$'\t'"#{?session_attached,1,0}" 2>/dev/null
+}
+
+# Returns: NAME<TAB>PATH<TAB>HAS_SESSION(1/0)<TAB>TYPE
+discover_projects() {
+    declare -A SEEN_PATHS
+
+    # 1. Active Tmux Session directories
+    if tmux list-sessions >/dev/null 2>&1; then
+        while IFS=$'\t' read -r s_name s_path; do
+            [ -z "$s_path" ] || [ ! -d "$s_path" ] && continue
+            if [ -z "${SEEN_PATHS["$s_path"]+x}" ]; then
+                SEEN_PATHS["$s_path"]=1
+                local p_type
+                p_type=$(detect_project_type "$s_path")
+                echo -e "${s_name}\t${s_path}\t1\t${p_type}"
+            fi
+        done < <(tmux list-sessions -F "#{session_name}"$'\t'"#{session_path}" 2>/dev/null)
+    fi
+
+    # 2. Code Directories
+    for parent in "${CODE_DIRS[@]}"; do
+        [ -d "$parent" ] || continue
+        for d in "$parent"/*; do
+            [ -d "$d" ] || continue
+            [ -L "$d" ] && continue
+            local base
+            base=$(basename "$d")
+            [[ "$base" == .* ]] && continue
+            if [ -z "${SEEN_PATHS["$d"]+x}" ]; then
+                SEEN_PATHS["$d"]=1
+                local s_clean="${base//./_}"
+                s_clean="${s_clean//:/_}"
+                local has_sess=0
+                tmux has-session -t "$s_clean" >/dev/null 2>&1 && has_sess=1
+                local p_type
+                p_type=$(detect_project_type "$d")
+                echo -e "${base}\t${d}\t${has_sess}\t${p_type}"
+            fi
+        done
+    done
+
+    # 3. Key Config Directories
+    for cfg in "${CONFIG_DIRS[@]}"; do
+        [ -d "$cfg" ] || continue
+        if [ -z "${SEEN_PATHS["$cfg"]+x}" ]; then
+            SEEN_PATHS["$cfg"]=1
+            local base
+            base=$(basename "$cfg")
+            local s_clean="cfg_${base}"
+            local has_sess=0
+            tmux has-session -t "$s_clean" >/dev/null 2>&1 && has_sess=1
+            echo -e "config/${base}\t${cfg}\t${has_sess}\tConfig"
+        fi
+    done
+}
+
+attach_or_create() {
+    local target_name="$1"
+    local target_dir="$2"
+
+    [ -z "$target_name" ] && return 1
+
+    # Sanitize session name for tmux
+    local s_clean="${target_name//./_}"
+    s_clean="${s_clean//:/_}"
+    s_clean="${s_clean// /_}"
+
+    if ! tmux has-session -t "$s_clean" 2>/dev/null; then
+        local start_dir="${target_dir:-$HOME}"
+        [ ! -d "$start_dir" ] && start_dir="$HOME"
+        tmux new-session -d -s "$s_clean" -c "$start_dir"
+    fi
+
+    if [ -n "${TMUX:-}" ]; then
+        tmux switch-client -t "$s_clean"
+    else
+        tmux attach-session -t "$s_clean"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Headless CLI Commands
+# ------------------------------------------------------------------------------
+
+cmd_list() {
+    echo -e "${BOLD}${CYAN}=== Active Tmux Sessions ===${RESET}"
+    if ! tmux list-sessions >/dev/null 2>&1; then
+        echo -e "${DIM}No active tmux sessions running.${RESET}\n"
+        return 0
+    fi
+
+    printf " %-18s %-12s %-24s %s\n" "SESSION NAME" "WINDOWS" "CREATED" "STATUS"
+    echo -e "${DIM}─────────────────────────────────────────────────────────────────${RESET}"
+
+    while IFS=$'\t' read -r name windows created attached; do
+        [ -z "$name" ] && continue
+        local status="${DIM}Detached${RESET}"
+        local color="$RESET"
+        if [ "$attached" -eq 1 ]; then
+            status="${GREEN}${BOLD}Attached${RESET}"
+            color="${GREEN}${BOLD}"
+        fi
+        printf " ${color}%-18s${RESET} %-12s %-24s %s\n" "$name" "$windows windows" "$created" "$status"
+    done < <(parse_sessions)
+    echo ""
+}
+
+cmd_projects() {
+    echo -e "${BOLD}${CYAN}=== Discovered Code & Config Projects ===${RESET}"
+    printf " %-20s %-14s %-12s %s\n" "PROJECT" "STACK" "TMUX" "PATH"
+    echo -e "${DIM}──────────────────────────────────────────────────────────────────────────${RESET}"
+
+    while IFS=$'\t' read -r name path has_sess type; do
+        [ -z "$name" ] && continue
+        local sess_mark="${DIM}None${RESET}"
+        [ "$has_sess" -eq 1 ] && sess_mark="${GREEN}${BOLD}Active${RESET}"
+        local icon
+        icon=$(proj_to_icon "$type")
+        printf " ${icon} %-18s %-14s %-12s ${DIM}%s${RESET}\n" "$name" "$type" "$sess_mark" "$path"
+    done < <(discover_projects)
+}
+
+cmd_new() {
+    local name="$1"
+    local dir="${2:-$PWD}"
+    if [ -z "$name" ]; then
+        echo -ne "${BOLD}Enter session name: ${RESET}"
+        read -r name
+    fi
+    [ -z "$name" ] && return 1
+    attach_or_create "$name" "$dir"
+}
+
+cmd_kill() {
+    local name="$1"
+    if [ -z "$name" ]; then
+        echo -e "${RED}Usage: tm kill <session_name>${RESET}" >&2
+        return 1
+    fi
+    if tmux kill-session -t "$name" 2>/dev/null; then
+        notify normal "terminal" "Tmux Session Killed" "Session '$name' closed"
+        echo -e "${GREEN}Session '$name' killed.${RESET}"
+    else
+        echo -e "${RED}Session '$name' not found.${RESET}" >&2
+        return 1
+    fi
+}
+
+cmd_kill_all() {
+    echo -e "${YELLOW}Killing all detached tmux sessions...${RESET}"
+    local killed=0
+    while IFS=$'\t' read -r name _ _ attached; do
+        [ -z "$name" ] && continue
+        if [ "$attached" -eq 0 ]; then
+            tmux kill-session -t "$name" 2>/dev/null && ((killed++))
+        fi
+    done < <(parse_sessions)
+    notify normal "terminal" "Tmux Cleaned" "Killed $killed detached sessions"
+    echo -e "${GREEN}Killed $killed detached sessions.${RESET}"
+}
+
+# ------------------------------------------------------------------------------
+# Preview Function (for fzf side panel)
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="$1"
+    [ -z "$target" ] && return 0
+
+    local type payload
+    type="${target%%:*}"
+    payload="${target#*:}"
+
+    case "$type" in
+        session)
+            local s_name="$payload"
+            echo -e "${BOLD}${CYAN}=== Tmux Session: $s_name ===${RESET}"
+
+            if ! tmux has-session -t "$s_name" 2>/dev/null; then
+                echo -e "${RED}Session '$s_name' is no longer active.${RESET}"
+                return 0
+            fi
+
+            local s_info
+            s_info=$(tmux list-sessions -F "#{session_windows}"$'\t'"#{session_created_string}"$'\t'"#{?session_attached,Attached,Detached}"$'\t'"#{session_path}" -f "#{==:#{session_name},$s_name}" 2>/dev/null)
+            local windows created attached path
+            IFS=$'\t' read -r windows created attached path <<< "$s_info"
+
+            local att_color="${DIM}"
+            [ "$attached" = "Attached" ] && att_color="${GREEN}${BOLD}"
+
+            echo -e "  ${BOLD}Status:${RESET}        ${att_color}${attached}${RESET}"
+            echo -e "  ${BOLD}Windows:${RESET}       ${windows:-1} window(s)"
+            echo -e "  ${BOLD}Created:${RESET}       ${created:-Unknown}"
+            echo -e "  ${BOLD}Working Dir:${RESET}   ${DIM}${path:-$HOME}${RESET}"
+            echo ""
+
+            echo -e "${BOLD}${CYAN}Windows in Session:${RESET}"
+            tmux list-windows -t "$s_name" -F "  #{?window_active,${GREEN}*${RESET}, } [#{window_index}] #{window_name} (#{window_panes} pane(s))" 2>/dev/null
+            echo ""
+
+            echo -e "${BOLD}${CYAN}Live Terminal Screen Preview:${RESET}"
+            echo -e "${DIM}───────────────────────────────────────────${RESET}"
+            local screen_cap
+            screen_cap=$(tmux capture-pane -pt "${s_name}:" -e 2>/dev/null | tail -n 20)
+            if [ -n "$screen_cap" ] && [[ "$screen_cap" =~ [^[:space:]] ]]; then
+                echo "$screen_cap"
+            else
+                echo -e "${DIM}(Terminal pane is currently idle or empty)${RESET}"
+            fi
+            echo -e "${DIM}───────────────────────────────────────────${RESET}"
+            echo ""
+            echo -e "${BOLD}${WHITE}Actions:${RESET}"
+            echo -e "  ${CYAN}Enter${RESET}   Attach / jump to this session"
+            echo -e "  ${CYAN}Ctrl-K${RESET}  Kill this tmux session"
+            echo -e "  ${CYAN}Ctrl-R${RESET}  Rename this session"
+            ;;
+
+        project)
+            local p_path="$payload"
+            local p_name
+            p_name=$(basename "$p_path")
+
+            echo -e "${BOLD}${CYAN}=== Project: $p_name ===${RESET}"
+            echo -e "  ${BOLD}Path:${RESET}          ${DIM}$p_path${RESET}"
+
+            local p_type
+            p_type=$(detect_project_type "$p_path")
+            echo -e "  ${BOLD}Tech Stack:${RESET}    $(proj_to_icon "$p_type") $p_type"
+
+            local s_clean="${p_name//./_}"
+            s_clean="${s_clean//:/_}"
+            if tmux has-session -t "$s_clean" 2>/dev/null; then
+                echo -e "  ${BOLD}Tmux Session:${RESET}  ${GREEN}${BOLD}Active (Session: $s_clean)${RESET}"
+            else
+                echo -e "  ${BOLD}Tmux Session:${RESET}  ${DIM}None (Press Enter to start)${RESET}"
+            fi
+            echo ""
+
+            if [ -d "$p_path/.git" ]; then
+                echo -e "${BOLD}${CYAN}Git Repository Status:${RESET}"
+                local branch
+                branch=$(git -C "$p_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "detached")
+                local tracking
+                tracking=$(git -C "$p_path" status -sb 2>/dev/null | head -n 1 | sed 's/^## //')
+                echo -e "  ${BOLD}Branch:${RESET}         ${GREEN}${branch}${RESET} ${DIM}(${tracking})${RESET}"
+
+                local git_stat
+                git_stat=$(git -C "$p_path" status -s 2>/dev/null | head -n 8)
+                if [ -n "$git_stat" ]; then
+                    echo -e "  ${BOLD}Changed Files:${RESET}"
+                    while IFS= read -r f_line; do
+                        echo -e "    ${YELLOW}${f_line}${RESET}"
+                    done <<< "$git_stat"
+                else
+                    echo -e "  ${BOLD}Tree State:${RESET}    ${GREEN}Clean working tree${RESET}"
+                fi
+                echo ""
+
+                echo -e "${BOLD}${CYAN}Recent Commits:${RESET}"
+                git -C "$p_path" log --oneline --color=always -n 5 2>/dev/null || echo -e "  ${DIM}No commits yet${RESET}"
+            else
+                echo -e "${DIM}Not a git repository. Standard directory.${RESET}"
+                local f_count
+                f_count=$(find "$p_path" -maxdepth 2 -not -path '*/.*' 2>/dev/null | wc -l)
+                echo -e "  ${BOLD}Subfiles:${RESET}      ~$f_count items"
+            fi
+            echo ""
+            echo -e "${BOLD}${WHITE}Actions:${RESET}"
+            echo -e "  ${CYAN}Enter${RESET}   Open / create tmux session in this project"
+            echo -e "  ${CYAN}Ctrl-L${RESET}  Open lazygit in this directory"
+            echo -e "  ${CYAN}Ctrl-O${RESET}  Open folder in \$EDITOR (${EDITOR:-nvim})"
+            echo -e "  ${CYAN}Ctrl-D${RESET}  Show git diff"
+            ;;
+
+        action)
+            case "$payload" in
+                new_pwd)
+                    echo -e "${BOLD}${CYAN}=== New Session in Current Working Directory ===${RESET}"
+                    echo -e "Creates a new tmux session located in:"
+                    echo -e "  ${BOLD}Directory:${RESET} $PWD"
+                    echo -e "  ${BOLD}Session:${RESET}   $(basename "$PWD")"
+                    echo ""
+                    echo -e "  ${BOLD}Hotkey:${RESET}    ${CYAN}Ctrl-N${RESET}"
+                    ;;
+                new_named)
+                    echo -e "${BOLD}${CYAN}=== New Custom Tmux Session ===${RESET}"
+                    echo -e "Prompts for custom session name and directory path."
+                    ;;
+                kill_detached)
+                    echo -e "${BOLD}${CYAN}=== Clean Inactive Detached Sessions ===${RESET}"
+                    echo -e "Kills all background tmux sessions that have 0 attached clients"
+                    echo -e "to free RAM and system processes."
+                    ;;
+                refresh)
+                    echo -e "${BOLD}${CYAN}=== Refresh Sessions & Projects ===${RESET}"
+                    echo -e "Re-scans tmux sessions and discovers newly created directories."
+                    echo ""
+                    echo -e "  ${BOLD}Hotkey:${RESET}    ${CYAN}Ctrl-R${RESET}"
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive TUI Menu (fzf)
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    if ! command -v fzf >/dev/null 2>&1; then
+        cmd_list
+        return 0
+    fi
+
+    local self_bin="${BASH_SOURCE[0]}"
+
+    while true; do
+        clear
+        local sess_count=0
+        local raw_sessions
+        raw_sessions=$(parse_sessions)
+        [ -n "$raw_sessions" ] && sess_count=$(echo "$raw_sessions" | grep -c '^[a-zA-Z0-9_]' || echo "0")
+
+        local in_tmux="${DIM}No${RESET}"
+        [ -n "${TMUX:-}" ] && in_tmux="${GREEN}Yes${RESET}"
+
+        local raw_projects
+        raw_projects=$(discover_projects)
+        local proj_count=0
+        [ -n "$raw_projects" ] && proj_count=$(echo "$raw_projects" | grep -c '^[a-zA-Z0-9_]' || echo "0")
+
+        local header_info="Sessions: $sess_count | Inside Tmux: $in_tmux | Projects: $proj_count"
+
+        local menu=()
+
+        # 1. Active Tmux Sessions
+        if [ -n "$raw_sessions" ]; then
+            while IFS=$'\t' read -r name windows created attached; do
+                [ -z "$name" ] && continue
+                local att_mark=""
+                [ "$attached" -eq 1 ] && att_mark=" ★ (Attached)"
+                menu+=("  Session: ${name} [${windows}w]${att_mark}"$'\t'"session:${name}")
+            done <<< "$raw_sessions"
+        fi
+
+        # 2. Quick Session Creators
+        menu+=("󰌢  New Session in Current Directory ($(basename "$PWD"))"$'\t'"action:new_pwd")
+        menu+=("󰈊  New Custom Named Session"$'\t'"action:new_named")
+
+        # 3. Discovered Projects
+        if [ -n "$raw_projects" ]; then
+            while IFS=$'\t' read -r name path has_sess type; do
+                [ -z "$name" ] && continue
+                local icon
+                icon=$(proj_to_icon "$type")
+                local tag=""
+                [ "$has_sess" -eq 1 ] && tag=" ★"
+                menu+=("${icon}  Project: ${name} [${type}]${tag}"$'\t'"project:${path}")
+            done <<< "$raw_projects"
+        fi
+
+        # 4. Cleanup
+        menu+=("󰆴  Kill All Detached Sessions"$'\t'"action:kill_detached")
+
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-r,ctrl-k,ctrl-n,ctrl-l,ctrl-o,ctrl-d \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Tmux > " \
+            --header="[$header_info] (Enter: Open/Attach | Ctrl-K: Kill | Ctrl-N: New | Ctrl-L: Lazygit | Ctrl-R: Refresh | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local sel_arg
+        sel_arg=$(echo "$choice" | cut -f2)
+        local item_type="${sel_arg%%:*}"
+        local item_val="${sel_arg#*:}"
+
+        # Global Hotkey Handlers
+        case "$key" in
+            ctrl-r)
+                continue
+                ;;
+            ctrl-n)
+                clear
+                cmd_new
+                break
+                ;;
+            ctrl-k)
+                if [ "$item_type" = "session" ]; then
+                    cmd_kill "$item_val"
+                elif [ "$item_type" = "project" ]; then
+                    local s_clean
+                    s_clean=$(basename "$item_val" | tr '.' '_' | tr ':' '_')
+                    cmd_kill "$s_clean"
+                fi
+                continue
+                ;;
+            ctrl-l)
+                if [ "$item_type" = "project" ] && [ -d "$item_val/.git" ]; then
+                    if command -v lazygit >/dev/null 2>&1; then
+                        ( cd "$item_val" && lazygit )
+                    fi
+                fi
+                continue
+                ;;
+            ctrl-o)
+                local open_dir="$item_val"
+                [ "$item_type" = "session" ] && open_dir=$(tmux list-sessions -F "#{session_path}" -f "#{==:#{session_name},$item_val}" 2>/dev/null || echo "$HOME")
+                if [ -d "$open_dir" ]; then
+                    clear
+                    ${EDITOR:-nvim} "$open_dir"
+                fi
+                continue
+                ;;
+            ctrl-d)
+                if [ "$item_type" = "project" ] && [ -d "$item_val/.git" ]; then
+                    clear
+                    git -C "$item_val" diff | ${PAGER:-less}
+                fi
+                continue
+                ;;
+        esac
+
+        # Enter pressed
+        case "$item_type" in
+            session)
+                attach_or_create "$item_val"
+                break
+                ;;
+            project)
+                local b_name
+                b_name=$(basename "$item_val")
+                attach_or_create "$b_name" "$item_val"
+                break
+                ;;
+            action)
+                case "$item_val" in
+                    new_pwd)
+                        local b_name
+                        b_name=$(basename "$PWD")
+                        attach_or_create "$b_name" "$PWD"
+                        break
+                        ;;
+                    new_named)
+                        clear
+                        cmd_new
+                        break
+                        ;;
+                    kill_detached)
+                        clear
+                        cmd_kill_all
+                        echo ""
+                        echo -ne "${BOLD}Press Enter to return...${RESET}"
+                        read -r
+                        ;;
+                esac
+                ;;
+        esac
+    done
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}tm${RESET} - Terminal Tmux Session & Project Dashboard (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    tm                              Launch interactive fzf menu with live preview
+    tm list | ls                    List running tmux sessions
+    tm projects                     List discovered code repositories & projects
+    tm new [name] [dir]             Create and attach to new session
+    tm attach <name>                Attach or switch to session
+    tm kill <name>                  Kill specified tmux session
+    tm kill-all                     Kill all detached inactive sessions
+    tm preview <target>             Internal preview generator for fzf
+    tm help                         Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}       Attach to session or jump into project in tmux
+    ${CYAN}Ctrl-K${RESET}      Kill selected tmux session
+    ${CYAN}Ctrl-N${RESET}      Create new session
+    ${CYAN}Ctrl-L${RESET}      Open lazygit in selected project
+    ${CYAN}Ctrl-O${RESET}      Open project directory in \$EDITOR (${EDITOR:-nvim})
+    ${CYAN}Ctrl-D${RESET}      View git diff for selected project
+    ${CYAN}Ctrl-R${RESET}      Refresh sessions and project list
+    ${CYAN}Esc / Ctrl-C${RESET} Exit menu
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    list|ls) cmd_list ;;
+    projects|projs) cmd_projects ;;
+    new) shift; cmd_new "$@" ;;
+    attach|switch) attach_or_create "$2" ;;
+    kill) cmd_kill "$2" ;;
+    kill-all) cmd_kill_all ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            cmd_list
+        fi
+        ;;
+esac

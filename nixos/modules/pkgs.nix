@@ -73,6 +73,12 @@ let
   gens = pkgs.writeShellScriptBin "gens" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/nixos "$@"
   '';
+  tm = pkgs.writeShellScriptBin "tm" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/tm "$@"
+  '';
+  project = pkgs.writeShellScriptBin "project" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/tm "$@"
+  '';
   nixtest = pkgs.writeShellScriptBin "nixtest" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
   '';
@@ -458,6 +464,8 @@ in
     theme
     nixos-cmd
     gens
+    tm
+    project
     nixtest
 
     # Archive
