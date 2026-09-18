@@ -1,0 +1,1048 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# audio - Terminal PipeWire & WirePlumber Audio Manager (CLI & fzf TUI)
+# Control audio sinks, microphones, per-app streams, volume & live VU monitor.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-audio-volume-high}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Helpers & State Getters
+# ------------------------------------------------------------------------------
+
+get_default_sink_id() {
+    wpctl status 2>/dev/null | awk '
+    BEGIN { in_sinks=0 }
+    /├─ Sinks:/ { in_sinks=1; next }
+    /├─ Sources:|├─ Filters:|├─ Devices:|└─ Streams:|├─ Streams:|Video|Settings/ { in_sinks=0 }
+    in_sinks && /\*/ {
+        match($0, /([0-9]+)\./, m)
+        print m[1]
+        exit
+    }'
+}
+
+get_default_source_id() {
+    wpctl status 2>/dev/null | awk '
+    BEGIN { in_sources=0 }
+    /├─ Sources:/ { in_sources=1; next }
+    /├─ Filters:|├─ Devices:|└─ Streams:|├─ Streams:|Video|Settings/ { in_sources=0 }
+    in_sources && /\*/ {
+        match($0, /([0-9]+)\./, m)
+        print m[1]
+        exit
+    }'
+}
+
+get_vol_and_mute() {
+    local target="${1:-@DEFAULT_AUDIO_SINK@}"
+    local raw val pct muted=0
+    raw=$(wpctl get-volume "$target" 2>/dev/null || echo "Volume: 0.00")
+    val=$(echo "$raw" | grep -oP '\d+\.\d+' | head -n1 || echo "0.00")
+    pct=$(awk -v v="$val" 'BEGIN { printf "%d", (v * 100) + 0.5 }')
+    echo "$raw" | grep -qi "MUTED" && muted=1
+    echo "${pct}:${muted}"
+}
+
+vol_to_bar() {
+    local vol="${1:-0}"
+    local muted="${2:-0}"
+    local width=14
+    local filled=$(( (vol * width + 50) / 100 ))
+    [ "$filled" -gt "$width" ] && filled="$width"
+    [ "$filled" -lt 0 ] && filled=0
+    local empty=$(( width - filled ))
+    local bar=""
+    for ((i=0; i<filled; i++)); do bar+="█"; done
+    for ((i=0; i<empty; i++)); do bar+="░"; done
+
+    if [ "$muted" -eq 1 ]; then
+        echo -e "${RED}[${bar}] ${vol}% (MUTED)${RESET}"
+    else
+        local color="$GREEN"
+        if [ "$vol" -gt 100 ]; then
+            color="$MAGENTA"
+        elif [ "$vol" -lt 30 ]; then
+            color="$BLUE"
+        elif [ "$vol" -ge 80 ]; then
+            color="$YELLOW"
+        fi
+        echo -e "${color}[${bar}] ${vol}%${RESET}"
+    fi
+}
+
+vol_to_icon() {
+    local vol="${1:-0}"
+    local muted="${2:-0}"
+    if [ "$muted" -eq 1 ] || [ "$vol" -eq 0 ]; then
+        echo "󰝟"
+    elif [ "$vol" -lt 33 ]; then
+        echo "󰕿"
+    elif [ "$vol" -lt 66 ]; then
+        echo "󰖀"
+    else
+        echo "󰕾"
+    fi
+}
+
+sink_to_icon() {
+    local desc="${1,,}"
+    if [[ "$desc" =~ (bluez|bluetooth) ]]; then
+        echo "󰂯"
+    elif [[ "$desc" =~ (headphone|headset) ]]; then
+        echo "󰋋"
+    elif [[ "$desc" =~ (hdmi|displayport) ]]; then
+        echo "󰍹"
+    elif [[ "$desc" =~ (usb) ]]; then
+        echo "󰓃"
+    else
+        echo "󰓃"
+    fi
+}
+
+source_to_icon() {
+    local muted="${1:-0}"
+    if [ "$muted" -eq 1 ]; then
+        echo "󰍭"
+    else
+        echo "󰍬"
+    fi
+}
+
+app_to_icon() {
+    local app="${1,,}"
+    if [[ "$app" =~ (firefox|waterfox|zen|librewolf) ]]; then echo "󰈹"
+    elif [[ "$app" =~ (chrome|chromium|brave) ]]; then echo "󰊯"
+    elif [[ "$app" =~ (discord|vesktop|webcord) ]]; then echo "󰙯"
+    elif [[ "$app" =~ (spotify) ]]; then echo ""
+    elif [[ "$app" =~ (mpv|vlc) ]]; then echo ""
+    elif [[ "$app" =~ (steam|wine|game|sober|roblox) ]]; then echo "󰊴"
+    elif [[ "$app" =~ (obs|recording) ]]; then echo "󰕧"
+    else echo ""
+    fi
+}
+
+parse_sinks() {
+    # Returns: ID<TAB>IS_DEFAULT(1/0)<TAB>DESC<TAB>VOL<TAB>MUTED
+    wpctl status 2>/dev/null | awk '
+    BEGIN { in_sinks=0 }
+    /├─ Sinks:/ { in_sinks=1; next }
+    /├─ Sources:|├─ Filters:|├─ Devices:|└─ Streams:|├─ Streams:|Video|Settings/ { in_sinks=0 }
+    in_sinks {
+        if ($0 ~ /^[│ ]*([* ])[ ]*([0-9]+)\.[ ]*(.*?)[ ]*\[vol:[ ]*([0-9.]+)/) {
+            line = $0
+            is_def = (line ~ /\*/) ? 1 : 0
+            match(line, /([0-9]+)\./, m_id)
+            id = m_id[1]
+            match(line, /\[vol:[ ]*([0-9.]+)/, m_vol)
+            vol = int(m_vol[1] * 100 + 0.5)
+            muted = (line ~ /MUTED/) ? 1 : 0
+            sub(/^[│ *]+[0-9]+\.[ ]*/, "", line)
+            sub(/[ ]*\[vol:.*$/, "", line)
+            desc = line
+            print id "\t" is_def "\t" desc "\t" vol "\t" muted
+        }
+    }'
+}
+
+parse_sources() {
+    # Returns: ID<TAB>IS_DEFAULT(1/0)<TAB>DESC<TAB>VOL<TAB>MUTED
+    wpctl status 2>/dev/null | awk '
+    BEGIN { in_sources=0 }
+    /├─ Sources:/ { in_sources=1; next }
+    /├─ Filters:|├─ Devices:|└─ Streams:|├─ Streams:|Video|Settings/ { in_sources=0 }
+    in_sources {
+        if ($0 ~ /^[│ ]*([* ])[ ]*([0-9]+)\.[ ]*(.*?)[ ]*\[vol:[ ]*([0-9.]+)/) {
+            line = $0
+            is_def = (line ~ /\*/) ? 1 : 0
+            match(line, /([0-9]+)\./, m_id)
+            id = m_id[1]
+            match(line, /\[vol:[ ]*([0-9.]+)/, m_vol)
+            vol = int(m_vol[1] * 100 + 0.5)
+            muted = (line ~ /MUTED/) ? 1 : 0
+            sub(/^[│ *]+[0-9]+\.[ ]*/, "", line)
+            sub(/[ ]*\[vol:.*$/, "", line)
+            desc = line
+            print id "\t" is_def "\t" desc "\t" vol "\t" muted
+        }
+    }'
+}
+
+parse_streams() {
+    # Returns: ID<TAB>NAME<TAB>VOL<TAB>MUTED
+    # First attempt via pactl sink-inputs
+    if command -v pactl >/dev/null 2>&1; then
+        local curr_id="" curr_app="" curr_vol="100" curr_mute="0"
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^Sink\ Input\ \#([0-9]+) ]]; then
+                if [ -n "$curr_id" ]; then
+                    echo -e "${curr_id}\t${curr_app:-Unknown App}\t${curr_vol}\t${curr_mute}"
+                fi
+                curr_id="${BASH_REMATCH[1]}"
+                curr_app=""
+                curr_vol="100"
+                curr_mute="0"
+            elif [[ "$line" =~ Mute:\ (yes|no) ]]; then
+                [ "${BASH_REMATCH[1]}" = "yes" ] && curr_mute="1" || curr_mute="0"
+            elif [[ "$line" =~ Volume:.*\/[[:space:]]*([0-9]+)\% ]]; then
+                curr_vol="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ application.name\ =\ \"([^\"]+)\" ]]; then
+                curr_app="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ media.name\ =\ \"([^\"]+)\" ]] && [ -z "$curr_app" ]; then
+                curr_app="${BASH_REMATCH[1]}"
+            fi
+        done < <(pactl list sink-inputs 2>/dev/null)
+        if [ -n "$curr_id" ]; then
+            echo -e "${curr_id}\t${curr_app:-Unknown App}\t${curr_vol}\t${curr_mute}"
+        fi
+    fi
+}
+
+play_test_chime() {
+    local sound_file="/tmp/pipewire_audio_test.wav"
+    if [ ! -f "$sound_file" ]; then
+        python3 -c "
+import wave, math, struct
+sample_rate = 44100
+duration = 0.35
+with wave.open('$sound_file', 'w') as w:
+    w.setnchannels(2)
+    w.setsampwidth(2)
+    w.setframerate(sample_rate)
+    n_frames = int(sample_rate * duration)
+    for i in range(n_frames):
+        t = float(i) / sample_rate
+        freq = 523.25 if t < (duration / 2) else 659.25
+        env = math.sin(math.pi * t / duration)
+        sample = int(32767.0 * 0.35 * env * math.sin(2.0 * math.pi * freq * t))
+        w.writeframes(struct.pack('<hh', sample, sample))
+" 2>/dev/null || true
+    fi
+
+    if [ -f "$sound_file" ]; then
+        if command -v paplay >/dev/null 2>&1; then
+            paplay "$sound_file" >/dev/null 2>&1 &
+        elif command -v pw-play >/dev/null 2>&1; then
+            pw-play "$sound_file" >/dev/null 2>&1 &
+        fi
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Headless CLI Commands
+# ------------------------------------------------------------------------------
+
+cmd_status() {
+    local s_info m_info def_s_id def_m_id
+    s_info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
+    m_info=$(get_vol_and_mute "@DEFAULT_AUDIO_SOURCE@")
+    def_s_id=$(get_default_sink_id)
+    def_m_id=$(get_default_source_id)
+
+    IFS=':' read -r s_vol s_muted <<< "$s_info"
+    IFS=':' read -r m_vol m_muted <<< "$m_info"
+
+    echo -e "${BOLD}${CYAN}=== PipeWire Audio Status ===${RESET}"
+    echo -e "  ${BOLD}Master Output:${RESET}   $(vol_to_bar "$s_vol" "$s_muted") $(vol_to_icon "$s_vol" "$s_muted")"
+    echo -e "  ${BOLD}Default Sink:${RESET}    ID ${def_s_id:---}"
+    echo -e "  ${BOLD}Microphone:${RESET}      $(vol_to_bar "$m_vol" "$m_muted") $(source_to_icon "$m_muted")"
+    echo -e "  ${BOLD}Default Source:${RESET}  ID ${def_m_id:---}"
+    echo ""
+
+    echo -e "${BOLD}${CYAN}Output Sinks:${RESET}"
+    while IFS=$'\t' read -r id is_def desc vol muted; do
+        [ -z "$id" ] && continue
+        local def_mark=" "
+        [ "$is_def" -eq 1 ] && def_mark="${GREEN}*${RESET}"
+        local s_icon
+        s_icon=$(sink_to_icon "$desc")
+        echo -e "  ${def_mark} [${id}] ${s_icon} ${desc} - $(vol_to_bar "$vol" "$muted")"
+    done < <(parse_sinks)
+    echo ""
+
+    echo -e "${BOLD}${CYAN}Input Sources:${RESET}"
+    while IFS=$'\t' read -r id is_def desc vol muted; do
+        [ -z "$id" ] && continue
+        local def_mark=" "
+        [ "$is_def" -eq 1 ] && def_mark="${GREEN}*${RESET}"
+        local src_icon
+        src_icon=$(source_to_icon "$muted")
+        echo -e "  ${def_mark} [${id}] ${src_icon} ${desc} - $(vol_to_bar "$vol" "$muted")"
+    done < <(parse_sources)
+    echo ""
+
+    local streams
+    streams=$(parse_streams)
+    if [ -n "$streams" ]; then
+        echo -e "${BOLD}${CYAN}Active Streams:${RESET}"
+        while IFS=$'\t' read -r id app vol muted; do
+            local a_icon
+            a_icon=$(app_to_icon "$app")
+            echo -e "    [${id}] ${a_icon} ${app} - $(vol_to_bar "$vol" "$muted")"
+        done <<< "$streams"
+    else
+        echo -e "${DIM}No active audio playback streams.${RESET}"
+    fi
+}
+
+cmd_up() {
+    local step="${1:-5%}"
+    wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ "$step"+
+    local info
+    info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
+    IFS=':' read -r vol muted <<< "$info"
+    notify normal "$(vol_to_icon "$vol" "$muted")" "Volume: ${vol}%" "Volume increased by $step"
+    echo -e "Master Volume: $(vol_to_bar "$vol" "$muted")"
+}
+
+cmd_down() {
+    local step="${1:-5%}"
+    wpctl set-volume @DEFAULT_AUDIO_SINK@ "$step"-
+    local info
+    info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
+    IFS=':' read -r vol muted <<< "$info"
+    notify normal "$(vol_to_icon "$vol" "$muted")" "Volume: ${vol}%" "Volume decreased by $step"
+    echo -e "Master Volume: $(vol_to_bar "$vol" "$muted")"
+}
+
+cmd_set() {
+    local val="$1"
+    if [ -z "$val" ]; then
+        echo -e "${RED}Usage: audio set <0-150% | 0.0-1.5>${RESET}" >&2
+        return 1
+    fi
+    [[ "$val" != *%* ]] && [[ "$val" != *.* ]] && val="${val}%"
+    wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ "$val"
+    local info
+    info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
+    IFS=':' read -r vol muted <<< "$info"
+    notify normal "$(vol_to_icon "$vol" "$muted")" "Volume: ${vol}%" "Volume set to $val"
+    echo -e "Master Volume: $(vol_to_bar "$vol" "$muted")"
+}
+
+cmd_mute() {
+    wpctl set-mute @DEFAULT_AUDIO_SINK@ 1
+    notify normal "audio-volume-muted" "Audio Muted" "Master output muted"
+    echo -e "${RED}Master Output Muted${RESET}"
+}
+
+cmd_unmute() {
+    wpctl set-mute @DEFAULT_AUDIO_SINK@ 0
+    local info
+    info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
+    IFS=':' read -r vol _ <<< "$info"
+    notify normal "audio-volume-high" "Audio Unmuted" "Volume: ${vol}%"
+    echo -e "${GREEN}Master Output Unmuted (${vol}%)${RESET}"
+}
+
+cmd_toggle_mute() {
+    wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+    local info
+    info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
+    IFS=':' read -r vol muted <<< "$info"
+    if [ "$muted" -eq 1 ]; then
+        notify normal "audio-volume-muted" "Audio Muted" "Master output muted"
+        echo -e "${RED}Master Output Muted${RESET}"
+    else
+        notify normal "audio-volume-high" "Audio Unmuted" "Volume: ${vol}%"
+        echo -e "${GREEN}Master Output Unmuted (${vol}%)${RESET}"
+    fi
+}
+
+cmd_mic_mute() {
+    wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 1
+    notify normal "microphone-sensitivity-muted" "Microphone Muted" "Mic input muted"
+    echo -e "${RED}Microphone Muted${RESET}"
+}
+
+cmd_mic_unmute() {
+    wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0
+    local info
+    info=$(get_vol_and_mute "@DEFAULT_AUDIO_SOURCE@")
+    IFS=':' read -r vol _ <<< "$info"
+    notify normal "audio-input-microphone" "Microphone Active" "Level: ${vol}%"
+    echo -e "${GREEN}Microphone Active (${vol}%)${RESET}"
+}
+
+cmd_mic_toggle() {
+    wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+    local info
+    info=$(get_vol_and_mute "@DEFAULT_AUDIO_SOURCE@")
+    IFS=':' read -r vol muted <<< "$info"
+    if [ "$muted" -eq 1 ]; then
+        notify normal "microphone-sensitivity-muted" "Microphone Muted" "Mic input muted"
+        echo -e "${RED}Microphone Muted${RESET}"
+    else
+        notify normal "audio-input-microphone" "Microphone Active" "Level: ${vol}%"
+        echo -e "${GREEN}Microphone Active (${vol}%)${RESET}"
+    fi
+}
+
+cmd_set_sink() {
+    local target="$1"
+    if [ -z "$target" ]; then
+        echo -e "${RED}Usage: audio set-sink <id>${RESET}" >&2
+        return 1
+    fi
+    if wpctl set-default "$target"; then
+        notify normal "audio-card" "Audio Output Changed" "Default sink set to $target"
+        echo -e "${GREEN}Default audio output set to: $target${RESET}"
+    else
+        echo -e "${RED}Failed to set default sink to: $target${RESET}" >&2
+        return 1
+    fi
+}
+
+cmd_set_source() {
+    local target="$1"
+    if [ -z "$target" ]; then
+        echo -e "${RED}Usage: audio set-source <id>${RESET}" >&2
+        return 1
+    fi
+    if wpctl set-default "$target"; then
+        notify normal "audio-input-microphone" "Microphone Changed" "Default source set to $target"
+        echo -e "${GREEN}Default audio input set to: $target${RESET}"
+    else
+        echo -e "${RED}Failed to set default source to: $target${RESET}" >&2
+        return 1
+    fi
+}
+
+cmd_restart() {
+    echo -e "${YELLOW}Restarting PipeWire and WirePlumber stack...${RESET}"
+    systemctl --user restart pipewire wireplumber pipewire-pulse 2>/dev/null || true
+    sleep 1
+    notify normal "audio-volume-high" "Audio Stack Restarted" "PipeWire services reloaded successfully"
+    echo -e "${GREEN}Audio services restarted successfully.${RESET}"
+}
+
+# ------------------------------------------------------------------------------
+# Preview Function (for fzf side panel)
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="$1"
+    [ -z "$target" ] && return 0
+
+    local type id
+    type="${target%%:*}"
+    id="${target#*:}"
+
+    case "$type" in
+        sink)
+            echo -e "${BOLD}${CYAN}=== Output Sink (Audio Device) ===${RESET}"
+            local raw_inspect
+            raw_inspect=$(wpctl inspect "$id" 2>/dev/null)
+            local name desc driver channels alsa_card
+            desc=$(echo "$raw_inspect" | grep -oP 'node\.description = "\K[^"]+' | head -n1)
+            name=$(echo "$raw_inspect" | grep -oP 'node\.name = "\K[^"]+' | head -n1)
+            driver=$(echo "$raw_inspect" | grep -oP 'alsa\.driver_name = "\K[^"]+' | head -n1)
+            alsa_card=$(echo "$raw_inspect" | grep -oP 'alsa\.card_name = "\K[^"]+' | head -n1)
+            channels=$(echo "$raw_inspect" | grep -oP 'audio\.channels = "\K[^"]+' | head -n1)
+
+            local vol_info
+            vol_info=$(get_vol_and_mute "$id")
+            IFS=':' read -r v_pct v_muted <<< "$vol_info"
+
+            local def_id
+            def_id=$(get_default_sink_id)
+            local is_def="No (Available)"
+            [ "$id" = "$def_id" ] && is_def="${GREEN}Yes (Active System Default)${RESET}"
+
+            echo -e "  ${BOLD}Description:${RESET}   ${desc:-Node $id}"
+            echo -e "  ${BOLD}Node ID:${RESET}       $id"
+            echo -e "  ${BOLD}Default Sink:${RESET}  $is_def"
+            echo -e "  ${BOLD}Volume Level:${RESET}  $(vol_to_bar "$v_pct" "$v_muted")"
+            echo -e "  ${BOLD}Mute State:${RESET}    $([ "$v_muted" -eq 1 ] && echo -e "${RED}Muted${RESET}" || echo -e "${GREEN}Unmuted${RESET}")"
+            [ -n "$alsa_card" ] && echo -e "  ${BOLD}Sound Card:${RESET}    $alsa_card"
+            [ -n "$driver" ]    && echo -e "  ${BOLD}Audio Driver:${RESET}  $driver"
+            [ -n "$channels" ]  && echo -e "  ${BOLD}Channels:${RESET}      $channels (${channels}ch)"
+            [ -n "$name" ]      && echo -e "  ${BOLD}Internal Name:${RESET} ${DIM}$name${RESET}"
+            echo ""
+            echo -e "${BOLD}${WHITE}Actions:${RESET}"
+            echo -e "  ${CYAN}Enter${RESET}   Open device controls (Volume, Mute, Set Default)"
+            echo -e "  ${CYAN}+ / -${RESET}   Adjust volume on this sink (+5% / -5%)"
+            echo -e "  ${CYAN}Ctrl-M${RESET}  Toggle mute on this sink"
+            echo -e "  ${CYAN}Ctrl-D${RESET}  Set as active default sink"
+            ;;
+
+        source)
+            echo -e "${BOLD}${CYAN}=== Input Source (Microphone) ===${RESET}"
+            local raw_inspect
+            raw_inspect=$(wpctl inspect "$id" 2>/dev/null)
+            local name desc driver channels alsa_card
+            desc=$(echo "$raw_inspect" | grep -oP 'node\.description = "\K[^"]+' | head -n1)
+            name=$(echo "$raw_inspect" | grep -oP 'node\.name = "\K[^"]+' | head -n1)
+            driver=$(echo "$raw_inspect" | grep -oP 'alsa\.driver_name = "\K[^"]+' | head -n1)
+            alsa_card=$(echo "$raw_inspect" | grep -oP 'alsa\.card_name = "\K[^"]+' | head -n1)
+            channels=$(echo "$raw_inspect" | grep -oP 'audio\.channels = "\K[^"]+' | head -n1)
+
+            local vol_info
+            vol_info=$(get_vol_and_mute "$id")
+            IFS=':' read -r v_pct v_muted <<< "$vol_info"
+
+            local def_id
+            def_id=$(get_default_source_id)
+            local is_def="No (Available)"
+            [ "$id" = "$def_id" ] && is_def="${GREEN}Yes (Active System Default)${RESET}"
+
+            echo -e "  ${BOLD}Description:${RESET}   ${desc:-Node $id}"
+            echo -e "  ${BOLD}Node ID:${RESET}       $id"
+            echo -e "  ${BOLD}Default Mic:${RESET}   $is_def"
+            echo -e "  ${BOLD}Input Level:${RESET}   $(vol_to_bar "$v_pct" "$v_muted")"
+            echo -e "  ${BOLD}Mute State:${RESET}    $([ "$v_muted" -eq 1 ] && echo -e "${RED}Muted${RESET}" || echo -e "${GREEN}Active${RESET}")"
+            [ -n "$alsa_card" ] && echo -e "  ${BOLD}Sound Card:${RESET}    $alsa_card"
+            [ -n "$driver" ]    && echo -e "  ${BOLD}Audio Driver:${RESET}  $driver"
+            [ -n "$channels" ]  && echo -e "  ${BOLD}Channels:${RESET}      $channels (${channels}ch)"
+            [ -n "$name" ]      && echo -e "  ${BOLD}Internal Name:${RESET} ${DIM}$name${RESET}"
+            echo ""
+            echo -e "${BOLD}${WHITE}Actions:${RESET}"
+            echo -e "  ${CYAN}Enter${RESET}   Open mic controls (Gain, Mute, Set Default)"
+            echo -e "  ${CYAN}+ / -${RESET}   Adjust microphone gain"
+            echo -e "  ${CYAN}Ctrl-M${RESET}  Toggle microphone mute"
+            echo -e "  ${CYAN}Ctrl-D${RESET}  Set as active default microphone"
+            ;;
+
+        stream)
+            echo -e "${BOLD}${CYAN}=== Application Audio Stream ===${RESET}"
+            local raw_input
+            raw_input=$(pactl list sink-inputs 2>/dev/null | awk -v target="$id" '
+            $0 ~ "^Sink Input #" target { match_found=1 }
+            match_found && /^$/ { exit }
+            match_found { print }
+            ')
+
+            local app media_name vol mute sink_id
+            app=$(echo "$raw_input" | grep -oP 'application\.name = "\K[^"]+' | head -n1)
+            media_name=$(echo "$raw_input" | grep -oP 'media\.name = "\K[^"]+' | head -n1)
+            vol=$(echo "$raw_input" | grep -oP 'Volume:.*\/[[:space:]]*\K[0-9]+(?=%)' | head -n1 || echo "100")
+            mute=$(echo "$raw_input" | grep -oP 'Mute:\s*\K(yes|no)' | head -n1 || echo "no")
+            sink_id=$(echo "$raw_input" | grep -oP 'Sink:\s*\K[0-9]+' | head -n1)
+
+            local is_m=0
+            [ "$mute" = "yes" ] && is_m=1
+
+            echo -e "  ${BOLD}Application:${RESET}   $(app_to_icon "$app") ${BOLD}${app:-Stream $id}${RESET}"
+            echo -e "  ${BOLD}Stream ID:${RESET}     $id"
+            [ -n "$media_name" ] && echo -e "  ${BOLD}Stream Title:${RESET}  $media_name"
+            echo -e "  ${BOLD}Stream Volume:${RESET} $(vol_to_bar "$vol" "$is_m")"
+            echo -e "  ${BOLD}Mute State:${RESET}    $([ "$is_m" -eq 1 ] && echo -e "${RED}Muted${RESET}" || echo -e "${GREEN}Active${RESET}")"
+            [ -n "$sink_id" ]    && echo -e "  ${BOLD}Routed Sink:${RESET}   Sink ID $sink_id"
+            echo ""
+            echo -e "${BOLD}${WHITE}Actions:${RESET}"
+            echo -e "  ${CYAN}Enter${RESET}   Adjust app volume, mute, or reroute"
+            echo -e "  ${CYAN}+ / -${RESET}   Increase/decrease application volume"
+            echo -e "  ${CYAN}Ctrl-M${RESET}  Mute/unmute this application"
+            ;;
+
+        action)
+            case "$id" in
+                vol_up)
+                    echo -e "${BOLD}${CYAN}=== Increase Master Volume ===${RESET}"
+                    echo -e "Increases output volume by 5% up to 150% boost."
+                    echo ""
+                    local s_info
+                    s_info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
+                    IFS=':' read -r v_pct v_muted <<< "$s_info"
+                    echo -e "  ${BOLD}Current Volume:${RESET} $(vol_to_bar "$v_pct" "$v_muted")"
+                    echo -e "  ${BOLD}Hotkey:${RESET}         ${CYAN}+${RESET} or ${CYAN}=${RESET}"
+                    ;;
+                vol_down)
+                    echo -e "${BOLD}${CYAN}=== Decrease Master Volume ===${RESET}"
+                    echo -e "Decreases output volume by 5%."
+                    echo ""
+                    local s_info
+                    s_info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
+                    IFS=':' read -r v_pct v_muted <<< "$s_info"
+                    echo -e "  ${BOLD}Current Volume:${RESET} $(vol_to_bar "$v_pct" "$v_muted")"
+                    echo -e "  ${BOLD}Hotkey:${RESET}         ${CYAN}-${RESET}"
+                    ;;
+                mute)
+                    echo -e "${BOLD}${CYAN}=== Toggle Master Audio Mute ===${RESET}"
+                    echo -e "Instantly mutes or unmutes the active output sink."
+                    echo ""
+                    local s_info
+                    s_info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
+                    IFS=':' read -r v_pct v_muted <<< "$s_info"
+                    echo -e "  ${BOLD}Current Status:${RESET} $([ "$v_muted" -eq 1 ] && echo -e "${RED}MUTED${RESET}" || echo -e "${GREEN}UNMUTED (${v_pct}%)${RESET}")"
+                    echo -e "  ${BOLD}Hotkey:${RESET}         ${CYAN}Ctrl-M${RESET}"
+                    ;;
+                mic_mute)
+                    echo -e "${BOLD}${CYAN}=== Toggle Microphone Mute ===${RESET}"
+                    echo -e "Instantly mutes or unmutes the active microphone source."
+                    echo ""
+                    local m_info
+                    m_info=$(get_vol_and_mute "@DEFAULT_AUDIO_SOURCE@")
+                    IFS=':' read -r m_pct m_muted <<< "$m_info"
+                    echo -e "  ${BOLD}Current Status:${RESET} $([ "$m_muted" -eq 1 ] && echo -e "${RED}MUTED${RESET}" || echo -e "${GREEN}ACTIVE (${m_pct}%)${RESET}")"
+                    ;;
+                test)
+                    echo -e "${BOLD}${CYAN}=== Audio Test Sound ===${RESET}"
+                    echo -e "Generates and plays a clean 2-tone stereo chime (523Hz / 659Hz)"
+                    echo -e "to test left and right speaker playback."
+                    echo ""
+                    echo -e "  ${BOLD}Output Target:${RESET} Default Sink (@DEFAULT_AUDIO_SINK@)"
+                    echo -e "  ${BOLD}Hotkey:${RESET}        ${CYAN}Ctrl-T${RESET}"
+                    ;;
+                restart)
+                    echo -e "${BOLD}${CYAN}=== Restart PipeWire Services ===${RESET}"
+                    echo -e "Restarts the user systemd units for PipeWire, WirePlumber,"
+                    echo -e "and PipeWire-Pulse to fix audio glitches or hung drivers."
+                    ;;
+                monitor)
+                    echo -e "${BOLD}${CYAN}=== Live Audio Monitor & VU Meter ===${RESET}"
+                    echo -e "Launches full-screen interactive dashboard with live"
+                    echo -e "level gauges, active streams, and realtime volume keys."
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Live Monitor Dashboard (audio monitor)
+# ------------------------------------------------------------------------------
+
+cmd_monitor() {
+    clear
+    trap 'echo -e "\n${RESET}"; exit 0' INT TERM
+
+    while true; do
+        tput cup 0 0 2>/dev/null || clear
+
+        local s_info m_info def_s_id def_m_id
+        s_info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
+        m_info=$(get_vol_and_mute "@DEFAULT_AUDIO_SOURCE@")
+        def_s_id=$(get_default_sink_id)
+        def_m_id=$(get_default_source_id)
+
+        IFS=':' read -r s_vol s_muted <<< "$s_info"
+        IFS=':' read -r m_vol m_muted <<< "$m_info"
+
+        local sink_desc mic_desc
+        sink_desc=$(wpctl inspect "$def_s_id" 2>/dev/null | grep -oP 'node\.description = "\K[^"]+' | head -n1 || echo "Sink $def_s_id")
+        mic_desc=$(wpctl inspect "$def_m_id" 2>/dev/null | grep -oP 'node\.description = "\K[^"]+' | head -n1 || echo "Mic $def_m_id")
+
+        echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${BOLD}${CYAN}║${RESET}  ${BOLD}PIPEWIRE AUDIO MONITOR & LIVE DASHBOARD${RESET}                           ${BOLD}${CYAN}║${RESET}"
+        echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════════════════╝${RESET}"
+        echo ""
+
+        # Master Output
+        local s_status="${GREEN}ACTIVE${RESET}"
+        [ "$s_muted" -eq 1 ] && s_status="${RED}MUTED${RESET}"
+        echo -e "  ${BOLD}Default Output:${RESET}   ${sink_desc} (ID: ${def_s_id:-?})"
+        echo -e "  ${BOLD}Master Volume:${RESET}    $(vol_to_bar "$s_vol" "$s_muted") [${s_status}]"
+        echo ""
+
+        # Simulated Stereo VU Meters based on volume
+        local vu_w=20
+        local l_fill=0 r_fill=0
+        if [ "$s_muted" -eq 0 ] && [ "$s_vol" -gt 0 ]; then
+            l_fill=$(( (s_vol * vu_w) / 100 ))
+            r_fill=$(( (s_vol * vu_w) / 100 ))
+            [ "$l_fill" -gt "$vu_w" ] && l_fill="$vu_w"
+            [ "$r_fill" -gt "$vu_w" ] && r_fill="$vu_w"
+        fi
+        local l_bar="" r_bar=""
+        for ((i=0; i<l_fill; i++)); do l_bar+="█"; done
+        for ((i=0; i<(vu_w-l_fill); i++)); do l_bar+="░"; done
+        for ((i=0; i<r_fill; i++)); do r_bar+="█"; done
+        for ((i=0; i<(vu_w-r_fill); i++)); do r_bar+="░"; done
+
+        echo -e "  ${BOLD}Stereo VU Level:${RESET}"
+        echo -e "    ${BOLD}L:${RESET} ${GREEN}[${l_bar}]${RESET} $([ "$s_vol" -gt 0 ] && echo "-$(( 100 - s_vol )) dB" || echo "-inf dB")"
+        echo -e "    ${BOLD}R:${RESET} ${GREEN}[${r_bar}]${RESET} $([ "$s_vol" -gt 0 ] && echo "-$(( 100 - s_vol )) dB" || echo "-inf dB")"
+        echo ""
+
+        # Microphone Input
+        local m_status="${GREEN}ACTIVE${RESET}"
+        [ "$m_muted" -eq 1 ] && m_status="${RED}MUTED${RESET}"
+        echo -e "  ${BOLD}Microphone:${RESET}       ${mic_desc} (ID: ${def_m_id:-?})"
+        echo -e "  ${BOLD}Input Level:${RESET}      $(vol_to_bar "$m_vol" "$m_muted") [${m_status}]"
+        echo ""
+
+        # Active Streams
+        echo -e "  ${BOLD}${CYAN}Active Streams:${RESET}"
+        local streams
+        streams=$(parse_streams)
+        if [ -n "$streams" ]; then
+            while IFS=$'\t' read -r st_id app st_vol st_mute; do
+                local a_icon
+                a_icon=$(app_to_icon "$app")
+                echo -e "    ${a_icon}  ${BOLD}${app}${RESET} (ID: $st_id) - $(vol_to_bar "$st_vol" "$st_mute")"
+            done <<< "$streams"
+        else
+            echo -e "    ${DIM}No active audio playback streams.${RESET}"
+        fi
+        echo ""
+
+        echo -e "${DIM}────────────────────────────────────────────────────────────────────────${RESET}"
+        echo -e "  ${CYAN}[+]${RESET} Vol Up   ${CYAN}[-]${RESET} Vol Down   ${CYAN}[M]${RESET} Mute   ${CYAN}[T]${RESET} Test Sound   ${CYAN}[Q]${RESET} Quit"
+
+        local key
+        read -s -n 1 -t 1 key || true
+        case "${key,,}" in
+            +) cmd_up "5%" >/dev/null ;;
+            =) cmd_up "5%" >/dev/null ;;
+            -) cmd_down "5%" >/dev/null ;;
+            m) cmd_toggle_mute >/dev/null ;;
+            t) play_test_chime ;;
+            q) clear; break ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------------------------
+# Interactive TUI Menu (fzf)
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    if ! command -v fzf >/dev/null 2>&1; then
+        cmd_status
+        return 0
+    fi
+
+    local self_bin="${BASH_SOURCE[0]}"
+
+    while true; do
+        clear
+        local s_info m_info def_s_id def_m_id
+        s_info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
+        m_info=$(get_vol_and_mute "@DEFAULT_AUDIO_SOURCE@")
+        def_s_id=$(get_default_sink_id)
+        def_m_id=$(get_default_source_id)
+
+        IFS=':' read -r s_vol s_muted <<< "$s_info"
+        IFS=':' read -r m_vol m_muted <<< "$m_info"
+
+        local stream_count=0
+        local raw_streams
+        raw_streams=$(parse_streams)
+        [ -n "$raw_streams" ] && stream_count=$(echo "$raw_streams" | grep -c '^[0-9]' || echo "0")
+
+        local s_badge="${s_vol}%"
+        [ "$s_muted" -eq 1 ] && s_badge="MUTED"
+        local m_badge="${m_vol}%"
+        [ "$m_muted" -eq 1 ] && m_badge="MUTED"
+
+        local header_info="Output: $s_badge | Mic: $m_badge | Streams: $stream_count"
+
+        local menu=()
+
+        # Output Sinks
+        while IFS=$'\t' read -r id is_def desc vol muted; do
+            [ -z "$id" ] && continue
+            local s_icon
+            s_icon=$(sink_to_icon "$desc")
+            local def_mark=""
+            [ "$is_def" -eq 1 ] && def_mark=" ★"
+            local v_label="${vol}%"
+            [ "$muted" -eq 1 ] && v_label="MUTED"
+            menu+=("${s_icon}  ${desc} [${v_label}]${def_mark}"$'\t'"sink:${id}")
+        done < <(parse_sinks)
+
+        # Input Sources
+        while IFS=$'\t' read -r id is_def desc vol muted; do
+            [ -z "$id" ] && continue
+            local src_icon
+            src_icon=$(source_to_icon "$muted")
+            local def_mark=""
+            [ "$is_def" -eq 1 ] && def_mark=" ★"
+            local v_label="${vol}%"
+            [ "$muted" -eq 1 ] && v_label="MUTED"
+            menu+=("${src_icon}  ${desc} [${v_label}]${def_mark}"$'\t'"source:${id}")
+        done < <(parse_sources)
+
+        # Active Streams
+        if [ -n "$raw_streams" ]; then
+            while IFS=$'\t' read -r st_id app st_vol st_mute; do
+                [ -z "$st_id" ] && continue
+                local a_icon
+                a_icon=$(app_to_icon "$app")
+                local v_label="${st_vol}%"
+                [ "$st_mute" -eq 1 ] && v_label="MUTED"
+                menu+=("${a_icon}  Stream: ${app} [${v_label}]"$'\t'"stream:${st_id}")
+            done <<< "$raw_streams"
+        fi
+
+        # Quick Controls
+        menu+=("  Increase Volume (+5%)"$'\t'"action:vol_up")
+        menu+=("  Decrease Volume (-5%)"$'\t'"action:vol_down")
+        menu+=("󰝟  Toggle Master Output Mute"$'\t'"action:mute")
+        menu+=("󰍭  Toggle Microphone Mute"$'\t'"action:mic_mute")
+        menu+=("󰓃  Play Audio Test Sound"$'\t'"action:test")
+        menu+=("󰍛  Launch Audio VU Monitor"$'\t'"action:monitor")
+        menu+=("󰑓  Restart PipeWire / WirePlumber"$'\t'"action:restart")
+
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-r,ctrl-m,+,=,-,ctrl-t,ctrl-d \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Audio > " \
+            --header="[$header_info] (Enter: Select | +/-: Vol | Ctrl-M: Mute | Ctrl-T: Test | Ctrl-R: Refresh | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local sel_arg
+        sel_arg=$(echo "$choice" | cut -f2)
+        local item_type="${sel_arg%%:*}"
+        local item_id="${sel_arg#*:}"
+
+        # Global Hotkey Handlers
+        case "$key" in
+            ctrl-r)
+                continue
+                ;;
+            ctrl-t)
+                play_test_chime
+                continue
+                ;;
+            ctrl-m)
+                if [ "$item_type" = "sink" ]; then
+                    wpctl set-mute "$item_id" toggle
+                elif [ "$item_type" = "source" ]; then
+                    wpctl set-mute "$item_id" toggle
+                elif [ "$item_type" = "stream" ]; then
+                    pactl set-sink-input-mute "$item_id" toggle 2>/dev/null || wpctl set-mute "$item_id" toggle
+                else
+                    cmd_toggle_mute
+                fi
+                continue
+                ;;
+            +|*'=')
+                if [ "$item_type" = "sink" ]; then
+                    wpctl set-volume -l 1.5 "$item_id" 5%+
+                elif [ "$item_type" = "source" ]; then
+                    wpctl set-volume -l 1.5 "$item_id" 5%+
+                elif [ "$item_type" = "stream" ]; then
+                    pactl set-sink-input-volume "$item_id" +5% 2>/dev/null || wpctl set-volume -l 1.5 "$item_id" 5%+
+                else
+                    cmd_up "5%"
+                fi
+                continue
+                ;;
+            -)
+                if [ "$item_type" = "sink" ]; then
+                    wpctl set-volume "$item_id" 5%-
+                elif [ "$item_type" = "source" ]; then
+                    wpctl set-volume "$item_id" 5%-
+                elif [ "$item_type" = "stream" ]; then
+                    pactl set-sink-input-volume "$item_id" -5% 2>/dev/null || wpctl set-volume "$item_id" 5%-
+                else
+                    cmd_down "5%"
+                fi
+                continue
+                ;;
+            ctrl-d)
+                if [ "$item_type" = "sink" ] || [ "$item_type" = "source" ]; then
+                    wpctl set-default "$item_id"
+                fi
+                continue
+                ;;
+        esac
+
+        # Enter pressed: context submenu or action
+        case "$item_type" in
+            sink)
+                local act
+                act=$(printf "1. Set as Default Output\n2. Increase Volume (+5%%)\n3. Decrease Volume (-5%%)\n4. Toggle Mute\n5. Set Custom Volume (%%)\n6. Play Audio Test Sound\n7. Cancel" | fzf \
+                    --prompt="Sink [$item_id] > " \
+                    --height=35% \
+                    --reverse \
+                    --border=rounded) || continue
+                case "$act" in
+                    1*) wpctl set-default "$item_id" ;;
+                    2*) wpctl set-volume -l 1.5 "$item_id" 5%+ ;;
+                    3*) wpctl set-volume "$item_id" 5%- ;;
+                    4*) wpctl set-mute "$item_id" toggle ;;
+                    5*)
+                        echo -ne "${BOLD}Enter volume percentage (0-150): ${RESET}"
+                        read -r new_v
+                        if [[ "$new_v" =~ ^[0-9]+$ ]]; then
+                            wpctl set-volume -l 1.5 "$item_id" "${new_v}%"
+                        fi
+                        ;;
+                    6*) play_test_chime ;;
+                esac
+                ;;
+
+            source)
+                local act
+                act=$(printf "1. Set as Default Microphone\n2. Increase Input (+5%%)\n3. Decrease Input (-5%%)\n4. Toggle Microphone Mute\n5. Set Custom Gain (%%)\n6. Cancel" | fzf \
+                    --prompt="Source [$item_id] > " \
+                    --height=32% \
+                    --reverse \
+                    --border=rounded) || continue
+                case "$act" in
+                    1*) wpctl set-default "$item_id" ;;
+                    2*) wpctl set-volume -l 1.5 "$item_id" 5%+ ;;
+                    3*) wpctl set-volume "$item_id" 5%- ;;
+                    4*) wpctl set-mute "$item_id" toggle ;;
+                    5*)
+                        echo -ne "${BOLD}Enter input gain percentage (0-100): ${RESET}"
+                        read -r new_v
+                        if [[ "$new_v" =~ ^[0-9]+$ ]]; then
+                            wpctl set-volume -l 1.5 "$item_id" "${new_v}%"
+                        fi
+                        ;;
+                esac
+                ;;
+
+            stream)
+                local act
+                act=$(printf "1. Increase Volume (+5%%)\n2. Decrease Volume (-5%%)\n3. Toggle Stream Mute\n4. Set Custom Volume (%%)\n5. Move to Default Sink\n6. Cancel" | fzf \
+                    --prompt="Stream [$item_id] > " \
+                    --height=32% \
+                    --reverse \
+                    --border=rounded) || continue
+                case "$act" in
+                    1*) pactl set-sink-input-volume "$item_id" +5% 2>/dev/null || wpctl set-volume -l 1.5 "$item_id" 5%+ ;;
+                    2*) pactl set-sink-input-volume "$item_id" -5% 2>/dev/null || wpctl set-volume "$item_id" 5%- ;;
+                    3*) pactl set-sink-input-mute "$item_id" toggle 2>/dev/null || wpctl set-mute "$item_id" toggle ;;
+                    4*)
+                        echo -ne "${BOLD}Enter stream volume percentage (0-150): ${RESET}"
+                        read -r new_v
+                        if [[ "$new_v" =~ ^[0-9]+$ ]]; then
+                            pactl set-sink-input-volume "$item_id" "${new_v}%" 2>/dev/null || wpctl set-volume -l 1.5 "$item_id" "${new_v}%"
+                        fi
+                        ;;
+                    5*)
+                        local def_sink
+                        def_sink=$(get_default_sink_id)
+                        [ -n "$def_sink" ] && pactl move-sink-input "$item_id" "$def_sink" 2>/dev/null
+                        ;;
+                esac
+                ;;
+
+            action)
+                case "$item_id" in
+                    vol_up) cmd_up "5%" ;;
+                    vol_down) cmd_down "5%" ;;
+                    mute) cmd_toggle_mute ;;
+                    mic_mute) cmd_mic_toggle ;;
+                    test) play_test_chime ;;
+                    monitor) cmd_monitor ;;
+                    restart) cmd_restart; sleep 1 ;;
+                esac
+                ;;
+        esac
+    done
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}audio${RESET} - Terminal PipeWire & WirePlumber Audio Manager (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    audio                           Launch interactive fzf menu with live preview
+    audio status                    Show active sinks, microphones, and audio status
+    audio up [step]                 Increase master volume (default: 5%)
+    audio down [step]               Decrease master volume (default: 5%)
+    audio set <val>                 Set master volume (e.g. 70%, 100%, 0.8)
+    audio mute                      Mute master output
+    audio unmute                    Unmute master output
+    audio toggle-mute               Toggle master output mute
+    audio mic-mute                  Mute default microphone
+    audio mic-unmute                Unmute default microphone
+    audio mic-toggle                Toggle microphone mute
+    audio sinks                     List available output sinks
+    audio sources                   List available input microphones
+    audio streams                   List active application audio streams
+    audio set-sink <id>             Set default output sink
+    audio set-source <id>           Set default input microphone
+    audio monitor                   Launch live real-time VU meter & dashboard
+    audio test                      Play 2-tone stereo acoustic test chime
+    audio restart                   Restart PipeWire, WirePlumber, and Pulse services
+    audio preview <target>          Internal preview generator for fzf
+    audio help                      Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}       Select item / open contextual action submenu
+    ${CYAN}+ / =${RESET}       Increase volume (+5%) on selected item
+    ${CYAN}-${RESET}           Decrease volume (-5%) on selected item
+    ${CYAN}Ctrl-M${RESET}      Toggle mute on selected device or stream
+    ${CYAN}Ctrl-D${RESET}      Set selected sink or source as default
+    ${CYAN}Ctrl-T${RESET}      Play stereo test chime
+    ${CYAN}Ctrl-R${RESET}      Refresh devices and audio streams
+    ${CYAN}Esc / Ctrl-C${RESET} Exit menu
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    status) cmd_status ;;
+    up|+) cmd_up "${2:-5%}" ;;
+    down|-) cmd_down "${2:-5%}" ;;
+    set) cmd_set "$2" ;;
+    mute) cmd_mute ;;
+    unmute) cmd_unmute ;;
+    toggle-mute|toggle) cmd_toggle_mute ;;
+    mic-mute) cmd_mic_mute ;;
+    mic-unmute) cmd_mic_unmute ;;
+    mic-toggle) cmd_mic_toggle ;;
+    sinks) parse_sinks ;;
+    sources) parse_sources ;;
+    streams) parse_streams ;;
+    set-sink) cmd_set_sink "$2" ;;
+    set-source) cmd_set_source "$2" ;;
+    restart) cmd_restart ;;
+    test) play_test_chime ;;
+    monitor) cmd_monitor ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            cmd_status
+        fi
+        ;;
+esac

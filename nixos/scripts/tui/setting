@@ -427,7 +427,11 @@ cmd_interactive() {
                 fi
                 ;;
             audio)
-                $HOME/.local/bin/audio_menu.sh
+                if [ -x "$HOME/.local/bin/audio" ]; then
+                    $HOME/.local/bin/audio
+                else
+                    $HOME/.local/bin/audio_menu.sh
+                fi
                 ;;
             awake)
                 if command -v awake >/dev/null 2>&1; then

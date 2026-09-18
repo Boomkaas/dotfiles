@@ -64,6 +64,9 @@ let
   theme = pkgs.writeShellScriptBin "theme" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/theme "$@"
   '';
+  audio = pkgs.writeShellScriptBin "audio" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/audio "$@"
+  '';
   nixtest = pkgs.writeShellScriptBin "nixtest" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
   '';
@@ -443,6 +446,7 @@ in
     wifi
     bluetooth
     bt
+    audio
     setting
     settings
     theme
