@@ -100,6 +100,57 @@ let
   config-cmd = pkgs.writeShellScriptBin "config" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/conf "$@"
   '';
+  disk-cmd = pkgs.writeShellScriptBin "disk" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/disk "$@"
+  '';
+  storage-cmd = pkgs.writeShellScriptBin "storage" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/disk "$@"
+  '';
+  repo-cmd = pkgs.writeShellScriptBin "repo" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/repo "$@"
+  '';
+  repos-cmd = pkgs.writeShellScriptBin "repos" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/repo "$@"
+  '';
+  gitui-cmd = pkgs.writeShellScriptBin "gitui" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/repo "$@"
+  '';
+  ports-cmd = pkgs.writeShellScriptBin "ports" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/ports "$@"
+  '';
+  port-cmd = pkgs.writeShellScriptBin "port" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/ports "$@"
+  '';
+  clip-cmd = pkgs.writeShellScriptBin "clip" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/clip "$@"
+  '';
+  clips-cmd = pkgs.writeShellScriptBin "clips" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/clip "$@"
+  '';
+  log-cmd = pkgs.writeShellScriptBin "log" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/log "$@"
+  '';
+  logs-cmd = pkgs.writeShellScriptBin "logs" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/log "$@"
+  '';
+  journal-cmd = pkgs.writeShellScriptBin "journal" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/log "$@"
+  '';
+  container-cmd = pkgs.writeShellScriptBin "container" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/container "$@"
+  '';
+  containers-cmd = pkgs.writeShellScriptBin "containers" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/container "$@"
+  '';
+  vm-cmd = pkgs.writeShellScriptBin "vm" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/container "$@"
+  '';
+  pkg-tool = pkgs.writeShellScriptBin "pkg" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/pkg "$@"
+  '';
+  pkgs-tool = pkgs.writeShellScriptBin "pkgs" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/pkg "$@"
+  '';
   nixtest = pkgs.writeShellScriptBin "nixtest" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
   '';
@@ -494,6 +545,23 @@ in
     conf-cmd
     configs-cmd
     config-cmd
+    disk-cmd
+    storage-cmd
+    repo-cmd
+    repos-cmd
+    gitui-cmd
+    ports-cmd
+    port-cmd
+    clip-cmd
+    clips-cmd
+    log-cmd
+    logs-cmd
+    journal-cmd
+    container-cmd
+    containers-cmd
+    vm-cmd
+    pkg-tool
+    pkgs-tool
     nixtest
 
     # Archive

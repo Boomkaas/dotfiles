@@ -1,0 +1,554 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# repo - Multi-Repository Git Workspace & Status Dashboard (CLI & fzf TUI)
+# Scan, monitor, preview, diff, pull/push, and open local Git projects.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+SEARCH_DIRS=(
+    "$HOME/Code"
+    "$HOME/Code/Vault"
+)
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-git}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+open_in_editor() {
+    local target="$1"
+    [ -z "$target" ] && return 1
+    if [ -n "${EDITOR:-}" ]; then
+        "$EDITOR" "$target"
+    elif command -v nvim >/dev/null 2>&1; then
+        nvim "$target"
+    elif command -v nano >/dev/null 2>&1; then
+        nano "$target"
+    else
+        xdg-open "$target" 2>/dev/null &
+    fi
+}
+
+open_in_ide() {
+    local target="$1"
+    [ -z "$target" ] && return 1
+    if command -v antigravity-ide >/dev/null 2>&1; then
+        antigravity-ide "$target" >/dev/null 2>&1 &
+        notify "normal" "antigravity" "Git Workspace" "Opened in Antigravity IDE: $(basename "$target")"
+    elif command -v codex >/dev/null 2>&1; then
+        codex "$target" >/dev/null 2>&1 &
+        notify "normal" "codex" "Git Workspace" "Opened in Codex: $(basename "$target")"
+    elif command -v code >/dev/null 2>&1; then
+        code "$target" >/dev/null 2>&1 &
+        notify "normal" "code" "Git Workspace" "Opened in VS Code: $(basename "$target")"
+    else
+        xdg-open "$target" >/dev/null 2>&1 &
+    fi
+}
+
+open_in_fm() {
+    local target="$1"
+    [ -z "$target" ] && return 1
+    if command -v yazi >/dev/null 2>&1; then
+        yazi "$target"
+    elif command -v thunar >/dev/null 2>&1; then
+        thunar "$target" >/dev/null 2>&1 &
+    else
+        xdg-open "$target" >/dev/null 2>&1 &
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Discovery & Parsers
+# ------------------------------------------------------------------------------
+
+# Returns list of repository roots
+find_git_repos() {
+    local found=()
+    declare -A SEEN
+    for base in "${SEARCH_DIRS[@]}"; do
+        [ ! -d "$base" ] && continue
+        while IFS= read -r gitdir; do
+            local repodir
+            repodir="$(dirname "$gitdir")"
+            if [ -z "${SEEN["$repodir"]+x}" ]; then
+                SEEN["$repodir"]=1
+                found+=("$repodir")
+            fi
+        done < <(find "$base" -maxdepth 3 -name ".git" -type d 2>/dev/null)
+    done
+
+    # Always ensure Dotfiles is included
+    if [ -d "$HOME/Code/Dotfiles/.git" ] && [ -z "${SEEN["$HOME/Code/Dotfiles"]+x}" ]; then
+        found+=("$HOME/Code/Dotfiles")
+    fi
+
+    printf "%s\n" "${found[@]}" | sort -u
+}
+
+# Returns: NAME<TAB>PATH<TAB>BRANCH<TAB>DIRTY(0/1)<TAB>MOD_COUNT<TAB>AHEAD<TAB>BEHIND<TAB>STASH_COUNT
+parse_repo_status() {
+    local repopath="$1"
+    [ ! -d "$repopath/.git" ] && return 1
+
+    local name
+    name=$(basename "$repopath")
+
+    local branch
+    branch=$(git -C "$repopath" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "detached")
+
+    local mod_count=0
+    local is_dirty=0
+    mod_count=$(git -C "$repopath" status --porcelain 2>/dev/null | wc -l || echo "0")
+    [ "$mod_count" -gt 0 ] && is_dirty=1
+
+    local ahead=0 behind=0
+    if git -C "$repopath" rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
+        local counts
+        counts=$(git -C "$repopath" rev-list --left-right --count HEAD...@{u} 2>/dev/null || echo "0 0")
+        ahead=$(echo "$counts" | awk '{print $1}')
+        behind=$(echo "$counts" | awk '{print $2}')
+    fi
+
+    local stash_cnt=0
+    stash_cnt=$(git -C "$repopath" stash list 2>/dev/null | wc -l || echo "0")
+
+    echo -e "${name}\t${repopath}\t${branch}\t${is_dirty}\t${mod_count}\t${ahead}\t${behind}\t${stash_cnt}"
+}
+
+# ------------------------------------------------------------------------------
+# Actions
+# ------------------------------------------------------------------------------
+
+cmd_pull() {
+    local repopath="$1"
+    [ -z "$repopath" ] && return 1
+    echo -e "${CYAN}Pulling latest changes in $(basename "$repopath")...${RESET}"
+    if git -C "$repopath" pull --rebase; then
+        notify "normal" "git" "Git Pull" "Successfully pulled $(basename "$repopath")"
+    else
+        notify "critical" "dialog-error" "Git Pull" "Pull failed or conflicts in $(basename "$repopath")"
+    fi
+}
+
+cmd_push() {
+    local repopath="$1"
+    [ -z "$repopath" ] && return 1
+    echo -e "${CYAN}Pushing commits from $(basename "$repopath")...${RESET}"
+    local branch
+    branch=$(git -C "$repopath" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+    if git -C "$repopath" push origin "$branch"; then
+        notify "normal" "git" "Git Push" "Pushed $(basename "$repopath") ($branch) to origin"
+    else
+        notify "critical" "dialog-error" "Git Push" "Push failed for $(basename "$repopath")"
+    fi
+}
+
+cmd_commit() {
+    local repopath="$1"
+    [ -z "$repopath" ] && return 1
+    clear
+    echo -e "${BOLD}${CYAN}Git Stage & Commit: $(basename "$repopath")${RESET}\n"
+    git -C "$repopath" status --short
+    echo ""
+    echo -ne "${BOLD}Commit message (leave empty to cancel): ${RESET}"
+    read -r msg
+    if [ -n "$msg" ]; then
+        git -C "$repopath" add -A
+        git -C "$repopath" commit -m "$msg"
+        echo -e "${GREEN}✔ Commit created.${RESET}"
+    else
+        echo -e "${YELLOW}Commit cancelled.${RESET}"
+    fi
+    echo ""
+    echo -ne "${BOLD}Press Enter to return...${RESET}"
+    read -r
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="$1"
+    if [ -z "$target" ]; then
+        echo -e "${DIM}Select a repository to inspect Git status, branch, and history.${RESET}"
+        return 0
+    fi
+
+    case "$target" in
+        action:toggle_scope)
+            cat <<EOF
+${BOLD}${CYAN}Repository Scope Filtering${RESET}
+Cycle through display filters:
+  • ${BOLD}all${RESET}      - All detected Git projects in ~/Code and ~/Code/Vault
+  • ${BOLD}dirty${RESET}    - Repositories with uncommitted / untracked changes
+  • ${BOLD}unpushed${RESET} - Repositories with local commits ahead of remote
+  • ${BOLD}clean${RESET}    - Completely synced and clean working trees
+
+${DIM}Shortcut:${RESET} Press ${BOLD}TAB${RESET} at any time.
+EOF
+            return 0
+            ;;
+
+        action:fetch_all)
+            echo -e "${BOLD}${CYAN}Fetch All Repositories${RESET}\n"
+            echo "Fetches remote tracking branches for all local repositories."
+            return 0
+            ;;
+    esac
+
+    if [ ! -d "$target/.git" ]; then
+        echo -e "${RED}✘ Not a git repository:${RESET} $target"
+        return 0
+    fi
+
+    local name path branch is_dirty mod_cnt ahead behind stash_cnt
+    IFS=$'\t' read -r name path branch is_dirty mod_cnt ahead behind stash_cnt < <(parse_repo_status "$target")
+
+    local remote_url
+    remote_url=$(git -C "$target" config --get remote.origin.url 2>/dev/null || echo "local / no remote")
+
+    local status_badge="${GREEN}Clean${RESET}"
+    [ "$is_dirty" -eq 1 ] && status_badge="${YELLOW}${BOLD}Modified (${mod_cnt} files)${RESET}"
+
+    local sync_badge="${GREEN}In sync${RESET}"
+    if [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]; then
+        sync_badge="${MAGENTA}${BOLD}Diverged (↑${ahead} ↓${behind})${RESET}"
+    elif [ "$ahead" -gt 0 ]; then
+        sync_badge="${YELLOW}${BOLD}Ahead (↑${ahead} unpushed)${RESET}"
+    elif [ "$behind" -gt 0 ]; then
+        sync_badge="${BLUE}${BOLD}Behind (↓${behind} unpulled)${RESET}"
+    fi
+
+    echo -e "${BOLD} Repository:${RESET}   ${name}"
+    echo -e "${BOLD}📂 Path:${RESET}         ${path}"
+    echo -e "${BOLD} Branch:${RESET}       ${branch}"
+    echo -e "${BOLD}🌐 Remote:${RESET}       ${remote_url}"
+    echo -e "${BOLD}📊 Status:${RESET}       ${status_badge} | Remote: ${sync_badge}"
+    [ "$stash_cnt" -gt 0 ] && echo -e "${BOLD}📦 Stashes:${RESET}      ${stash_cnt} saved"
+    echo "─────────────────────────────────────────────────────────────────────────────"
+
+    # Show uncommitted status if dirty
+    if [ "$is_dirty" -eq 1 ]; then
+        echo -e "${YELLOW}${BOLD}── Uncommitted Working Tree Changes ─────────────────────────${RESET}"
+        git -C "$target" status --short
+        echo ""
+    fi
+
+    echo -e "${CYAN}${BOLD}── Recent Commit History (Last 10) ──────────────────────────${RESET}"
+    git -C "$target" log -n 10 --graph --pretty=format:'%C(yellow)%h%Creset %C(green)%ar%Creset %C(blue)%an%Creset %s%C(auto)%d%Creset' --color=always 2>/dev/null
+    echo ""
+
+    if [ "$stash_cnt" -gt 0 ]; then
+        echo ""
+        echo -e "${MAGENTA}${BOLD}── Stashed Changes ──────────────────────────────────────────${RESET}"
+        git -C "$target" stash list --color=always
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Action Submenu
+# ------------------------------------------------------------------------------
+
+show_action_menu() {
+    local target="$1"
+    local name
+    name=$(basename "$target")
+
+    local acts=()
+    acts+=("1.   Open in Terminal Editor ($EDITOR / Neovim)")
+    acts+=("2.   Open in Graphical IDE (Antigravity IDE / Codex)")
+    acts+=("3. 󰇥  Browse Repository in Yazi")
+    acts+=("4. 󱁤  Open in GUI File Manager (Thunar)")
+    acts+=("5.   Pull Latest Changes (git pull --rebase)")
+    acts+=("6.   Push Commits to Remote (git push)")
+    acts+=("7. 📝 Stage and Commit Changes")
+    acts+=("8.   Show Full Git Diff")
+    acts+=("9. 📜 Show Commit Log Graph")
+    acts+=("10. 📋 Copy Path to Clipboard")
+    acts+=("11. ✘  Cancel")
+
+    local choice
+    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Repo [$name] > " --height=45% --reverse --border=rounded) || return 0
+
+    case "$choice" in
+        1*) open_in_editor "$target" ;;
+        2*) open_in_ide "$target" ;;
+        3*) open_in_fm "$target" ;;
+        4*) thunar "$target" >/dev/null 2>&1 & ;;
+        5*) cmd_pull "$target" ;;
+        6*) cmd_push "$target" ;;
+        7*) cmd_commit "$target" ;;
+        8*)
+            clear
+            git -C "$target" diff HEAD | (command -v bat >/dev/null 2>&1 && bat --color=always -p -l diff || cat)
+            echo ""
+            echo -ne "${BOLD}Press Enter to return...${RESET}"
+            read -r
+            ;;
+        9*)
+            clear
+            git -C "$target" log -n 30 --graph --pretty=format:'%C(yellow)%h%Creset %C(green)%ar%Creset %C(blue)%an%Creset %s%C(auto)%d%Creset' --color=always
+            echo ""
+            echo -ne "${BOLD}Press Enter to return...${RESET}"
+            read -r
+            ;;
+        10*)
+            if command -v wl-copy >/dev/null 2>&1; then
+                echo -n "$target" | wl-copy
+                notify "normal" "edit-copy" "Clipboard" "Copied repository path to clipboard"
+            fi
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive Dashboard
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    local self_bin
+    self_bin="$(readlink -f "$0")"
+
+    local current_scope="all"
+    local scopes=("all" "dirty" "unpushed" "clean")
+
+    while true; do
+        clear
+
+        local repo_dirs=()
+        while IFS= read -r r; do
+            [ -n "$r" ] && repo_dirs+=("$r")
+        done < <(find_git_repos)
+
+        local total_repos=${#repo_dirs[@]}
+        local dirty_count=0 unpushed_count=0
+
+        local repo_data=()
+        for r in "${repo_dirs[@]}"; do
+            local st
+            st=$(parse_repo_status "$r")
+            [ -n "$st" ] && repo_data+=("$st")
+            local is_d ahead
+            is_d=$(echo "$st" | cut -f4)
+            ahead=$(echo "$st" | cut -f6)
+            [ "$is_d" -eq 1 ] && ((dirty_count++))
+            [ "$ahead" -gt 0 ] && ((unpushed_count++))
+        done
+
+        local scope_label
+        case "$current_scope" in
+            all) scope_label="${CYAN}All Repos (${total_repos})${RESET}" ;;
+            dirty) scope_label="${YELLOW}Modified (${dirty_count})${RESET}" ;;
+            unpushed) scope_label="${MAGENTA}Unpushed (${unpushed_count})${RESET}" ;;
+            clean) scope_label="${GREEN}Clean${RESET}" ;;
+        esac
+
+        local header_info="Scope: $scope_label | Total: $total_repos | Modified: $dirty_count | Unpushed: $unpushed_count"
+
+        # Next scope for Tab
+        local next_scope="all"
+        for i in "${!scopes[@]}"; do
+            if [ "${scopes[$i]}" = "$current_scope" ]; then
+                local next_idx=$(( (i + 1) % ${#scopes[@]} ))
+                next_scope="${scopes[$next_idx]}"
+                break
+            fi
+        done
+
+        local menu=()
+        menu+=("󰌢  [TAB] Switch Scope (Next: ${next_scope})"$'\t'"action:toggle_scope")
+        menu+=("🔄  [Ctrl-A] Fetch All Repositories from Remotes"$'\t'"action:fetch_all")
+
+        for line in "${repo_data[@]}"; do
+            local name path branch is_dirty mod_cnt ahead behind stash_cnt
+            IFS=$'\t' read -r name path branch is_dirty mod_cnt ahead behind stash_cnt <<< "$line"
+
+            # Apply scope filter
+            if [ "$current_scope" = "dirty" ] && [ "$is_dirty" -eq 0 ]; then continue; fi
+            if [ "$current_scope" = "unpushed" ] && [ "$ahead" -eq 0 ]; then continue; fi
+            if [ "$current_scope" = "clean" ] && { [ "$is_dirty" -eq 1 ] || [ "$ahead" -gt 0 ]; }; then continue; fi
+
+            local icon=""
+            local badges=""
+            if [ "$is_dirty" -eq 1 ]; then
+                badges+="[M:${mod_cnt}] "
+            else
+                badges+="[✔] "
+            fi
+
+            if [ "$ahead" -gt 0 ]; then
+                badges+="[↑${ahead}] "
+            fi
+            if [ "$behind" -gt 0 ]; then
+                badges+="[↓${behind}] "
+            fi
+
+            local label
+            label=$(printf "%s  %-26s %-16s %s" "$icon" "$name" "($branch)" "$badges")
+            menu+=("${label}"$'\t'"$path")
+        done
+
+        # Invoke fzf
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-e,ctrl-p,ctrl-u,ctrl-f,ctrl-d,ctrl-s,ctrl-l,ctrl-r,ctrl-a,tab \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Repo ($current_scope) > " \
+            --header="[$header_info] (Enter: Open $EDITOR | Ctrl-E: IDE | Ctrl-P: Pull | Ctrl-U: Push | Ctrl-D: Diff | Ctrl-F: Yazi | Tab: Filter | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local target_payload
+        target_payload=$(echo "$choice" | cut -f2)
+
+        # Tab scope switcher
+        if [ "$key" = "tab" ] || [ "$target_payload" = "action:toggle_scope" ]; then
+            current_scope="$next_scope"
+            continue
+        fi
+
+        # Fetch all
+        if [ "$key" = "ctrl-a" ] || [ "$target_payload" = "action:fetch_all" ]; then
+            clear
+            echo -e "${BOLD}${CYAN}Fetching all repositories...${RESET}\n"
+            for r in "${repo_dirs[@]}"; do
+                echo -ne "Fetching $(basename "$r")... "
+                git -C "$r" fetch --quiet 2>/dev/null && echo -e "${GREEN}✔${RESET}" || echo -e "${YELLOW}skipped/offline${RESET}"
+            done
+            echo ""
+            echo -ne "${BOLD}Press Enter to return...${RESET}"
+            read -r
+            continue
+        fi
+
+        case "$key" in
+            ctrl-e) open_in_ide "$target_payload"; continue ;;
+            ctrl-p) cmd_pull "$target_payload"; continue ;;
+            ctrl-u) cmd_push "$target_payload"; continue ;;
+            ctrl-s) cmd_commit "$target_payload"; continue ;;
+            ctrl-f) open_in_fm "$target_payload"; continue ;;
+            ctrl-d)
+                clear
+                git -C "$target_payload" diff HEAD | (command -v bat >/dev/null 2>&1 && bat --color=always -p -l diff || cat)
+                echo ""
+                echo -ne "${BOLD}Press Enter to return...${RESET}"
+                read -r
+                continue
+                ;;
+            ctrl-l)
+                clear
+                git -C "$target_payload" log -n 25 --graph --pretty=format:'%C(yellow)%h%Creset %C(green)%ar%Creset %C(blue)%an%Creset %s%C(auto)%d%Creset' --color=always
+                echo ""
+                echo -ne "${BOLD}Press Enter to return...${RESET}"
+                read -r
+                continue
+                ;;
+            ctrl-r) continue ;;
+        esac
+
+        # Default Enter: Contextual actions or Open in editor
+        show_action_menu "$target_payload"
+    done
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}repo${RESET} - Multi-Repository Git Workspace & Status Dashboard (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    repo                            Launch interactive fzf repository dashboard
+    repo list                       Print overview table of all detected git repositories
+    repo pull <target>              Pull latest remote changes for repository
+    repo push <target>              Push commits to remote
+    repo preview <target>           Internal preview generator for fzf
+    repo help                       Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}       Open contextual action menu (Neovim, IDE, Commit, Logs)
+    ${CYAN}Ctrl-E${RESET}      Open repository in graphical IDE (Antigravity IDE / Codex)
+    ${CYAN}Ctrl-P${RESET}      Pull latest changes (git pull --rebase)
+    ${CYAN}Ctrl-U${RESET}      Push local commits to remote (git push)
+    ${CYAN}Ctrl-S${RESET}      Quick stage and commit dialog
+    ${CYAN}Ctrl-D${RESET}      View uncommitted diff
+    ${CYAN}Ctrl-L${RESET}      View commit history graph
+    ${CYAN}Ctrl-F${RESET}      Browse repository files in Yazi
+    ${CYAN}Ctrl-A${RESET}      Fetch remotes for all repositories
+    ${CYAN}Tab${RESET}         Cycle scope filter (all -> dirty -> unpushed -> clean)
+    ${CYAN}Esc / Ctrl-C${RESET} Exit dashboard
+
+EOF
+}
+
+cmd_list() {
+    printf "%-26s %-16s %-12s %s\n" "REPOSITORY" "BRANCH" "STATUS" "PATH"
+    echo "────────────────────────────────────────────────────────────────────────────────────────"
+    while IFS= read -r r; do
+        [ -z "$r" ] && continue
+        local name path branch is_dirty mod_cnt ahead behind stash_cnt
+        IFS=$'\t' read -r name path branch is_dirty mod_cnt ahead behind stash_cnt < <(parse_repo_status "$r")
+        local st="Clean"
+        [ "$is_dirty" -eq 1 ] && st="Mod:${mod_cnt}"
+        [ "$ahead" -gt 0 ] && st+="/↑${ahead}"
+        printf "%-26s %-16s %-12s %s\n" "$name" "$branch" "$st" "$path"
+    done < <(find_git_repos)
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    list|ls) cmd_list ;;
+    pull) cmd_pull "$2" ;;
+    push) cmd_push "$2" ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            find_git_repos
+        fi
+        ;;
+esac

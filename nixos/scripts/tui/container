@@ -1,0 +1,465 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# container - Docker Containers & Libvirt VM Manager (CLI & fzf TUI)
+# Manage local containers, images, volumes, and virtual machines.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-docker}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Data Queries
+# ------------------------------------------------------------------------------
+
+# Returns: ID<TAB>NAME<TAB>IMAGE<TAB>STATUS<TAB>STATE<TAB>PORTS
+get_docker_containers() {
+    if ! command -v docker >/dev/null 2>&1; then return 0; fi
+    docker ps -a --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.State}}\t{{.Ports}}" 2>/dev/null
+}
+
+# Returns: ID<TAB>NAME<TAB>STATE
+get_virsh_vms() {
+    if ! command -v virsh >/dev/null 2>&1; then return 0; fi
+    virsh list --all 2>/dev/null | tail -n +3 | while read -r id name state rest; do
+        [ -z "$name" ] && continue
+        echo -e "${id}\t${name}\t${state}"
+    done
+}
+
+# Returns: REPO:TAG<TAB>ID<TAB>SIZE<TAB>CREATED
+get_docker_images() {
+    if ! command -v docker >/dev/null 2>&1; then return 0; fi
+    docker images --format "{{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}" 2>/dev/null
+}
+
+# ------------------------------------------------------------------------------
+# Actions
+# ------------------------------------------------------------------------------
+
+cmd_start() {
+    local type="$1"
+    local id="$2"
+    if [ "$type" = "docker" ]; then
+        echo -e "${CYAN}Starting container ${id}...${RESET}"
+        if docker start "$id" 2>&1; then
+            notify "normal" "media-playback-start" "Docker" "Started container $id"
+        fi
+    elif [ "$type" = "vm" ]; then
+        echo -e "${CYAN}Starting VM ${id}...${RESET}"
+        if virsh start "$id" 2>&1; then
+            notify "normal" "media-playback-start" "Virtual Machine" "Started VM $id"
+        fi
+    fi
+}
+
+cmd_stop() {
+    local type="$1"
+    local id="$2"
+    if [ "$type" = "docker" ]; then
+        echo -e "${YELLOW}Stopping container ${id}...${RESET}"
+        if docker stop "$id" 2>&1; then
+            notify "normal" "media-playback-stop" "Docker" "Stopped container $id"
+        fi
+    elif [ "$type" = "vm" ]; then
+        echo -e "${YELLOW}Stopping VM ${id}...${RESET}"
+        if virsh shutdown "$id" 2>&1; then
+            notify "normal" "media-playback-stop" "Virtual Machine" "Shutting down VM $id"
+        fi
+    fi
+}
+
+cmd_restart() {
+    local type="$1"
+    local id="$2"
+    if [ "$type" = "docker" ]; then
+        echo -e "${CYAN}Restarting container ${id}...${RESET}"
+        docker restart "$id" 2>&1
+    elif [ "$type" = "vm" ]; then
+        echo -e "${CYAN}Rebooting VM ${id}...${RESET}"
+        virsh reboot "$id" 2>&1
+    fi
+}
+
+cmd_logs() {
+    local id="$1"
+    clear
+    echo -e "${BOLD}${CYAN}Streaming logs for container ${id} (Ctrl-C to exit)...${RESET}\n"
+    docker logs -f --tail 100 "$id"
+}
+
+cmd_shell() {
+    local id="$1"
+    clear
+    echo -e "${BOLD}${CYAN}Opening interactive shell in container ${id}...${RESET}\n"
+    if docker exec -it "$id" sh 2>/dev/null; then
+        :
+    elif docker exec -it "$id" bash 2>/dev/null; then
+        :
+    else
+        echo -e "${RED}✘ Could not open shell (is container running?)${RESET}"
+        echo -ne "${BOLD}Press Enter to return...${RESET}"
+        read -r
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="$1"
+    if [ -z "$target" ]; then
+        echo -e "${DIM}Select a container, image, or VM to inspect details.${RESET}"
+        return 0
+    fi
+
+    case "$target" in
+        action:prune_docker)
+            cat <<EOF
+${BOLD}${CYAN}Prune Dangling Docker Objects${RESET}
+Removes all stopped containers, dangling images, and unused build caches.
+Command: docker system prune -f
+EOF
+            return 0
+            ;;
+    esac
+
+    local type="${target%%:*}"
+    local payload="${target#*:}"
+
+    case "$type" in
+        docker)
+            local cid="$payload"
+            echo -e "${BOLD}🐳 Docker Container:${RESET} ${cid}"
+            echo "─────────────────────────────────────────────────────────────────────────────"
+            docker inspect "$cid" --format 'Name: {{.Name}}
+Image: {{.Config.Image}}
+Status: {{.State.Status}} (Running: {{.State.Running}})
+IP Address: {{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}
+Ports: {{range $p, $conf := .NetworkSettings.Ports}}{{$p}} -> {{(index $conf 0).HostPort}} {{end}}
+Mounts: {{range .Mounts}}{{.Source}} -> {{.Destination}} {{end}}
+Created: {{.Created}}' 2>/dev/null
+            echo ""
+            echo -e "${CYAN}${BOLD}── Recent Container Logs ────────────────────────────────────${RESET}"
+            docker logs --tail 20 "$cid" 2>&1 || echo "No logs"
+            ;;
+
+        image)
+            local img_id="$payload"
+            echo -e "${BOLD}📦 Docker Image:${RESET} ${img_id}"
+            echo "─────────────────────────────────────────────────────────────────────────────"
+            docker image inspect "$img_id" --format 'RepoTags: {{.RepoTags}}
+Size: {{.Size}} bytes
+Created: {{.Created}}
+Architecture: {{.Architecture}}
+Author: {{.Author}}' 2>/dev/null
+            ;;
+
+        vm)
+            local vm_name="$payload"
+            echo -e "${BOLD}🖥️  Virtual Machine:${RESET} ${vm_name}"
+            echo "─────────────────────────────────────────────────────────────────────────────"
+            virsh dominfo "$vm_name" 2>/dev/null || echo "VM details unavailable"
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Contextual Action Menu
+# ------------------------------------------------------------------------------
+
+show_action_menu() {
+    local target="$1"
+    local type="${target%%:*}"
+    local payload="${target#*:}"
+
+    local acts=()
+    case "$type" in
+        docker)
+            local is_running
+            is_running=$(docker inspect -f '{{.State.Running}}' "$payload" 2>/dev/null || echo "false")
+            if [ "$is_running" = "true" ]; then
+                acts+=("1. ⏹️  Stop Container")
+                acts+=("2. 🔄 Restart Container")
+                acts+=("3. 📜 View Live Logs (docker logs -f)")
+                acts+=("4. 🐚 Open Interactive Shell (docker exec -it)")
+            else
+                acts+=("1. ▶️  Start Container")
+                acts+=("2. 🗑️  Remove Container (docker rm)")
+                acts+=("3. 📜 View Previous Logs")
+            fi
+            acts+=("5. 📋 Copy Container ID to Clipboard")
+            acts+=("6. ✘  Cancel")
+
+            local choice
+            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Container [$payload] > " --height=35% --reverse --border=rounded) || return 0
+            case "$choice" in
+                1*) [ "$is_running" = "true" ] && cmd_stop "docker" "$payload" || cmd_start "docker" "$payload" ;;
+                2*) [ "$is_running" = "true" ] && cmd_restart "docker" "$payload" || docker rm "$payload" ;;
+                3*) cmd_logs "$payload" ;;
+                4*) cmd_shell "$payload" ;;
+                5*) command -v wl-copy >/dev/null 2>&1 && echo -n "$payload" | wl-copy && notify "normal" "edit-copy" "Copied" "Copied ID" ;;
+            esac
+            ;;
+
+        vm)
+            acts+=("1. ▶️  Start Virtual Machine")
+            acts+=("2. ⏹️  Graceful Shutdown")
+            acts+=("3. 🔄 Reboot VM")
+            acts+=("4. 💀 Force Off / Destroy")
+            acts+=("5. ✘  Cancel")
+
+            local choice
+            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="VM [$payload] > " --height=30% --reverse --border=rounded) || return 0
+            case "$choice" in
+                1*) virsh start "$payload" ;;
+                2*) virsh shutdown "$payload" ;;
+                3*) virsh reboot "$payload" ;;
+                4*) virsh destroy "$payload" ;;
+            esac
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive Dashboard
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    local self_bin
+    self_bin="$(readlink -f "$0")"
+
+    local current_scope="all"
+    local scopes=("all" "running" "stopped" "images" "vms")
+
+    while true; do
+        clear
+
+        local containers_raw images_raw vms_raw
+        containers_raw=$(get_docker_containers)
+        images_raw=$(get_docker_images)
+        vms_raw=$(get_virsh_vms)
+
+        local running_cnt=0 stopped_cnt=0
+        if [ -n "$containers_raw" ]; then
+            running_cnt=$(echo "$containers_raw" | grep -c $'\trunning\t' || echo "0")
+            stopped_cnt=$(echo "$containers_raw" | grep -c -v $'\trunning\t' || echo "0")
+        fi
+
+        local scope_label
+        case "$current_scope" in
+            all) scope_label="${CYAN}All Containers & VMs${RESET}" ;;
+            running) scope_label="${GREEN}Running Containers (${running_cnt})${RESET}" ;;
+            stopped) scope_label="${YELLOW}Stopped Containers (${stopped_cnt})${RESET}" ;;
+            images) scope_label="${MAGENTA}Docker Images${RESET}" ;;
+            vms) scope_label="${BLUE}Virtual Machines${RESET}" ;;
+        esac
+
+        local header_info="Scope: $scope_label | Running: $running_cnt | Stopped: $stopped_cnt"
+
+        # Next scope for Tab
+        local next_scope="all"
+        for i in "${!scopes[@]}"; do
+            if [ "${scopes[$i]}" = "$current_scope" ]; then
+                local next_idx=$(( (i + 1) % ${#scopes[@]} ))
+                next_scope="${scopes[$next_idx]}"
+                break
+            fi
+        done
+
+        local menu=()
+        menu+=("󰌢  [TAB] Switch Scope (Next: ${next_scope})"$'\t'"action:toggle_scope")
+        menu+=("🧹  [Ctrl-P] Prune Stopped Containers & Caches"$'\t'"action:prune_docker")
+
+        # Docker Containers
+        if [ "$current_scope" != "images" ] && [ "$current_scope" != "vms" ]; then
+            if [ -n "$containers_raw" ]; then
+                while IFS=$'\t' read -r cid cname cimage cstatus cstate cports; do
+                    [ -z "$cid" ] && continue
+                    if [ "$current_scope" = "running" ] && [ "$cstate" != "running" ]; then continue; fi
+                    if [ "$current_scope" = "stopped" ] && [ "$cstate" = "running" ]; then continue; fi
+
+                    local icon="⏹️"
+                    [ "$cstate" = "running" ] && icon="🟢"
+
+                    local label
+                    label=$(printf "%s  %-20s %-12s [%s] %s" "$icon" "$cname" "($cstate)" "$cid" "$cimage")
+                    menu+=("${label}"$'\t'"docker:${cid}")
+                done <<< "$containers_raw"
+            fi
+        fi
+
+        # Libvirt VMs
+        if [ "$current_scope" = "all" ] || [ "$current_scope" = "vms" ]; then
+            if [ -n "$vms_raw" ]; then
+                while IFS=$'\t' read -r vid vname vstate; do
+                    [ -z "$vname" ] && continue
+                    local icon="🖥️"
+                    [ "$vstate" = "running" ] && icon="🟢"
+                    local label
+                    label=$(printf "%s  VM: %-18s (%s)" "$icon" "$vname" "$vstate")
+                    menu+=("${label}"$'\t'"vm:${vname}")
+                done <<< "$vms_raw"
+            fi
+        fi
+
+        # Docker Images
+        if [ "$current_scope" = "all" ] || [ "$current_scope" = "images" ]; then
+            if [ -n "$images_raw" ]; then
+                while IFS=$'\t' read -r irepo iid isz icreated; do
+                    [ -z "$irepo" ] && continue
+                    local label
+                    label=$(printf "📦  IMG: %-32s (%s) %s" "$irepo" "$isz" "$icreated")
+                    menu+=("${label}"$'\t'"image:${iid}")
+                done <<< "$images_raw"
+            fi
+        fi
+
+        # If empty
+        if [ ${#menu[@]} -le 2 ]; then
+            menu+=("ℹ️  No containers or virtual machines found"$'\t'"action:toggle_scope")
+        fi
+
+        # Invoke fzf
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-s,ctrl-k,ctrl-l,ctrl-a,ctrl-p,ctrl-r,tab \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Container ($current_scope) > " \
+            --header="[$header_info] (Enter: Actions | Ctrl-S: Start | Ctrl-K: Stop | Ctrl-L: Logs | Ctrl-A: Shell | Tab: Filter | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local target_payload
+        target_payload=$(echo "$choice" | cut -f2)
+
+        # Tab scope switcher
+        if [ "$key" = "tab" ] || [ "$target_payload" = "action:toggle_scope" ]; then
+            current_scope="$next_scope"
+            continue
+        fi
+
+        if [ "$target_payload" = "action:prune_docker" ] || [ "$key" = "ctrl-p" ]; then
+            clear
+            echo -e "${BOLD}${CYAN}Pruning unused Docker containers, images and caches...${RESET}\n"
+            docker system prune -f
+            echo ""
+            echo -ne "${BOLD}Press Enter to return...${RESET}"
+            read -r
+            continue
+        fi
+
+        local type="${target_payload%%:*}"
+        local payload="${target_payload#*:}"
+
+        case "$key" in
+            ctrl-s) cmd_start "$type" "$payload"; sleep 0.5; continue ;;
+            ctrl-k) cmd_stop "$type" "$payload"; sleep 0.5; continue ;;
+            ctrl-l) [ "$type" = "docker" ] && cmd_logs "$payload"; continue ;;
+            ctrl-a) [ "$type" = "docker" ] && cmd_shell "$payload"; continue ;;
+            ctrl-r) continue ;;
+        esac
+
+        # Enter pressed
+        show_action_menu "$target_payload"
+    done
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}container${RESET} - Docker Containers & Libvirt VM Manager (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    container                       Launch interactive fzf container & VM dashboard
+    container list                  List all containers and VMs
+    container start <id>            Start container
+    container stop <id>             Stop container
+    container restart <id>          Restart container
+    container logs <id>             Follow container live logs
+    container shell <id>            Attach interactive shell to container
+    container preview <target>      Internal preview generator for fzf
+    container help                  Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}       Open contextual action menu (Start/Stop, Shell, Logs, Remove)
+    ${CYAN}Ctrl-S${RESET}      Start container or VM
+    ${CYAN}Ctrl-K${RESET}      Stop container or VM
+    ${CYAN}Ctrl-L${RESET}      Follow container logs (docker logs -f)
+    ${CYAN}Ctrl-A${RESET}      Attach interactive terminal shell (docker exec -it sh)
+    ${CYAN}Ctrl-P${RESET}      Prune unused Docker objects
+    ${CYAN}Ctrl-R${RESET}      Refresh list
+    ${CYAN}Tab${RESET}         Cycle scope filter (all -> running -> stopped -> images -> vms)
+    ${CYAN}Esc / Ctrl-C${RESET} Exit dashboard
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    list|ls)
+        echo "=== Docker Containers ==="
+        docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Image}}" 2>/dev/null
+        echo ""
+        echo "=== Virtual Machines ==="
+        virsh list --all 2>/dev/null
+        ;;
+    start) cmd_start "docker" "$2" ;;
+    stop) cmd_stop "docker" "$2" ;;
+    restart) cmd_restart "docker" "$2" ;;
+    logs) cmd_logs "$2" ;;
+    shell) cmd_shell "$2" ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            docker ps -a
+        fi
+        ;;
+esac

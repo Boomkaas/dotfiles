@@ -1,0 +1,358 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# log - Systemd Journal & Kernel Log Explorer (CLI & fzf TUI)
+# Inspect system errors, follow unit logs, filter kernel events & diagnostics.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-utilities-system-monitor}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Data Queries
+# ------------------------------------------------------------------------------
+
+# Returns log lines according to scope
+query_logs() {
+    local scope="${1:-errors}"
+    local limit="${2:-100}"
+
+    case "$scope" in
+        errors)
+            journalctl -p 3 -xb -n "$limit" --no-pager 2>/dev/null
+            ;;
+        boot)
+            journalctl -b -n "$limit" --no-pager 2>/dev/null
+            ;;
+        kernel)
+            journalctl -k -b -n "$limit" --no-pager 2>/dev/null
+            ;;
+        failed)
+            # Find failed units and fetch their logs
+            local failed_units
+            failed_units=$(systemctl --failed --no-legend 2>/dev/null | awk '{print $1}')
+            if [ -n "$failed_units" ]; then
+                for u in $failed_units; do
+                    journalctl -u "$u" -n 25 --no-pager 2>/dev/null
+                done
+            else
+                echo "No failed systemd units on this boot."
+            fi
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Actions
+# ------------------------------------------------------------------------------
+
+cmd_follow() {
+    local unit="$1"
+    clear
+    if [ -n "$unit" ] && [ "$unit" != "-" ]; then
+        echo -e "${BOLD}${CYAN}Following logs for unit: ${unit} (Ctrl-C to stop)...${RESET}\n"
+        journalctl -u "$unit" -f
+    else
+        echo -e "${BOLD}${CYAN}Following live system journal (Ctrl-C to stop)...${RESET}\n"
+        journalctl -f
+    fi
+}
+
+cmd_dmesg() {
+    clear
+    echo -e "${BOLD}${CYAN}Kernel Ring Buffer (dmesg):${RESET}\n"
+    dmesg -T --color=always 2>/dev/null | tail -n 60 | (command -v bat >/dev/null 2>&1 && bat --color=always -p || cat)
+    echo ""
+    echo -ne "${BOLD}Press Enter to return...${RESET}"
+    read -r
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="$1"
+    if [ -z "$target" ]; then
+        echo -e "${DIM}Select a log line to inspect context and surrounding logs.${RESET}"
+        return 0
+    fi
+
+    case "$target" in
+        action:toggle_scope)
+            cat <<EOF
+${BOLD}${CYAN}Log Scope Filtering${RESET}
+Cycle through journal presets:
+  • ${BOLD}errors${RESET} - Critical errors, emergencies, alerts (priority ≤ 3)
+  • ${BOLD}boot${RESET}   - Current boot timeline events
+  • ${BOLD}kernel${RESET} - Kernel and hardware ring buffer logs
+  • ${BOLD}failed${RESET} - Output from failing / crashed systemd units
+
+${DIM}Shortcut:${RESET} Press ${BOLD}TAB${RESET} at any time.
+EOF
+            return 0
+            ;;
+        action:follow_live)
+            echo -e "${BOLD}${CYAN}Live Journal Follow${RESET}\n"
+            echo "Launches real-time continuous streaming of new system log events."
+            return 0
+            ;;
+        action:view_dmesg)
+            echo -e "${BOLD}${CYAN}Kernel Ring Buffer (dmesg)${RESET}\n"
+            echo "Inspect raw hardware, driver, ACPI, and CPU messages."
+            return 0
+            ;;
+    esac
+
+    # Display entry details
+    echo -e "${BOLD}📜 Log Entry:${RESET}"
+    echo "$target"
+    echo "─────────────────────────────────────────────────────────────────────────────"
+
+    # Extract timestamp or process name
+    local proc=""
+    if [[ "$target" =~ ([a-zA-Z0-9_\.\-]+)\[([0-9]+)\]: ]]; then
+        proc="${BASH_REMATCH[1]}"
+        local pid="${BASH_REMATCH[2]}"
+        echo -e "${BOLD}⚙️  Process:${RESET}  $proc (PID: $pid)"
+        echo ""
+        echo -e "${CYAN}${BOLD}── Recent logs from $proc ─────────────────────────────────${RESET}"
+        journalctl _COMM="$proc" -n 25 --no-pager 2>/dev/null
+    elif [[ "$target" =~ kernel: ]]; then
+        echo -e "${BOLD}⚙️  Subsystem:${RESET} Linux Kernel"
+        echo ""
+        echo -e "${CYAN}${BOLD}── Surrounding Kernel Messages ────────────────────────────${RESET}"
+        journalctl -k -b -n 25 --no-pager 2>/dev/null
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Contextual Action Menu
+# ------------------------------------------------------------------------------
+
+show_action_menu() {
+    local target="$1"
+
+    local acts=()
+    acts+=("1. 📋 Copy Log Line to Clipboard")
+    acts+=("2. 🔍 View Full Surrounding Context (journalctl -n 50)")
+    acts+=("3. 📡 Live Follow Mode (journalctl -f)")
+    acts+=("4. ✘  Cancel")
+
+    local choice
+    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Log Action > " --height=30% --reverse --border=rounded) || return 0
+
+    case "$choice" in
+        1*)
+            if command -v wl-copy >/dev/null 2>&1; then
+                echo -n "$target" | wl-copy
+                notify "normal" "edit-copy" "Log Copied" "Copied log entry to clipboard"
+            fi
+            ;;
+        2*)
+            clear
+            if [[ "$target" =~ ([a-zA-Z0-9_\.\-]+)\[([0-9]+)\]: ]]; then
+                journalctl _COMM="${BASH_REMATCH[1]}" -n 60 --no-pager | (command -v bat >/dev/null 2>&1 && bat --color=always -p || cat)
+            else
+                journalctl -b -n 60 --no-pager | (command -v bat >/dev/null 2>&1 && bat --color=always -p || cat)
+            fi
+            echo ""
+            echo -ne "${BOLD}Press Enter to return...${RESET}"
+            read -r
+            ;;
+        3*) cmd_follow ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive Dashboard
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    local self_bin
+    self_bin="$(readlink -f "$0")"
+
+    local current_scope="errors"
+    local scopes=("errors" "boot" "kernel" "failed")
+
+    while true; do
+        clear
+
+        local raw_logs
+        raw_logs=$(query_logs "$current_scope" 100)
+
+        local log_count=0
+        [ -n "$raw_logs" ] && log_count=$(wc -l <<< "$raw_logs" || echo "0")
+
+        local scope_label
+        case "$current_scope" in
+            errors) scope_label="${RED}System Errors (${log_count})${RESET}" ;;
+            boot) scope_label="${CYAN}Current Boot Logs${RESET}" ;;
+            kernel) scope_label="${YELLOW}Kernel Ring Buffer${RESET}" ;;
+            failed) scope_label="${MAGENTA}Failed Units${RESET}" ;;
+        esac
+
+        local header_info="Scope: $scope_label"
+
+        # Next scope for Tab
+        local next_scope="errors"
+        for i in "${!scopes[@]}"; do
+            if [ "${scopes[$i]}" = "$current_scope" ]; then
+                local next_idx=$(( (i + 1) % ${#scopes[@]} ))
+                next_scope="${scopes[$next_idx]}"
+                break
+            fi
+        done
+
+        local menu=()
+        menu+=("󰌢  [TAB] Switch Scope (Next: ${next_scope})"$'\t'"action:toggle_scope")
+        menu+=("📡  [Ctrl-F] Live Stream / Follow Journal in Real-Time"$'\t'"action:follow_live")
+        menu+=("🐧  [Ctrl-K] Kernel dmesg Buffer Viewer"$'\t'"action:view_dmesg")
+
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            # Skip noise / decorative lines
+            [[ "$line" =~ ^(░░|Subject:|Defined-By:|Support:|A\ start\ job|The\ job) ]] && continue
+
+            local icon="📄"
+            if [[ "$line" =~ (error|fail|crit|emerg|fault|fatal) ]]; then
+                icon="🔴"
+            elif [[ "$line" =~ (warn|mismatch) ]]; then
+                icon="⚠️"
+            elif [[ "$line" =~ kernel: ]]; then
+                icon="🐧"
+            fi
+
+            # Format line nicely
+            local display_line="${line:0:80}"
+            menu+=("${icon}  ${display_line}"$'\t'"$line")
+        done <<< "$raw_logs"
+
+        # Invoke fzf
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-f,ctrl-k,ctrl-c,ctrl-r,tab \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Log ($current_scope) > " \
+            --header="[$header_info] (Enter: Actions | Ctrl-F: Live Follow | Ctrl-K: Dmesg | Ctrl-C: Copy | Tab: Filter | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local target_payload
+        target_payload=$(echo "$choice" | cut -f2)
+
+        # Tab scope switcher
+        if [ "$key" = "tab" ] || [ "$target_payload" = "action:toggle_scope" ]; then
+            current_scope="$next_scope"
+            continue
+        fi
+
+        if [ "$target_payload" = "action:follow_live" ] || [ "$key" = "ctrl-f" ]; then
+            cmd_follow
+            continue
+        fi
+
+        if [ "$target_payload" = "action:view_dmesg" ] || [ "$key" = "ctrl-k" ]; then
+            cmd_dmesg
+            continue
+        fi
+
+        case "$key" in
+            ctrl-c)
+                command -v wl-copy >/dev/null 2>&1 && echo -n "$target_payload" | wl-copy && notify "normal" "edit-copy" "Copied" "Log line copied to clipboard"
+                continue
+                ;;
+            ctrl-r) continue ;;
+        esac
+
+        # Enter pressed
+        show_action_menu "$target_payload"
+    done
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}log${RESET} - Systemd Journal & Kernel Log Explorer (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    log                             Launch interactive fzf log explorer
+    log errors                      Print recent system errors (priority <= 3)
+    log boot                        Print current boot logs
+    log kernel                      Print kernel ring buffer logs
+    log follow [unit]               Live stream / follow logs
+    log preview <target>            Internal preview generator for fzf
+    log help                        Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}       Open contextual action menu (Copy, Context, Follow)
+    ${CYAN}Ctrl-F${RESET}      Live stream logs in real-time (journalctl -f)
+    ${CYAN}Ctrl-K${RESET}      Inspect kernel dmesg ring buffer
+    ${CYAN}Ctrl-C${RESET}      Copy selected log line to clipboard
+    ${CYAN}Ctrl-R${RESET}      Refresh log view
+    ${CYAN}Tab${RESET}         Cycle scope filter (errors -> boot -> kernel -> failed)
+    ${CYAN}Esc / Ctrl-C${RESET} Exit explorer
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    errors|err) query_logs "errors" "${2:-50}" ;;
+    boot) query_logs "boot" "${2:-50}" ;;
+    kernel|dmesg) query_logs "kernel" "${2:-50}" ;;
+    failed) query_logs "failed" "${2:-50}" ;;
+    follow) cmd_follow "$2" ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            query_logs "errors" 30
+        fi
+        ;;
+esac

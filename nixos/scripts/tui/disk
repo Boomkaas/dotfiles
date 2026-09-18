@@ -1,0 +1,504 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# disk - Storage, USB Drives & Nix Store Garbage Collection Hub (CLI & fzf TUI)
+# Manage disk partitions, mount/eject USB devices, reclaim Nix store space.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-drive-harddisk}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+open_in_fm() {
+    local target="$1"
+    if [ -z "$target" ] || [ ! -d "$target" ]; then return 1; fi
+    if command -v yazi >/dev/null 2>&1; then
+        yazi "$target"
+    elif command -v thunar >/dev/null 2>&1; then
+        thunar "$target" >/dev/null 2>&1 &
+    else
+        xdg-open "$target" >/dev/null 2>&1 &
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Data Parsers
+# ------------------------------------------------------------------------------
+
+# Returns: DEV<TAB>MOUNT<TAB>FSTYPE<TAB>TOTAL<TAB>USED<TAB>AVAIL<TAB>USE_PCT
+get_partitions() {
+    df -hT -x tmpfs -x devtmpfs -x efivarfs 2>/dev/null | tail -n +2 | while read -r fs type size used avail pct target; do
+        [ -z "$target" ] && continue
+        echo -e "${fs}\t${target}\t${type}\t${size}\t${used}\t${avail}\t${pct}"
+    done
+}
+
+# Returns: NAME<TAB>MAJ:MIN<TAB>RM<TAB>SIZE<TAB>TYPE<TAB>MOUNTPOINT<TAB>MODEL<TAB>TRAN
+get_block_devices() {
+    lsblk -r -o NAME,MAJ:MIN,RM,SIZE,TYPE,MOUNTPOINT,MODEL,TRAN 2>/dev/null | tail -n +2
+}
+
+get_nix_store_info() {
+    local store_size="unknown"
+    local path_count="0"
+    if [ -d "/nix/store" ]; then
+        store_size=$(df -h /nix/store 2>/dev/null | awk 'NR==2 {print $3}')
+        path_count=$(find /nix/store -maxdepth 1 2>/dev/null | wc -l || echo "0")
+    fi
+    echo -e "${store_size}\t${path_count}"
+}
+
+# ------------------------------------------------------------------------------
+# Actions
+# ------------------------------------------------------------------------------
+
+cmd_mount() {
+    local dev="$1"
+    [ -z "$dev" ] && return 1
+    echo -e "${CYAN}Mounting ${dev}...${RESET}"
+    if udisksctl mount -b "$dev" 2>&1; then
+        notify "normal" "drive-removable-media" "Disk Manager" "Mounted $dev successfully"
+    else
+        notify "critical" "dialog-error" "Disk Manager" "Failed to mount $dev"
+    fi
+}
+
+cmd_unmount() {
+    local target="$1"
+    [ -z "$target" ] && return 1
+    echo -e "${YELLOW}Unmounting ${target}...${RESET}"
+    if udisksctl unmount -b "$target" 2>/dev/null || udisksctl unmount -p "$target" 2>/dev/null || sudo umount "$target" 2>&1; then
+        notify "normal" "drive-removable-media" "Disk Manager" "Unmounted $target successfully"
+    else
+        notify "critical" "dialog-error" "Disk Manager" "Failed to unmount $target"
+    fi
+}
+
+cmd_eject() {
+    local dev="$1"
+    [ -z "$dev" ] && return 1
+    echo -e "${YELLOW}Powering off / ejecting ${dev}...${RESET}"
+    if udisksctl power-off -b "$dev" 2>&1; then
+        notify "normal" "media-eject" "Disk Manager" "Safely ejected $dev"
+    else
+        notify "critical" "dialog-error" "Disk Manager" "Failed to safely eject $dev"
+    fi
+}
+
+cmd_clean_nix() {
+    clear
+    echo -e "${BOLD}${CYAN}Reclaiming Nix Store Disk Space...${RESET}\n"
+    if command -v nh >/dev/null 2>&1; then
+        echo -e "${BOLD}Running: nh clean all${RESET}"
+        nh clean all
+    else
+        echo -e "${BOLD}Running: nix-collect-garbage -d${RESET}"
+        nix-collect-garbage -d
+    fi
+    echo ""
+    echo -e "${GREEN}✔ Nix garbage collection completed.${RESET}"
+    echo -ne "${BOLD}Press Enter to return...${RESET}"
+    read -r
+}
+
+cmd_optimise_nix() {
+    clear
+    echo -e "${BOLD}${CYAN}Optimizing / Deduplicating Nix Store (Hardlink sharing)...${RESET}\n"
+    echo -e "${BOLD}Running: nix-store --optimise${RESET}"
+    nix-store --optimise
+    echo ""
+    echo -e "${GREEN}✔ Nix store optimization completed.${RESET}"
+    echo -ne "${BOLD}Press Enter to return...${RESET}"
+    read -r
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="$1"
+    if [ -z "$target" ]; then
+        echo -e "${DIM}Select a partition, USB drive, or storage action to inspect.${RESET}"
+        return 0
+    fi
+
+    case "$target" in
+        action:clean_nix)
+            echo -e "${BOLD}${CYAN}Nix Store Garbage Collection${RESET}\n"
+            echo "Deletes old unreferenced Nix store generations, build outputs,"
+            echo "and package caches across system and user profiles."
+            echo ""
+            echo "Command executed: nh clean all (or nix-collect-garbage -d)"
+            echo "Keeps: ≥ 3 generations (defined in flake.nix / system configuration)"
+            echo ""
+            local store_info
+            store_info=$(get_nix_store_info)
+            echo -e "${BOLD}Current /nix/store Size:${RESET} $(echo "$store_info" | cut -f1)"
+            echo -e "${BOLD}Current Store Objects:${RESET}  $(echo "$store_info" | cut -f2)"
+            return 0
+            ;;
+
+        action:optimise_nix)
+            echo -e "${BOLD}${CYAN}Nix Store Hardlink Deduplication${RESET}\n"
+            echo "Scans /nix/store for identical files across different package builds"
+            echo "and replaces duplicates with hardlinks to reclaim physical disk space."
+            echo ""
+            echo "Command executed: nix-store --optimise"
+            return 0
+            ;;
+
+        action:analyze_home)
+            echo -e "${BOLD}${CYAN}Home Directory Storage Breakdown (~)${RESET}\n"
+            echo -e "${BOLD}Top Directories in $HOME:${RESET}"
+            du -sh "$HOME"/* 2>/dev/null | sort -hr | head -n 25
+            return 0
+            ;;
+
+        part:*)
+            local mountp="${target#part:}"
+            echo -e "${BOLD}${CYAN}Filesystem Partition:${RESET} $mountp"
+            echo "─────────────────────────────────────────────────────────────────────────────"
+            df -hT "$mountp" 2>/dev/null
+            echo ""
+            echo -e "${BOLD}Inode Usage:${RESET}"
+            df -i "$mountp" 2>/dev/null | tail -n +2 | awk '{print "Total Inodes: " $2 " | Used: " $3 " (" $5 ") | Free: " $4}'
+            echo ""
+            echo -e "${BOLD}Mount Properties:${RESET}"
+            findmnt "$mountp" 2>/dev/null || cat /proc/mounts | grep " $mountp "
+            echo ""
+            echo -e "${BOLD}Top-Level Contents:${RESET}"
+            ls -lh --color=always "$mountp" 2>/dev/null | head -n 15
+            return 0
+            ;;
+
+        dev:*)
+            local devname="${target#dev:}"
+            local devpath="/dev/$devname"
+            echo -e "${BOLD}${CYAN}Block Storage Device:${RESET} $devpath"
+            echo "─────────────────────────────────────────────────────────────────────────────"
+            lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT,LABEL,UUID "$devpath" 2>/dev/null
+            echo ""
+            echo -e "${BOLD}UDisks Properties:${RESET}"
+            udisksctl info -b "$devpath" 2>/dev/null | grep -E "(IdLabel|IdType|IdUsage|Drive|Size|Media|HintSystem)" | head -n 15
+            return 0
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Action Menu
+# ------------------------------------------------------------------------------
+
+show_action_menu() {
+    local target="$1"
+    local acts=()
+
+    case "$target" in
+        action:clean_nix) cmd_clean_nix; return 0 ;;
+        action:optimise_nix) cmd_optimise_nix; return 0 ;;
+        action:analyze_home)
+            clear
+            du -sh "$HOME"/* 2>/dev/null | sort -hr | head -n 35
+            echo ""
+            echo -ne "${BOLD}Press Enter to return...${RESET}"
+            read -r
+            return 0
+            ;;
+        part:*)
+            local p="${target#part:}"
+            acts+=("1. 󰇥  Browse Partition in Yazi ($p)")
+            acts+=("2. 󱁤  Open in GUI File Manager (Thunar)")
+            acts+=("3. 📊 Detailed Du Breakdown")
+            [ "$p" != "/" ] && [ "$p" != "/boot" ] && [ "$p" != "/nix" ] && acts+=("4. 󰍃  Unmount Partition")
+            acts+=("5. ✘  Cancel")
+
+            local choice
+            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Partition [$p] > " --height=30% --reverse --border=rounded) || return 0
+            case "$choice" in
+                1*) open_in_fm "$p" ;;
+                2*) thunar "$p" >/dev/null 2>&1 & ;;
+                3*)
+                    clear
+                    echo -e "${BOLD}Top Folders in $p:${RESET}\n"
+                    du -sh "$p"/* 2>/dev/null | sort -hr | head -n 30
+                    echo ""
+                    echo -ne "${BOLD}Press Enter to return...${RESET}"
+                    read -r
+                    ;;
+                4*) cmd_unmount "$p" ;;
+            esac
+            ;;
+        dev:*)
+            local d="${target#dev:}"
+            local full_dev="/dev/$d"
+            local is_mounted
+            is_mounted=$(lsblk -no MOUNTPOINT "$full_dev" 2>/dev/null | tr -d '[:space:]')
+
+            if [ -n "$is_mounted" ]; then
+                acts+=("1. 󰍃  Unmount Device ($is_mounted)")
+                acts+=("2. ⏏  Safely Eject / Power Off")
+                acts+=("3. 󰇥  Browse in Yazi")
+            else
+                acts+=("1. 󰋊  Mount Device ($full_dev)")
+                acts+=("2. ⏏  Safely Eject / Power Off")
+            fi
+            acts+=("4. ✘  Cancel")
+
+            local choice
+            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Device [$d] > " --height=30% --reverse --border=rounded) || return 0
+            case "$choice" in
+                1*)
+                    if [ -n "$is_mounted" ]; then
+                        cmd_unmount "$full_dev"
+                    else
+                        cmd_mount "$full_dev"
+                    fi
+                    ;;
+                2*) cmd_eject "$full_dev" ;;
+                3*) [ -n "$is_mounted" ] && open_in_fm "$is_mounted" ;;
+            esac
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive Dashboard
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    local self_bin
+    self_bin="$(readlink -f "$0")"
+
+    local current_scope="all"
+    local scopes=("all" "partitions" "usb" "nix")
+
+    while true; do
+        clear
+
+        # Header stats
+        local root_used root_avail root_pct
+        read -r root_used root_avail root_pct < <(df -h / 2>/dev/null | awk 'NR==2 {print $3, $4, $5}')
+        local store_info
+        store_info=$(get_nix_store_info)
+        local store_sz
+        store_sz=$(echo "$store_info" | cut -f1)
+
+        local scope_label
+        case "$current_scope" in
+            all) scope_label="${CYAN}All Storage${RESET}" ;;
+            partitions) scope_label="${BLUE}Partitions${RESET}" ;;
+            usb) scope_label="${YELLOW}USB & Removable${RESET}" ;;
+            nix) scope_label="${MAGENTA}Nix Store${RESET}" ;;
+        esac
+
+        local header_info="Scope: $scope_label | Root (/): $root_used used ($root_avail free, $root_pct) | /nix/store: $store_sz"
+
+        # Next scope for Tab
+        local next_scope="all"
+        for i in "${!scopes[@]}"; do
+            if [ "${scopes[$i]}" = "$current_scope" ]; then
+                local next_idx=$(( (i + 1) % ${#scopes[@]} ))
+                next_scope="${scopes[$next_idx]}"
+                break
+            fi
+        done
+
+        local menu=()
+
+        # Control row
+        menu+=("󰌢  [TAB] Switch Scope (Next: ${next_scope})"$'\t'"action:toggle_scope")
+        menu+=("🧹  [Ctrl-C] Reclaim Nix Store Space (nh clean all)"$'\t'"action:clean_nix")
+        menu+=("🔗  [Ctrl-O] Deduplicate Nix Store Hardlinks (nix-store --optimise)"$'\t'"action:optimise_nix")
+        menu+=("📊  [Ctrl-H] Analyze Home Directory Storage Breakdown (~)"$'\t'"action:analyze_home")
+
+        # Partitions
+        if [ "$current_scope" = "all" ] || [ "$current_scope" = "partitions" ]; then
+            while IFS=$'\t' read -r fs target type size used avail pct; do
+                [ -z "$target" ] && continue
+                local icon="󰋊"
+                [ "$target" = "/" ] && icon=""
+                [ "$target" = "/boot" ] && icon="󰒓"
+                local label
+                label=$(printf "%s  %-18s [%s] %s used / %s (%s)" "$icon" "$target" "$type" "$used" "$size" "$pct")
+                menu+=("${label}"$'\t'"part:${target}")
+            done < <(get_partitions)
+        fi
+
+        # Removable / USB Devices
+        if [ "$current_scope" = "all" ] || [ "$current_scope" = "usb" ]; then
+            while IFS=' ' read -r name majmin rm size type mountpoint model tran; do
+                [ -z "$name" ] && continue
+                [ "$rm" != "1" ] && [ "$tran" != "usb" ] && continue
+                local st="Unmounted"
+                [ -n "$mountpoint" ] && st="$mountpoint"
+                local label
+                label=$(printf "󰕌  USB: /dev/%-8s (%s) -> %s" "$name" "$size" "$st")
+                menu+=("${label}"$'\t'"dev:${name}")
+            done < <(get_block_devices)
+        fi
+
+        # Invoke fzf
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-c,ctrl-o,ctrl-h,ctrl-m,ctrl-e,ctrl-f,tab \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Disk ($current_scope) > " \
+            --header="[$header_info] (Enter: Actions | Ctrl-C: Clean Nix | Ctrl-O: Optimise | Ctrl-M: Mount/Unmount | Ctrl-F: Yazi | Tab: Filter | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local target_payload
+        target_payload=$(echo "$choice" | cut -f2)
+
+        # Tab scope switcher
+        if [ "$key" = "tab" ] || [ "$target_payload" = "action:toggle_scope" ]; then
+            current_scope="$next_scope"
+            continue
+        fi
+
+        case "$key" in
+            ctrl-c) cmd_clean_nix; continue ;;
+            ctrl-o) cmd_optimise_nix; continue ;;
+            ctrl-h)
+                clear
+                du -sh "$HOME"/* 2>/dev/null | sort -hr | head -n 35
+                echo ""
+                echo -ne "${BOLD}Press Enter to return...${RESET}"
+                read -r
+                continue
+                ;;
+            ctrl-m)
+                if [[ "$target_payload" == dev:* ]]; then
+                    local dev="/dev/${target_payload#dev:}"
+                    local mp
+                    mp=$(lsblk -no MOUNTPOINT "$dev" 2>/dev/null | tr -d '[:space:]')
+                    if [ -n "$mp" ]; then
+                        cmd_unmount "$dev"
+                    else
+                        cmd_mount "$dev"
+                    fi
+                elif [[ "$target_payload" == part:* ]]; then
+                    cmd_unmount "${target_payload#part:}"
+                fi
+                continue
+                ;;
+            ctrl-e)
+                if [[ "$target_payload" == dev:* ]]; then
+                    cmd_eject "/dev/${target_payload#dev:}"
+                fi
+                continue
+                ;;
+            ctrl-f)
+                if [[ "$target_payload" == part:* ]]; then
+                    open_in_fm "${target_payload#part:}"
+                elif [[ "$target_payload" == dev:* ]]; then
+                    local mp
+                    mp=$(lsblk -no MOUNTPOINT "/dev/${target_payload#dev:}" 2>/dev/null | tr -d '[:space:]')
+                    [ -n "$mp" ] && open_in_fm "$mp"
+                fi
+                continue
+                ;;
+        esac
+
+        # Enter pressed
+        show_action_menu "$target_payload"
+    done
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}disk${RESET} - Storage, USB Drives & Nix Store Garbage Collection Hub (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    disk                            Launch interactive fzf disk & storage dashboard
+    disk list                       Print mounted partitions and storage status
+    disk usb                        List detected USB and removable storage devices
+    disk clean                      Reclaim Nix store space (nh clean all / nix-collect-garbage)
+    disk optimise                   Hardlink deduplication for /nix/store
+    disk mount <device>             Mount storage device (via udisksctl)
+    disk unmount <device|mount>     Unmount storage device
+    disk eject <device>             Safely power-off / eject removable device
+    disk preview <target>           Internal preview generator for fzf
+    disk help                       Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}       Open contextual action submenu (Mount/Unmount, Yazi, Details)
+    ${CYAN}Ctrl-C${RESET}      Reclaim Nix store space (nh clean all)
+    ${CYAN}Ctrl-O${RESET}      Deduplicate Nix store hardlinks (nix-store --optimise)
+    ${CYAN}Ctrl-H${RESET}      Analyze Home folder storage breakdown
+    ${CYAN}Ctrl-M${RESET}      Quick Mount / Unmount device
+    ${CYAN}Ctrl-E${RESET}      Safely Eject / Power-off USB device
+    ${CYAN}Ctrl-F${RESET}      Open partition mountpoint in Yazi file manager
+    ${CYAN}Tab${RESET}         Cycle scope filter (all -> partitions -> usb -> nix)
+    ${CYAN}Esc / Ctrl-C${RESET} Exit dashboard
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    list|ls)
+        df -hT -x tmpfs -x devtmpfs
+        ;;
+    usb)
+        lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,MODEL,TRAN | grep -E "(usb|disk|part)"
+        ;;
+    clean) cmd_clean_nix ;;
+    optimise|optimize) cmd_optimise_nix ;;
+    mount) cmd_mount "$2" ;;
+    unmount|umount) cmd_unmount "$2" ;;
+    eject) cmd_eject "$2" ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            df -hT -x tmpfs -x devtmpfs
+        fi
+        ;;
+esac

@@ -1,0 +1,388 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# pkg - Nix Package Explorer & Ephemeral Shell Launcher (CLI & fzf TUI)
+# Inspect system packages, test tools in temporary shells, copy attributes & search.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+PKGS_FILE="${PKGS_FILE:-$HOME/Code/Dotfiles/nixos/modules/pkgs.nix}"
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-system-software-install}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Data Queries
+# ------------------------------------------------------------------------------
+
+# Returns packages declared in pkgs.nix
+get_declared_packages() {
+    if [ ! -f "$PKGS_FILE" ]; then return 0; fi
+    awk '/environment\.systemPackages = with pkgs; \[/,/\];/' "$PKGS_FILE" 2>/dev/null \
+        | grep -E '^\s+[a-zA-Z0-9_\.\-]+$' \
+        | tr -d ' ' \
+        | sort -u
+}
+
+# Returns binaries available in system path
+get_system_binaries() {
+    if [ -d "/run/current-system/sw/bin" ]; then
+        find /run/current-system/sw/bin -maxdepth 1 -type l -printf "%f\n" 2>/dev/null | sort -u
+    fi
+}
+
+# Returns user profile binaries
+get_user_binaries() {
+    if [ -d "$HOME/.nix-profile/bin" ]; then
+        find "$HOME/.nix-profile/bin" -maxdepth 1 -type l -printf "%f\n" 2>/dev/null | sort -u
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Actions
+# ------------------------------------------------------------------------------
+
+cmd_spawn_shell() {
+    local pkg="$1"
+    [ -z "$pkg" ] && return 1
+    clear
+    echo -e "${BOLD}${CYAN}Spawning ephemeral nix-shell with package: ${pkg}...${RESET}\n"
+    echo -e "${DIM}Running: nix-shell -p $pkg${RESET}\n"
+    nix-shell -p "$pkg"
+}
+
+cmd_copy_attr() {
+    local pkg="$1"
+    [ -z "$pkg" ] && return 1
+    if command -v wl-copy >/dev/null 2>&1; then
+        echo -n "$pkg" | wl-copy
+        notify "normal" "edit-copy" "Package Copied" "Copied '$pkg' attribute to clipboard"
+        echo -e "${GREEN}✔ Copied to clipboard:${RESET} $pkg"
+    fi
+}
+
+cmd_open_manifest() {
+    local pkg="$1"
+    if [ -f "$PKGS_FILE" ]; then
+        local line_num
+        line_num=$(grep -n -E "^\s*${pkg}\s*$" "$PKGS_FILE" | cut -d: -f1 | head -n 1)
+        if [ -n "$line_num" ] && command -v nvim >/dev/null 2>&1; then
+            nvim "+${line_num}" "$PKGS_FILE"
+        else
+            "${EDITOR:-nano}" "$PKGS_FILE"
+        fi
+    fi
+}
+
+cmd_search_nixpkgs() {
+    local query="$1"
+    clear
+    echo -e "${BOLD}${CYAN}Searching Nixpkgs for '${query}'...${RESET}\n"
+    if command -v nix >/dev/null 2>&1; then
+        nix search nixpkgs "$query" 2>&1 | head -n 50
+    else
+        echo -e "${RED}nix command not available.${RESET}"
+    fi
+    echo ""
+    echo -ne "${BOLD}Press Enter to return...${RESET}"
+    read -r
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local pkg="$1"
+    if [ -z "$pkg" ]; then
+        echo -e "${DIM}Select a package to inspect declaration, binaries, and options.${RESET}"
+        return 0
+    fi
+
+    case "$pkg" in
+        action:toggle_scope)
+            cat <<EOF
+${BOLD}${CYAN}Package Scope Filtering${RESET}
+Cycle through package sources:
+  • ${BOLD}system${RESET}    - Declared in nixos/modules/pkgs.nix
+  • ${BOLD}binaries${RESET}  - System binaries in /run/current-system/sw/bin
+  • ${BOLD}user${RESET}      - User profile packages (~/.nix-profile)
+
+${DIM}Shortcut:${RESET} Press ${BOLD}TAB${RESET} at any time.
+EOF
+            return 0
+            ;;
+        action:search_web)
+            echo -e "${BOLD}${CYAN}Search NixOS Packages (search.nixos.org)${RESET}\n"
+            echo "Open search.nixos.org in your default web browser."
+            return 0
+            ;;
+    esac
+
+    echo -e "${BOLD}📦 Package:${RESET}   ${BOLD}${CYAN}${pkg}${RESET}"
+
+    # Check presence in system bin
+    local bin_path=""
+    if [ -e "/run/current-system/sw/bin/$pkg" ]; then
+        bin_path="/run/current-system/sw/bin/$pkg"
+        local real_store
+        real_store=$(readlink -f "$bin_path" 2>/dev/null || echo "$bin_path")
+        echo -e "${BOLD}📍 Binary:${RESET}    $bin_path"
+        echo -e "${BOLD}🏪 Store Path:${RESET} $real_store"
+    elif [ -e "$HOME/.nix-profile/bin/$pkg" ]; then
+        bin_path="$HOME/.nix-profile/bin/$pkg"
+        local real_store
+        real_store=$(readlink -f "$bin_path" 2>/dev/null || echo "$bin_path")
+        echo -e "${BOLD}📍 User Bin:${RESET}  $bin_path"
+        echo -e "${BOLD}🏪 Store Path:${RESET} $real_store"
+    else
+        echo -e "${BOLD}📍 Status:${RESET}    Declared in pkgs.nix"
+    fi
+    echo "─────────────────────────────────────────────────────────────────────────────"
+
+    # Context in pkgs.nix
+    if [ -f "$PKGS_FILE" ]; then
+        local line_num
+        line_num=$(grep -n -E "^\s*${pkg}\s*$" "$PKGS_FILE" 2>/dev/null | cut -d: -f1 | head -n 1)
+        if [ -n "$line_num" ]; then
+            echo -e "${YELLOW}${BOLD}── Declaration in pkgs.nix (Line ${line_num}) ──────────────────────${RESET}"
+            local start_l=$(( line_num > 4 ? line_num - 4 : 1 ))
+            local end_l=$(( line_num + 5 ))
+            if command -v bat >/dev/null 2>&1; then
+                bat --color=always --style=numbers --line-range "${start_l}:${end_l}" --highlight-line "$line_num" "$PKGS_FILE" 2>/dev/null
+            else
+                sed -n "${start_l},${end_l}p" "$PKGS_FILE"
+            fi
+            echo ""
+        fi
+    fi
+
+    # Whatis / manpage check
+    if command -v whatis >/dev/null 2>&1; then
+        local what_out
+        what_out=$(whatis "$pkg" 2>/dev/null)
+        if [ -n "$what_out" ]; then
+            echo -e "${CYAN}${BOLD}── Description ──────────────────────────────────────────────${RESET}"
+            echo "$what_out"
+            echo ""
+        fi
+    fi
+
+    # Package version probe
+    if [ -n "$bin_path" ]; then
+        echo -e "${MAGENTA}${BOLD}── Version Check ────────────────────────────────────────────${RESET}"
+        "$bin_path" --version 2>&1 | head -n 4 || echo "Version flag not supported"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Contextual Action Menu
+# ------------------------------------------------------------------------------
+
+show_action_menu() {
+    local pkg="$1"
+
+    local acts=()
+    acts+=("1. 🐚 Spawn Ephemeral Shell (nix-shell -p $pkg)")
+    acts+=("2. 📋 Copy Attribute Name to Clipboard")
+    acts+=("3. 📝 Jump to Declaration in pkgs.nix")
+    acts+=("4. 🌐 Open on search.nixos.org")
+    acts+=("5. ✘  Cancel")
+
+    local choice
+    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Package [$pkg] > " --height=30% --reverse --border=rounded) || return 0
+
+    case "$choice" in
+        1*) cmd_spawn_shell "$pkg" ;;
+        2*) cmd_copy_attr "$pkg" ;;
+        3*) cmd_open_manifest "$pkg" ;;
+        4*)
+            xdg-open "https://search.nixos.org/packages?channel=unstable&query=${pkg}" >/dev/null 2>&1 &
+            notify "normal" "web-browser" "Nix Search" "Opened search for $pkg"
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive Dashboard
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    local self_bin
+    self_bin="$(readlink -f "$0")"
+
+    local current_scope="system"
+    local scopes=("system" "binaries" "user")
+
+    while true; do
+        clear
+
+        local pkgs_raw=""
+        case "$current_scope" in
+            system) pkgs_raw=$(get_declared_packages) ;;
+            binaries) pkgs_raw=$(get_system_binaries) ;;
+            user) pkgs_raw=$(get_user_binaries) ;;
+        esac
+
+        local count=0
+        [ -n "$pkgs_raw" ] && count=$(wc -l <<< "$pkgs_raw" || echo "0")
+
+        local scope_label
+        case "$current_scope" in
+            system) scope_label="${CYAN}Declared in pkgs.nix (${count})${RESET}" ;;
+            binaries) scope_label="${GREEN}System Binaries (${count})${RESET}" ;;
+            user) scope_label="${MAGENTA}User Profile (${count})${RESET}" ;;
+        esac
+
+        local header_info="Scope: $scope_label"
+
+        # Next scope for Tab
+        local next_scope="system"
+        for i in "${!scopes[@]}"; do
+            if [ "${scopes[$i]}" = "$current_scope" ]; then
+                local next_idx=$(( (i + 1) % ${#scopes[@]} ))
+                next_scope="${scopes[$next_idx]}"
+                break
+            fi
+        done
+
+        local menu=()
+        menu+=("󰌢  [TAB] Switch Scope (Next: ${next_scope})"$'\t'"action:toggle_scope")
+        menu+=("🌐  [Ctrl-W] Search NixOS Packages on Web (search.nixos.org)"$'\t'"action:search_web")
+
+        while IFS= read -r pkg; do
+            [ -z "$pkg" ] && continue
+            local icon="📦"
+            [ -x "/run/current-system/sw/bin/$pkg" ] && icon="⚡"
+
+            local label
+            label=$(printf "%s  %-30s" "$icon" "$pkg")
+            menu+=("${label}"$'\t'"$pkg")
+        done <<< "$pkgs_raw"
+
+        # Invoke fzf
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-y,ctrl-o,ctrl-w,ctrl-s,ctrl-r,tab \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Pkg ($current_scope) > " \
+            --header="[$header_info] (Enter: Ephemeral Shell | Ctrl-Y: Copy | Ctrl-O: Edit in pkgs.nix | Ctrl-W: Web | Tab: Filter | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local target_payload
+        target_payload=$(echo "$choice" | cut -f2)
+
+        # Tab scope switcher
+        if [ "$key" = "tab" ] || [ "$target_payload" = "action:toggle_scope" ]; then
+            current_scope="$next_scope"
+            continue
+        fi
+
+        if [ "$target_payload" = "action:search_web" ] || [ "$key" = "ctrl-w" ]; then
+            xdg-open "https://search.nixos.org/packages?channel=unstable" >/dev/null 2>&1 &
+            continue
+        fi
+
+        case "$key" in
+            ctrl-y) cmd_copy_attr "$target_payload"; continue ;;
+            ctrl-o) cmd_open_manifest "$target_payload"; continue ;;
+            ctrl-s) cmd_spawn_shell "$target_payload"; continue ;;
+            ctrl-r) continue ;;
+        esac
+
+        # Enter pressed
+        show_action_menu "$target_payload"
+    done
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}pkg${RESET} - Nix Package Explorer & Ephemeral Shell Launcher (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    pkg                             Launch interactive fzf package explorer
+    pkg list [scope]                Print packages in list format (system|binaries|user)
+    pkg shell <pkg>                 Spawn ephemeral nix-shell with specified package
+    pkg search <query>              Search nixpkgs for matching packages
+    pkg preview <pkg>               Internal preview generator for fzf
+    pkg help                        Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}       Open contextual action menu (Shell, Copy, Manifest)
+    ${CYAN}Ctrl-S${RESET}      Spawn instant ephemeral shell (nix-shell -p)
+    ${CYAN}Ctrl-Y${RESET}      Copy package attribute name to clipboard
+    ${CYAN}Ctrl-O${RESET}      Jump to package declaration in pkgs.nix
+    ${CYAN}Ctrl-W${RESET}      Open search.nixos.org in web browser
+    ${CYAN}Ctrl-R${RESET}      Refresh package list
+    ${CYAN}Tab${RESET}         Cycle scope filter (system -> binaries -> user)
+    ${CYAN}Esc / Ctrl-C${RESET} Exit explorer
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    list|ls)
+        case "${2:-system}" in
+            system) get_declared_packages ;;
+            binaries|bin) get_system_binaries ;;
+            user) get_user_binaries ;;
+        esac
+        ;;
+    shell|run) cmd_spawn_shell "$2" ;;
+    copy) cmd_copy_attr "$2" ;;
+    search) cmd_search_nixpkgs "$2" ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            get_declared_packages
+        fi
+        ;;
+esac

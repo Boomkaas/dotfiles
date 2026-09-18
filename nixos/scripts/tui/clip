@@ -1,0 +1,335 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# clip - Wayland Clipboard History & Snippet Manager (CLI & fzf TUI)
+# Browse past clipboard items, syntax preview code, pin snippets, copy & delete.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+SNIPPETS_FILE="${SNIPPETS_FILE:-$HOME/.config/snippets.txt}"
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-edit-paste}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+copy_clip() {
+    local raw_entry="$1"
+    [ -z "$raw_entry" ] && return 1
+    if echo "$raw_entry" | cliphist decode | wl-copy; then
+        notify "normal" "edit-copy" "Clipboard" "Restored item to active clipboard"
+        echo -e "${GREEN}✔ Copied item back to active clipboard.${RESET}"
+    else
+        notify "critical" "dialog-error" "Clipboard" "Failed to copy item"
+    fi
+}
+
+delete_clip() {
+    local raw_entry="$1"
+    [ -z "$raw_entry" ] && return 1
+    if echo "$raw_entry" | cliphist delete; then
+        notify "normal" "edit-delete" "Clipboard" "Deleted item from clipboard history"
+        echo -e "${YELLOW}✔ Deleted item from clipboard history.${RESET}"
+    fi
+}
+
+wipe_all() {
+    echo -e "${RED}${BOLD}Wiping entire clipboard history...${RESET}"
+    cliphist wipe
+    notify "normal" "edit-delete" "Clipboard" "Cleared entire clipboard history"
+}
+
+pin_snippet() {
+    local raw_entry="$1"
+    [ -z "$raw_entry" ] && return 1
+    local content
+    content=$(echo "$raw_entry" | cliphist decode 2>/dev/null)
+    [ -z "$content" ] && return 1
+
+    mkdir -p "$(dirname "$SNIPPETS_FILE")"
+    echo -e "# Saved on $(date '+%Y-%m-%d %H:%M:%S')\n$content\n---\n" >> "$SNIPPETS_FILE"
+    notify "normal" "emblem-favorite" "Clipboard Snippet" "Pinned snippet to $SNIPPETS_FILE"
+    echo -e "${GREEN}✔ Snippet pinned to:${RESET} $SNIPPETS_FILE"
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local raw_entry="$1"
+    if [ -z "$raw_entry" ]; then
+        echo -e "${DIM}Select a clipboard item to inspect full decoded content.${RESET}"
+        return 0
+    fi
+
+    case "$raw_entry" in
+        action:wipe_history)
+            cat <<EOF
+${BOLD}${RED}Wipe Entire Clipboard History${RESET}
+Permanently removes all saved items from cliphist cache.
+Command: cliphist wipe
+EOF
+            return 0
+            ;;
+
+        action:view_snippets)
+            echo -e "${BOLD}${CYAN}Pinned Snippets File:${RESET} $SNIPPETS_FILE\n"
+            if [ -f "$SNIPPETS_FILE" ]; then
+                head -n 60 "$SNIPPETS_FILE"
+            else
+                echo -e "${DIM}No snippets pinned yet.${RESET}"
+            fi
+            return 0
+            ;;
+    esac
+
+    local decoded
+    decoded=$(echo "$raw_entry" | cliphist decode 2>/dev/null)
+
+    if [ -z "$decoded" ]; then
+        echo -e "${DIM}Binary / Empty payload${RESET}"
+        return 0
+    fi
+
+    local lines chars
+    lines=$(wc -l <<< "$decoded" || echo "1")
+    chars=$(wc -m <<< "$decoded" || echo "0")
+
+    local type_badge="Text"
+    local code_pat='^(\{|\[|package |import |def |function )'
+    if [[ "$decoded" =~ ^https?:// ]]; then
+        type_badge="URL / Web Link"
+    elif [[ "$decoded" =~ $code_pat ]]; then
+        type_badge="Code Snippet"
+    elif [[ "$decoded" =~ ^(nix|git|curl|docker|systemctl|ssh|cargo|python)\  ]]; then
+        type_badge="Shell Command"
+    fi
+
+    echo -e "${BOLD}📋 Clipboard Entry:${RESET} [${type_badge}]"
+    echo -e "${BOLD}📊 Stats:${RESET}           ${lines} lines | ${chars} characters"
+    echo "─────────────────────────────────────────────────────────────────────────────"
+
+    if command -v bat >/dev/null 2>&1; then
+        echo "$decoded" | bat --color=always --style=plain --line-range :120 2>/dev/null || echo "$decoded" | head -n 120
+    else
+        echo "$decoded" | head -n 120
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Contextual Action Submenu
+# ------------------------------------------------------------------------------
+
+show_action_menu() {
+    local raw_entry="$1"
+    local acts=()
+    acts+=("1. 📋 Copy to Active Clipboard (wl-copy)")
+    acts+=("2. 📝 Edit in Editor before Copying ($EDITOR / Neovim)")
+    acts+=("3. 📌 Pin to Saved Snippets ($SNIPPETS_FILE)")
+    acts+=("4. 🗑️  Delete this Item from History")
+    acts+=("5. 🧹 Wipe Entire History (Clear All)")
+    acts+=("6. ✘  Cancel")
+
+    local choice
+    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Clip Action > " --height=35% --reverse --border=rounded) || return 0
+
+    case "$choice" in
+        1*) copy_clip "$raw_entry" ;;
+        2*)
+            local tmpf
+            tmpf=$(mktemp --suffix=.txt)
+            echo "$raw_entry" | cliphist decode > "$tmpf"
+            "${EDITOR:-nvim}" "$tmpf"
+            wl-copy < "$tmpf"
+            rm -f "$tmpf"
+            notify "normal" "edit-copy" "Clipboard" "Edited snippet copied to clipboard"
+            ;;
+        3*) pin_snippet "$raw_entry" ;;
+        4*) delete_clip "$raw_entry" ;;
+        5*) wipe_all ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive Dashboard
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    local self_bin
+    self_bin="$(readlink -f "$0")"
+
+    if ! command -v cliphist >/dev/null 2>&1; then
+        echo -e "${RED}✘ cliphist is not installed.${RESET}"
+        return 1
+    fi
+
+    while true; do
+        clear
+
+        local items_raw
+        items_raw=$(cliphist list 2>/dev/null | head -n 150)
+
+        local count=0
+        [ -n "$items_raw" ] && count=$(wc -l <<< "$items_raw" || echo "0")
+
+        local header_info="Clipboard History: ${count} entries in memory"
+
+        local menu=()
+        menu+=("📌  [Ctrl-P] View Pinned Snippets File"$'\t'"action:view_snippets")
+        menu+=("🧹  [Ctrl-X] Wipe Entire Clipboard History"$'\t'"action:wipe_history")
+
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            local id="${line%%	*}"
+            local snippet="${line#*	}"
+            # Truncate preview snippet to 50 chars
+            local display_snippet="${snippet:0:55}"
+
+            local icon="📄"
+            if [[ "$snippet" =~ ^https?:// ]]; then
+                icon="🔗"
+            elif [[ "$snippet" =~ ^(nix|git|curl|docker|systemctl|ssh|cargo|python)\  ]]; then
+                icon="💻"
+            elif [[ "$snippet" =~ [\{\}\[\]\;] ]]; then
+                icon=""
+            fi
+
+            local label
+            label=$(printf "%s  #%-5s %s" "$icon" "$id" "$display_snippet")
+            menu+=("${label}"$'\t'"$line")
+        done <<< "$items_raw"
+
+        # Invoke fzf
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-d,ctrl-p,ctrl-x,ctrl-e,ctrl-r \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Clip > " \
+            --header="[$header_info] (Enter: Copy | Ctrl-D: Delete Item | Ctrl-P: Pin Snippet | Ctrl-E: Edit | Ctrl-X: Wipe All | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local target_payload
+        target_payload=$(echo "$choice" | cut -f2)
+
+        case "$target_payload" in
+            action:wipe_history) wipe_all; continue ;;
+            action:view_snippets)
+                clear
+                echo -e "${BOLD}${CYAN}Pinned Snippets:${RESET} $SNIPPETS_FILE\n"
+                [ -f "$SNIPPETS_FILE" ] && cat "$SNIPPETS_FILE" || echo "No snippets pinned yet."
+                echo ""
+                echo -ne "${BOLD}Press Enter to return...${RESET}"
+                read -r
+                continue
+                ;;
+        esac
+
+        case "$key" in
+            ctrl-d) delete_clip "$target_payload"; continue ;;
+            ctrl-p) pin_snippet "$target_payload"; continue ;;
+            ctrl-x) wipe_all; continue ;;
+            ctrl-e)
+                local tmpf
+                tmpf=$(mktemp --suffix=.txt)
+                echo "$target_payload" | cliphist decode > "$tmpf"
+                "${EDITOR:-nvim}" "$tmpf"
+                wl-copy < "$tmpf"
+                rm -f "$tmpf"
+                notify "normal" "edit-copy" "Clipboard" "Edited snippet copied to clipboard"
+                continue
+                ;;
+            ctrl-r) continue ;;
+        esac
+
+        # Enter pressed -> restore to active clipboard
+        copy_clip "$target_payload"
+        break
+    done
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}clip${RESET} - Wayland Clipboard History & Snippet Manager (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    clip                            Launch interactive clipboard history picker
+    clip list                       Print recent clipboard history items
+    clip decode <id>                Decode and print raw content of clipboard item
+    clip copy <id>                  Restore clipboard item to active wl-copy
+    clip delete <id>                Delete clipboard item from history
+    clip wipe                       Clear entire clipboard history
+    clip preview <entry>            Internal preview generator for fzf
+    clip help                       Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}       Copy selected item to active clipboard (wl-copy)
+    ${CYAN}Ctrl-D${RESET}      Delete item from clipboard history
+    ${CYAN}Ctrl-P${RESET}      Pin item to saved snippets file (~/.config/snippets.txt)
+    ${CYAN}Ctrl-E${RESET}      Edit snippet in Neovim before copying
+    ${CYAN}Ctrl-X${RESET}      Wipe entire clipboard history
+    ${CYAN}Ctrl-R${RESET}      Refresh clipboard items
+    ${CYAN}Esc / Ctrl-C${RESET} Exit picker
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    list|ls) cliphist list | head -n "${2:-50}" ;;
+    decode) cliphist decode <<< "$2" ;;
+    copy) echo "$2" | cliphist decode | wl-copy ;;
+    delete) cliphist delete <<< "$2" ;;
+    wipe) wipe_all ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            cliphist list | head -n 25
+        fi
+        ;;
+esac
