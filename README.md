@@ -16,10 +16,11 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 | **Notification Center**| [SwayNC](https://github.com/ErikReider/SwayNotificationCenter) | GTK-based control center with quick toggles, sliders, and media widget |
 | **App Launcher & Menus**| [Rofi](https://github.com/davatorium/rofi) (Wayland) | Multi-mode launcher + interactive submenus (Wi-Fi, Bluetooth, Audio, Processes, Disk, Clean, Config) |
 | **Terminal & Multiplexer**| [Kitty](https://sw.kovidgoyal.net/kitty/) + [Tmux](https://github.com/tmux/tmux) | GPU-accelerated terminal (Gruvbox Dark) + Tmux patched for 100MB buffer limit |
+| **TUI Control Center** | [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) + 18 TUI Suite | Master CLI/FZF launcher & 18 unified interactive TUIs for system, network, dev & desktop |
 | **Code Editor** | [Neovim](https://neovim.io/) | LazyVim IDE with OLED #000000 theme, full VS Code key parity, & Antigravity AI |
 | **File Managers** | [Yazi](https://github.com/sxyazi/yazi) + [Thunar](https://docs.xfce.org/xfce/thunar/start) | Lightning-fast TUI file manager with Ueberzug++ previews & shell cd integration + GUI fallback |
 | **Shell** | [Fish](https://fishshell.com/) + [Starship](https://starship.rs/) | Interactive shell with Zoxide, Direnv, Eza, Yazi `Ctrl+O` hotkey, and smart `agy` token wrapper |
-| **Audio Stack** | [PipeWire](https://pipewire.org/) | PipeWire + ALSA + Pulse + JACK + Realtek ALC256 ASUS mic pin routing |
+| **Audio Stack** | [PipeWire](https://pipewire.org/) + WireMix | PipeWire + ALSA + Pulse + JACK + WireMix TUI + Realtek ALC256 ASUS mic pin routing |
 | **Network & Diagnostics**| NetworkManager + Wireshark | System-wide packet capturing (GUI & CLI `wireshark`, `termshark`) with user permissions |
 | **VPN & File Sharing** | Hamachi + Samba | LogMeIn Hamachi (Haguichi GUI) & Samba LAN share (`~/Shared`) managed via `share` CLI |
 | **Virtualization** | Docker, KVM / Libvirt | Container and virtual machine virtualization with SPICE USB redirection |
@@ -113,37 +114,71 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   └── utils/
 │   │       └── xserver.nix             # GDM Wayland display manager, Hyprlock PAM auth, XDG desktop portals
 │   ├── scripts/
-│   │   ├── agy-tokens.py               # Antigravity Global Token & Quota Reporter CLI (colored gauges, reset timers)
-│   │   ├── audio_menu.sh               # Rofi-driven PipeWire output/input device and volume switcher (`audio-menu`)
-│   │   ├── awake                       # CLI wake-lock / caffeine inhibitor (`awake on`, `awake off`, `awake status`)
-│   │   ├── bluetooth                   # CLI helper for fast Bluetooth device discovery and connections
+│   │   ├── tui/                        # Unified FZF interactive terminal control suite (18 tools + launcher)
+│   │   │   ├── s                       # Master TUI command center & script launcher
+│   │   │   ├── audio                   # PipeWire & WirePlumber audio mixer & node routing
+│   │   │   ├── bluetooth               # Bluetooth device scanner, pairing, and battery status
+│   │   │   ├── clip                    # Wayland clipboard history & snippet manager (`cliphist`)
+│   │   │   ├── conf                    # Dotfiles & config picker with syntax preview (`bat`)
+│   │   │   ├── container               # Docker containers & Libvirt/KVM VM management
+│   │   │   ├── disk                    # Storage, partition usage, USB mount/eject, & Nix GC
+│   │   │   ├── log                     # Systemd journal & dmesg kernel error explorer
+│   │   │   ├── nixos                   # NixOS generations, closure diffs & rollback manager
+│   │   │   ├── pkg                     # Declared package explorer & ephemeral nix-shell tester
+│   │   │   ├── ports                   # Real-time listening ports, sockets & server killer
+│   │   │   ├── repo                    # Multi-repository Git radar & project status dashboard
+│   │   │   ├── service                 # Systemd user & system service daemon controller
+│   │   │   ├── setting                 # Desktop settings (brightness, power, idle, DND)
+│   │   │   ├── share                   # Samba LAN share & LogMeIn Hamachi VPN manager
+│   │   │   ├── task                    # Process monitor & MangoWM window controller
+│   │   │   ├── theme                   # Waybar theme switcher (80+ presets), wallpapers, fonts
+│   │   │   ├── tm                      # Tmux session manager & project workspace jumper
+│   │   │   └── wifi                    # Wi-Fi network scanner, connection & signal monitor
+│   │   ├── s -> tui/s                  # Canonical symlink to master command center
+│   │   ├── audio -> tui/audio          # PipeWire terminal mixer CLI wrapper
+│   │   ├── bluetooth -> tui/bluetooth  # Bluetooth device manager CLI wrapper
+│   │   ├── clip -> tui/clip            # Clipboard history CLI wrapper
+│   │   ├── conf -> tui/conf            # Dotfile config selector CLI wrapper
+│   │   ├── container -> tui/container  # Docker & VM manager CLI wrapper
+│   │   ├── disk -> tui/disk            # Disk & storage cleaner CLI wrapper
+│   │   ├── log -> tui/log              # Systemd journal explorer CLI wrapper
+│   │   ├── nixos -> tui/nixos          # NixOS generations & rollback CLI wrapper
+│   │   ├── pkg -> tui/pkg              # Nix packages explorer CLI wrapper
+│   │   ├── ports -> tui/ports          # Network ports & dev server CLI wrapper
+│   │   ├── repo -> tui/repo            # Git repositories dashboard CLI wrapper
+│   │   ├── service -> tui/service      # Systemd service manager CLI wrapper
+│   │   ├── setting -> tui/setting      # Desktop settings dispatcher CLI wrapper
+│   │   ├── share -> tui/share          # File sharing & VPN manager CLI wrapper
+│   │   ├── task -> tui/task            # Process & window controller CLI wrapper
+│   │   ├── theme -> tui/theme          # Desktop theme switcher CLI wrapper
+│   │   ├── tm -> tui/tm                # Tmux session manager CLI wrapper
+│   │   ├── wifi -> tui/wifi            # Wi-Fi network scanner CLI wrapper
+│   │   ├── agy-tokens.py               # Antigravity Global Token & Quota Reporter CLI
+│   │   ├── audio_menu.sh               # Rofi-driven PipeWire audio switcher (`audio-menu`)
+│   │   ├── awake                       # CLI wake-lock / caffeine inhibitor (`awake on/off/status`)
 │   │   ├── bluetooth_menu.sh           # Rofi interactive Bluetooth control menu (`bluetooth-menu`)
-│   │   ├── clean_menu.sh               # Rofi system cleaner (Nix generations, Nix store GC, temp caches) (`clean-menu`)
-│   │   ├── config_menu.sh              # Rofi rapid configuration editor for dotfiles and NixOS (`config-menu`)
-│   │   ├── disk_menu.sh                # Rofi visual disk usage breakdown and mount inspector (`disk-menu`)
-│   │   ├── dpms_handler.sh             # Unified DPMS monitor sleep/wake dispatcher (Hyprland, MangoWM, Niri, Labwc)
-│   │   ├── epic                        # CLI launcher for native in-browser Epic Games Store freebies claimer
-│   │   ├── epic-games-claimer.user.js  # Userscript for calm, in-browser Epic free game checkout with floating HUD
+│   │   ├── clean_menu.sh               # Rofi system cleaner (`clean-menu`)
+│   │   ├── config_menu.sh              # Rofi rapid configuration editor (`config-menu`)
+│   │   ├── disk_menu.sh                # Rofi visual disk usage breakdown (`disk-menu`)
+│   │   ├── dpms_handler.sh             # Unified DPMS monitor sleep/wake dispatcher
+│   │   ├── epic                        # CLI launcher for native Epic Games Store claimer
+│   │   ├── epic-games-claimer.user.js  # Userscript for calm Epic free game checkout
 │   │   ├── gfn.sh                      # GeForce NOW Flatpak launcher
-│   │   ├── gtk_theme_menu.sh           # Rofi GTK theme and icon theme switcher (`gtk-theme-menu`)
-│   │   ├── idle_inhibit.sh             # Activity & power state validator before sleep/poweroff actions
-│   │   ├── idle_sleep_poweroff.sh      # RTC hardware wake timer and dual-tier idle sleep/shutdown daemon
+│   │   ├── gtk_theme_menu.sh           # Rofi GTK theme switcher (`gtk-theme-menu`)
+│   │   ├── idle_inhibit.sh             # Activity & power state validator before sleep/poweroff
+│   │   ├── idle_sleep_poweroff.sh      # RTC hardware wake timer and dual-tier idle daemon
 │   │   ├── lock.sh                     # Multi-compositor screen lock script
-│   │   ├── nixreb.sh                   # Dotfiles sync to /etc/nixos and system rebuild helper (`nixreb`)
-│   │   ├── nixtest                     # Modular NixOS system verification test suite (14 modules, ~150+ checks)
-│   │   ├── process_menu.sh             # Rofi interactive process monitor and signal sender (`process-menu`)
+│   │   ├── nixreb.sh                   # Dotfiles sync to /etc/nixos and system rebuild helper
+│   │   ├── nixtest                     # Modular NixOS verification test suite (14 modules, ~150+ checks)
+│   │   ├── process_menu.sh             # Rofi interactive process monitor (`process-menu`)
 │   │   ├── roblox.sh                   # Roblox launcher via Sober Flatpak
-│   │   ├── screenshot.sh               # Region (slurp) and fullscreen screenshot utility with clipboard & notifications
-│   │   ├── setting                     # System settings dispatcher
-│   │   ├── share                       # Interactive FZF/CLI manager for Hamachi VPN & Samba sharing (`share`)
-│   │   ├── share_menu.sh               # Interactive TUI menu wrapper for network sharing (`share-menu`)
-│   │   ├── theme                       # Theme switcher and style setter
-│   │   ├── twitch                      # CLI launcher for native in-browser Twitch Drops claimer (`twitch` / `tdrops`)
-│   │   ├── twitch-drops-claimer.user.js# Userscript for Don't Starve Together Twitch Drops (160p eco, auto-claim)
-│   │   ├── unlock_screen.sh            # Reliable screen unlocker (DPMS wake, wtype PAM auth, MangoWM lock recovery)
+│   │   ├── screenshot.sh               # Region and fullscreen screenshot utility
+│   │   ├── share_menu.sh               # Interactive menu wrapper for network sharing (`share-menu`)
+│   │   ├── twitch                      # CLI launcher for Twitch Drops claimer (`twitch` / `tdrops`)
+│   │   ├── twitch-drops-claimer.user.js# Userscript for DST Twitch Drops (160p eco, auto-claim)
+│   │   ├── unlock_screen.sh            # Reliable screen unlocker (DPMS wake, wtype auth)
 │   │   ├── waybar_manager.sh           # Waybar theme switcher, cycle manager, and daemon controller
-│   │   ├── wifi                        # CLI helper for NetworkManager Wi-Fi scanning and connection
-│   │   └── wifi_menu.sh                # Rofi interactive Wi-Fi selector and connection menu (`wifi-menu`)
+│   │   └── wifi_menu.sh                # Rofi interactive Wi-Fi selector menu (`wifi-menu`)
 │   └── system/
 │       ├── configuration.nix           # System entrypoint (Tmux/Yazi overlays, Viewnior defaults, awww daemon service)
 │       └── hardware-configuration.nix  # Hardware-specific scan (Intel CPU, NVMe, EXT4 root, VFAT boot, swap partition)
@@ -201,10 +236,12 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 - **Default Image Applications**: Default image associations (PNG, JPEG, WebP, SVG, BMP, ICO) mapped to lightweight [Viewnior](https://github.com/hellnest/viewnior) with [Swappy](https://github.com/jtheoof/swappy) for annotations.
 
 ### 3. Package Management & System Menu Wrappers (`nixos/modules/pkgs.nix`)
-- Declares development toolchains (`lazygit`, `git`, `neovim`), desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), network tools (`haguichi`, `cifs-utils`), and custom binary wrappers:
-  - System test suite: `nixtest` (modular 14-subsystem verification suite).
-  - System menus: `wifi-menu`, `bluetooth-menu`, `audio-menu`, `process-menu`, `disk-menu`, `clean-menu`, `config-menu`, `gtk-theme-menu`, `share-menu`.
-  - Core helpers: `share`, `nixreb`, `awake`, `controlbot`, `epic`, `twitch` (`tdrops`), `gfn`, `roblox`.
+- Declares development toolchains (`lazygit`, `git`, `neovim`), audio tools (`pkgs_unstable.wiremix`), desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), network tools (`haguichi`, `cifs-utils`), and custom binary wrappers:
+  - **Master TUI Launcher**: `s` (interactive CLI & fzf command center unifying all 18 system tools).
+  - **18 Interactive TUI Tools**: `wifi`, `bluetooth` (`bt`), `ports` (`port`), `share`, `nixos` (`gens`), `service` (`services`), `disk` (`storage`), `task` (`tasks`), `log` (`logs`, `journal`), `repo` (`repos`, `gitui`), `tm` (`project`), `pkg` (`pkgs`), `container` (`containers`, `vm`), `conf` (`config`, `configs`), `audio`, `setting` (`settings`), `theme`, `clip` (`clips`).
+  - **System Test Suite**: `nixtest` (modular 14-subsystem verification suite).
+  - **GUI / Rofi Menus**: `wifi-menu`, `bluetooth-menu`, `audio-menu`, `process-menu`, `disk-menu`, `clean-menu`, `config-menu`, `gtk-theme-menu`, `share-menu`.
+  - **Core Helpers**: `share`, `nixreb`, `awake`, `controlbot`, `epic`, `twitch` (`tdrops`), `gfn`, `roblox`.
 
 ---
 
@@ -279,6 +316,45 @@ All custom system scripts are wrapped directly into NixOS binaries via `nixos/mo
 
 ---
 
+## 🎛️ Unified TUI Command Center & 18 Interactive Terminal Tools (`nixos/scripts/tui/`)
+
+In addition to graphical Rofi menus, the system features a complete, standalone terminal control suite built on `fzf`, ANSI styling, live previews, and keyboard navigation.
+
+### 🚀 Master Command Center (`s`)
+Run `s` anywhere in the terminal to summon the interactive launcher. Filter tools across 4 categories or launch them directly with their dedicated CLI commands and short aliases:
+
+```bash
+s               # Open interactive fzf launcher with live category filters and preview
+s <tool>        # Directly invoke any tool or alias (e.g., 's wifi', 's bt', 's port')
+s --list        # Print clean, formatted tabular list of all 18 tools and aliases
+```
+
+### 📋 Complete Tool Suite
+
+| Command | Aliases | Category | Purpose & Interactive Features |
+| :--- | :--- | :--- | :--- |
+| [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) | — | **Launcher** | **Master Command Center**: Unified launcher searching all 18 tools by name, alias, and description. |
+| [`wifi`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/wifi) | `wifi` | **Network** | **Wi-Fi Manager**: Scan nearby APs, monitor live signal dBm, connect with password prompt, display Wi-Fi QR codes, and WPS. |
+| [`bluetooth`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/bluetooth) | `bt` | **Network** | **Bluetooth Manager**: Controller power, scan, pair, trust, connect/disconnect audio devices & peripherals, battery % gauges. |
+| [`ports`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/ports) | `port`, `net` | **Network** | **Listening Ports & Dev Servers**: Real-time listening TCP/UDP sockets, bound processes, PIDs, and instant `kill` for stuck servers. |
+| [`share`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/share) | `share` | **Network** | **Samba & Hamachi File Sharing**: Manage Samba `/home/peng/Shared`, view Hamachi mesh VPN peers, and mount remote CIFS shares. |
+| [`nixos`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/nixos) | `gens` | **System** | **NixOS Generations & Rollback**: Generation history, active boot entry, closure size diffing (`nix profile diff-closures`), rollbacks, and GC. |
+| [`service`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/service) | `services` | **System** | **Systemd Service Manager**: Filter user & system units, start, stop, restart, reload, inspect unit status, and tail live logs. |
+| [`disk`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/disk) | `storage` | **System** | **Storage & USB Cleaner**: Filesystem usage gauges, USB auto-mount/safe-eject, interactive `ncdu`, `nh clean`, and nix-store GC. |
+| [`task`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/task) | `tasks` | **System** | **Process & MangoWM Window Controller**: Top CPU/RAM consumers, filter processes, Wayland window focus, `SIGTERM`/`SIGKILL`, freeze. |
+| [`log`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/log) | `logs`, `journal` | **System** | **Journal & Kernel Explorer**: Systemd journal filter by priority (`-p err`), systemd unit logs, `dmesg` kernel ring buffer, live `-f` tailing. |
+| [`repo`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/repo) | `repos`, `gitui` | **Dev** | **Git Multi-Repo Radar**: Discovers all Git repositories under `~/Code`, branch state, dirty working tree status, fetch, pull, and push. |
+| [`tm`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/tm) | `project` | **Dev** | **Tmux Sessions & Projects**: Interactive session switcher, window/pane preview, kill/detach sessions, and new project session bootstrap. |
+| [`pkg`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/pkg) | `pkgs` | **Dev** | **Nix Package Explorer**: Search systemPackages, view derivation details, copy package names, or spawn instant `nix-shell -p <pkg>`. |
+| [`container`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/container) | `containers`, `vm` | **Dev** | **Docker & Libvirt VM Manager**: Inspect running/stopped containers, start/stop/restart, follow container logs, and attach `/bin/sh`. |
+| [`conf`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/conf) | `config`, `configs` | **Dev** | **Dotfiles & Config Picker**: Syntax-highlighted `bat` previews, Git diff indicators, and instant jump into Neovim for any dotfile. |
+| [`audio`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/audio) | `audio` | **Desktop** | **PipeWire & WirePlumber Mixer**: Terminal volume faders, sink/source routing, mute toggles, WireMix integration, ALC256 mic testing. |
+| [`setting`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/setting) | `settings` | **Desktop** | **Quick Settings**: Backlight brightness faders (`brightnessctl`), volume, power governor, screen idle inhibit, SwayNC DND toggle. |
+| [`theme`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/theme) | `theme` | **Desktop** | **Theme & Wallpaper Customizer**: Interactive selector for 80+ Waybar themes, dynamic wallpaper transitions, fonts, and cava styles. |
+| [`clip`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/clip) | `clips`, `clipboard` | **Desktop** | **Clipboard & Snippets**: Wayland clipboard history (`cliphist`), decode text/image entries with syntax preview, pin snippets, delete. |
+
+---
+
 ## 🐚 Shell, Multiplexer & Terminal Workflow
 
 ### 🐱 Kitty Terminal (`config/kitty/kitty.conf`)
@@ -334,11 +410,24 @@ Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
 
 | Category | Abbreviation / Command | Target Action |
 | :--- | :--- | :--- |
+| **Control Center** | `s` / `s <tool>` | Master TUI launcher & interactive command center for 18 system tools |
 | **System** | `nixreb` | Sync dotfiles & rebuild NixOS flake (`nixreb.sh`) |
+| **System** | `gens` / `nixos` | Interactive NixOS generations, closure diffs & rollback manager |
+| **System** | `service` / `services` | Interactive Systemd user & system service manager |
+| **System** | `disk` / `storage` | Storage, partition usage, USB mount/eject, and cache cleaner |
+| **System** | `task` / `tasks` | Process monitor & MangoWM window focus / killer |
 | **System** | `nc` | Delete old Nix generations & run garbage collection |
 | **System** | `addchans` | Set up nixos-unstable and home-manager channels |
-| **Testing** | `nixtest` | Run modular NixOS verification test suite (`all`, `modules`, or `<module>`) |
+| **Network** | `wifi` / `bt` / `bluetooth` | Interactive Wi-Fi & Bluetooth device managers |
+| **Network** | `ports` / `port` | Inspect listening TCP/UDP sockets and kill dev servers |
 | **Sharing** | `share` / `share-menu` | Interactive Hamachi VPN & Samba network file sharing manager |
+| **Dev** | `repo` / `repos` / `gitui` | Multi-repository Git radar across `~/Code` |
+| **Dev** | `tm` / `project` | Interactive Tmux sessions & project workspaces manager |
+| **Dev** | `pkg` / `pkgs` | Search declared packages and test in temporary `nix-shell` |
+| **Dev** | `conf` / `config` | Dotfiles & config picker with syntax preview & Neovim jump |
+| **Dev** | `container` / `vm` | Docker container and Libvirt VM controller |
+| **Desktop** | `audio` / `setting` / `theme` / `clip` | Volume mixer, quick settings, Waybar/wallpapers, and clipboard history |
+| **Testing** | `nixtest` | Run modular NixOS verification test suite (`all`, `modules`, or `<module>`) |
 | **Tmux** | `t` / `ta` / `tls` / `tn` / `tk` | `tmux`, attach, list sessions, new session, kill session |
 | **File Manager**| `y` / `Ctrl + O` | Launch Yazi with auto-`cd` on exit |
 | **Menus** | `menu` | Launch Rofi application menu (`rofi -show drun`) |
