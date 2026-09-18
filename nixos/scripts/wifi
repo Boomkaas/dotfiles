@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # wifi - Terminal Wi-Fi Manager (CLI & fzf TUI)
-# Access, scan, connect, and manage Wi-Fi connections via terminal.
+# Access, scan, connect, monitor, and manage Wi-Fi connections via terminal.
 # ==============================================================================
-
 
 # Colors
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
@@ -75,12 +74,49 @@ freq_to_band() {
     local f_num
     f_num=$(echo "$freq" | tr -dc '0-9')
     if [ -n "$f_num" ]; then
-        if [ "$f_num" -gt 4000 ]; then echo "5 GHz"
+        if [ "$f_num" -gt 5900 ]; then echo "6 GHz"
+        elif [ "$f_num" -gt 4000 ]; then echo "5 GHz"
         elif [ "$f_num" -gt 2000 ]; then echo "2.4 GHz"
         else echo "${f_num}MHz"
         fi
     else
         echo "--"
+    fi
+}
+
+sig_to_bar() {
+    local sig="${1:-0}"
+    local width=10
+    local filled=$(( (sig * width + 50) / 100 ))
+    [ "$filled" -gt "$width" ] && filled="$width"
+    [ "$filled" -lt 0 ] && filled=0
+    local empty=$(( width - filled ))
+    local bar=""
+    for ((i=0; i<filled; i++)); do bar+="█"; done
+    for ((i=0; i<empty; i++)); do bar+="░"; done
+
+    local color="$GREEN"
+    if [ "$sig" -lt 40 ]; then
+        color="$RED"
+    elif [ "$sig" -lt 70 ]; then
+        color="$YELLOW"
+    fi
+    echo -e "${color}[${bar}]${RESET}"
+}
+
+sig_to_dbm() {
+    local sig="${1:-0}"
+    local dbm=$(( (sig / 2) - 100 ))
+    echo "${dbm} dBm"
+}
+
+sig_quality_label() {
+    local sig="${1:-0}"
+    if [ "$sig" -ge 80 ]; then echo "Excellent"
+    elif [ "$sig" -ge 65 ]; then echo "Good"
+    elif [ "$sig" -ge 45 ]; then echo "Fair"
+    elif [ "$sig" -ge 20 ]; then echo "Weak"
+    else echo "Very Poor"
     fi
 }
 
@@ -95,35 +131,44 @@ cmd_status() {
     active_ssid=$(get_active_ssid)
 
     echo -e "${BOLD}${CYAN}=== Wi-Fi Status ===${RESET}"
-    echo -e "  ${BOLD}Radio:${RESET}       $([ "$status" = "enabled" ] && echo -e "${GREEN}Enabled (ON)${RESET}" || echo -e "${RED}Disabled (OFF)${RESET}")"
-    echo -e "  ${BOLD}Interface:${RESET}   ${iface:---}"
+    echo -e "  ${BOLD}Radio:${RESET}        $([ "$status" = "enabled" ] && echo -e "${GREEN}Enabled (ON)${RESET}" || echo -e "${RED}Disabled (OFF)${RESET}")"
+    echo -e "  ${BOLD}Interface:${RESET}    ${iface:---}"
+
+    if [ -n "$iface" ]; then
+        local hw_addr driver
+        hw_addr=$(nmcli -t -f GENERAL.HWADDR dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2-)
+        driver=$(nmcli -t -f GENERAL.DRIVER dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2-)
+        [ -n "$hw_addr" ] && echo -e "  ${BOLD}MAC Address:${RESET}  $hw_addr"
+        [ -n "$driver" ]  && echo -e "  ${BOLD}Driver:${RESET}       $driver"
+    fi
 
     if [ -n "$active_ssid" ]; then
-        echo -e "  ${BOLD}Status:${RESET}      ${GREEN}Connected${RESET}"
-        echo -e "  ${BOLD}Network:${RESET}     ${BOLD}${GREEN}$active_ssid${RESET}"
+        echo -e "  ${BOLD}Status:${RESET}       ${GREEN}Connected${RESET}"
+        echo -e "  ${BOLD}Network:${RESET}      ${BOLD}${GREEN}$active_ssid${RESET}"
 
-        # Fetch IP and Gateway
-        local ip_info gw_info dns_info sig_info bssid_info freq_info
+        local ip_info gw_info dns_info sig_info bssid_info freq_info chan_info rate_info sec_info
         ip_info=$(nmcli -t -f IP4.ADDRESS dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
         gw_info=$(nmcli -t -f IP4.GATEWAY dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
         dns_info=$(nmcli -t -f IP4.DNS dev show "$iface" 2>/dev/null | tr '\n' ' ' | sed 's/IP4.DNS\[[0-9]*\]://g' | xargs)
         
         local active_line
-        active_line=$(nmcli -t -f ACTIVE,SSID,BSSID,SIGNAL,SECURITY,FREQ dev wifi list 2>/dev/null | grep '^yes:' | head -n 1 || true)
+        active_line=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list 2>/dev/null | grep '^\*' | head -n 1 || true)
         if [ -n "$active_line" ]; then
-            bssid_info=$(echo "$active_line" | cut -d: -f3-8 | sed 's/\\:/:/g')
-            sig_info=$(echo "$active_line" | cut -d: -f9)
-            freq_info=$(echo "$active_line" | cut -d: -f11)
+            local line_sub="${active_line//\\:/$'\001'}"
+            IFS=':' read -r _ _ bssid_info chan_info freq_info rate_info sig_info _ sec_info <<< "$line_sub"
+            bssid_info="${bssid_info//$'\001'/:}"
         fi
 
+        [ -n "$sig_info" ] && echo -e "  ${BOLD}Signal:${RESET}       $(sig_to_icon "$sig_info") $(sig_to_bar "$sig_info") $sig_info% ($(sig_to_dbm "$sig_info")) [$(sig_quality_label "$sig_info")]"
+        [ -n "$freq_info" ] && echo -e "  ${BOLD}Channel/Band:${RESET} Channel ${chan_info:---} ($(freq_to_band "$freq_info"), $freq_info)"
+        [ -n "$rate_info" ] && echo -e "  ${BOLD}Max Bitrate:${RESET}  $rate_info"
+        [ -n "$sec_info" ]  && echo -e "  ${BOLD}Security:${RESET}     $sec_info"
+        [ -n "$bssid_info" ] && echo -e "  ${BOLD}Access Point:${RESET} $bssid_info"
         [ -n "$ip_info" ] && echo -e "  ${BOLD}IPv4 Address:${RESET} $ip_info"
         [ -n "$gw_info" ] && echo -e "  ${BOLD}Gateway:${RESET}      $gw_info"
-        [ -n "$dns_info" ] && echo -e "  ${BOLD}DNS:${RESET}          $dns_info"
-        [ -n "$sig_info" ] && echo -e "  ${BOLD}Signal:${RESET}       $(sig_to_icon "$sig_info") $sig_info%"
-        [ -n "$freq_info" ] && echo -e "  ${BOLD}Frequency:${RESET}    $(freq_to_band "$freq_info") ($freq_info)"
-        [ -n "$bssid_info" ] && echo -e "  ${BOLD}BSSID:${RESET}        $bssid_info"
+        [ -n "$dns_info" ] && echo -e "  ${BOLD}DNS Server:${RESET}   $dns_info"
     else
-        echo -e "  ${BOLD}Status:${RESET}      ${YELLOW}Disconnected${RESET}"
+        echo -e "  ${BOLD}Status:${RESET}       ${YELLOW}Disconnected${RESET}"
     fi
 }
 
@@ -139,7 +184,7 @@ cmd_scan() {
     nmcli dev wifi rescan >/dev/null 2>&1 || true
 
     local raw_list active_ssid
-    raw_list=$(nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY,FREQ dev wifi list 2>/dev/null || true)
+    raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list 2>/dev/null || true)
     active_ssid=$(get_active_ssid)
 
     if [ -z "$raw_list" ]; then
@@ -147,16 +192,13 @@ cmd_scan() {
         return 0
     fi
 
-    declare -A SEEN_SIG SEEN_SEC SEEN_BAND SEEN_ACT
+    declare -A SEEN_SIG SEEN_SEC SEEN_BAND SEEN_CHAN SEEN_RATE SEEN_ACT
 
     while IFS= read -r line; do
         [ -z "$line" ] && continue
-        local in_use ssid signal security freq
-        in_use=$(echo "$line" | cut -d: -f1)
-        ssid=$(echo "$line" | cut -d: -f2)
-        signal=$(echo "$line" | cut -d: -f3)
-        security=$(echo "$line" | cut -d: -f4)
-        freq=$(echo "$line" | cut -d: -f5)
+        local line_sub="${line//\\:/$'\001'}"
+        local in_use ssid bssid chan freq rate signal bars security
+        IFS=':' read -r in_use ssid bssid chan freq rate signal bars security <<< "$line_sub"
 
         [ -z "$ssid" ] || [ "$ssid" = "--" ] && continue
         local sig_num
@@ -172,20 +214,23 @@ cmd_scan() {
             SEEN_SIG["$ssid"]="$sig_num"
             SEEN_SEC["$ssid"]="$security"
             SEEN_BAND["$ssid"]="$(freq_to_band "$freq")"
+            SEEN_CHAN["$ssid"]="$chan"
+            SEEN_RATE["$ssid"]="$rate"
             SEEN_ACT["$ssid"]="$is_act"
         fi
     done <<< "$raw_list"
 
     echo ""
-    printf "${BOLD}%-4s %-4s %-6s %-9s %-14s %s${RESET}\n" "ST" "" "SIGNAL" "BAND" "SECURITY" "SSID"
-    echo -e "${DIM}------------------------------------------------------------${RESET}"
+    printf "${BOLD}%-2s %-2s %-12s %-5s %-4s %-9s %-12s %-12s %s${RESET}\n" "ST" "" "SIGNAL" "QUAL" "CHAN" "BAND" "SECURITY" "MAX RATE" "SSID"
+    echo -e "${DIM}------------------------------------------------------------------------------------------------${RESET}"
 
-    # Build formatted lines and sort
     local lines=()
     for s in "${!SEEN_SIG[@]}"; do
         local sig="${SEEN_SIG["$s"]}"
         local sec="${SEEN_SEC["$s"]}"
         local band="${SEEN_BAND["$s"]}"
+        local chan="${SEEN_CHAN["$s"]}"
+        local rate="${SEEN_RATE["$s"]}"
         local is_act="${SEEN_ACT["$s"]}"
         local is_saved=0
         is_saved_ssid "$s" && is_saved=1
@@ -199,14 +244,15 @@ cmd_scan() {
 
         local icon
         icon=$(sig_to_icon "$sig")
+        local bar
+        bar=$(sig_to_bar "$sig")
         local sec_label="${sec:---}"
         [ "$sec_label" = "--" ] && sec_label="Open"
 
-        lines+=("$(printf "%s %s %3d%%   %-9s %-14s %s" "$st_tag" "$icon" "$sig" "$band" "$sec_label" "$s")")
+        lines+=("$(printf "%s %s %s %3d%%  %-4s %-9s %-12s %-12s %s" "$st_tag" "$icon" "$bar" "$sig" "$chan" "$band" "$sec_label" "$rate" "$s")")
     done
 
-    # Sort: active first, then saved, then highest signal
-    printf "%s\n" "${lines[@]}" | sort -k1,1r -k3,3nr
+    printf "%s\n" "${lines[@]}" | sort -k1,1r -k4,4nr
 }
 
 cmd_saved() {
@@ -235,7 +281,6 @@ cmd_connect() {
     local password="$2"
 
     if [ -z "$target_ssid" ]; then
-        # If no SSID provided and interactive, launch fzf picker
         if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
             cmd_interactive
             return 0
@@ -245,7 +290,6 @@ cmd_connect() {
         fi
     fi
 
-    # Check if network profile is already saved
     if is_saved_ssid "$target_ssid"; then
         echo -e "${CYAN}Connecting to saved profile: ${BOLD}$target_ssid${RESET}..."
         if nmcli con up id "$target_ssid"; then
@@ -260,7 +304,6 @@ cmd_connect() {
         fi
     fi
 
-    # Detect security if not specified
     local sec
     sec=$(nmcli -t -f SSID,SECURITY dev wifi list 2>/dev/null | awk -F: -v s="$target_ssid" '$1 == s { print $2; exit }')
 
@@ -357,6 +400,224 @@ cmd_toggle() {
 }
 
 # ------------------------------------------------------------------------------
+# Live Monitor Mode (Impala Dashboard Equivalent)
+# ------------------------------------------------------------------------------
+
+cmd_monitor() {
+    local iface
+    iface=$(get_wifi_iface)
+    echo -e "${CYAN}Starting live Wi-Fi monitor dashboard (Press 'q' to quit)...${RESET}"
+    
+    tput civis 2>/dev/null || true
+    trap 'tput cnorm 2>/dev/null || true; return 0' EXIT INT TERM
+
+    while true; do
+        clear
+        local active_ssid status ip_info gw_info
+        status=$(get_wifi_status)
+        active_ssid=$(get_active_ssid)
+
+        echo -e "${BOLD}${CYAN}╔════════════════════════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${BOLD}${CYAN}║                     󰤨  LIVE WI-FI MONITOR DASHBOARD                             ║${RESET}"
+        echo -e "${BOLD}${CYAN}╚════════════════════════════════════════════════════════════════════════════════╝${RESET}"
+
+        if [ "$status" = "disabled" ]; then
+            echo -e "  ${BOLD}Radio:${RESET}     ${RED}OFF (Disabled)${RESET}"
+        elif [ -n "$active_ssid" ]; then
+            ip_info=$(nmcli -t -f IP4.ADDRESS dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
+            gw_info=$(nmcli -t -f IP4.GATEWAY dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
+            
+            local active_line
+            active_line=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list 2>/dev/null | grep '^\*' | head -n 1 || true)
+            local a_bssid a_chan a_freq a_rate a_sig a_sec
+            if [ -n "$active_line" ]; then
+                local line_sub="${active_line//\\:/$'\001'}"
+                IFS=':' read -r _ _ a_bssid a_chan a_freq a_rate a_sig _ a_sec <<< "$line_sub"
+                a_bssid="${a_bssid//$'\001'/:}"
+            fi
+
+            local a_sig_num="${a_sig:-0}"
+            echo -e "  ${BOLD}Active Network:${RESET} ${GREEN}${BOLD}$active_ssid${RESET}  ${DIM}[BSSID: ${a_bssid:---}]${RESET}"
+            echo -e "  ${BOLD}Signal Quality:${RESET} $(sig_to_bar "$a_sig_num") $a_sig_num% ($(sig_to_dbm "$a_sig_num")) [$(sig_quality_label "$a_sig_num")]"
+            echo -e "  ${BOLD}Link Speed:${RESET}     ${CYAN}${a_rate:---}${RESET}  |  ${BOLD}Band:${RESET} $(freq_to_band "${a_freq:---}") (Ch: ${a_chan:---})  |  ${BOLD}Security:${RESET} ${a_sec:---}"
+            echo -e "  ${BOLD}IP Address:${RESET}     ${ip_info:---}  |  ${BOLD}Gateway:${RESET} ${gw_info:---}"
+        else
+            echo -e "  ${BOLD}Status:${RESET}    ${YELLOW}Disconnected (Wi-Fi ON)${RESET}"
+        fi
+
+        echo ""
+        echo -e "${BOLD}${CYAN}Nearby Wi-Fi Networks (Ranked by Signal):${RESET}"
+        printf "${BOLD}%-2s %-2s %-12s %-5s %-4s %-9s %-12s %-12s %s${RESET}\n" "ST" "" "SIGNAL" "QUAL" "CHAN" "BAND" "SECURITY" "MAX RATE" "SSID"
+        echo -e "${DIM}------------------------------------------------------------------------------------------------${RESET}"
+
+        local raw_list
+        raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list 2>/dev/null || true)
+        
+        declare -A SEEN_MON_SIG SEEN_MON_CHAN SEEN_MON_BAND SEEN_MON_SEC SEEN_MON_RATE SEEN_MON_ACT
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            local line_sub="${line//\\:/$'\001'}"
+            local m_in_use m_ssid m_bssid m_chan m_freq m_rate m_sig m_bars m_sec
+            IFS=':' read -r m_in_use m_ssid m_bssid m_chan m_freq m_rate m_sig m_bars m_sec <<< "$line_sub"
+            [ -z "$m_ssid" ] || [ "$m_ssid" = "--" ] && continue
+
+            local is_act=0
+            [ "$m_in_use" = "*" ] || [ "$m_ssid" = "$active_ssid" ] && is_act=1
+
+            local s_num
+            s_num=$(echo "$m_sig" | tr -dc '0-9')
+            [ -z "$s_num" ] && s_num=0
+
+            if [ -z "${SEEN_MON_SIG["$m_ssid"]+x}" ] || [ "$s_num" -gt "${SEEN_MON_SIG["$m_ssid"]}" ] || [ "$is_act" -eq 1 ]; then
+                SEEN_MON_SIG["$m_ssid"]="$s_num"
+                SEEN_MON_CHAN["$m_ssid"]="$m_chan"
+                SEEN_MON_BAND["$m_ssid"]="$(freq_to_band "$m_freq")"
+                SEEN_MON_SEC["$m_ssid"]="$m_sec"
+                SEEN_MON_RATE["$m_ssid"]="$m_rate"
+                SEEN_MON_ACT["$m_ssid"]="$is_act"
+            fi
+        done <<< "$raw_list"
+
+        local out_lines=()
+        for s in "${!SEEN_MON_SIG[@]}"; do
+            local sig="${SEEN_MON_SIG["$s"]}"
+            local chan="${SEEN_MON_CHAN["$s"]}"
+            local band="${SEEN_MON_BAND["$s"]}"
+            local sec="${SEEN_MON_SEC["$s"]}"
+            local rate="${SEEN_MON_RATE["$s"]}"
+            local is_act="${SEEN_MON_ACT["$s"]}"
+            local is_saved=0
+            is_saved_ssid "$s" && is_saved=1
+
+            local st_tag="  "
+            if [ "$is_act" -eq 1 ]; then st_tag="${GREEN}✓ ${RESET}"
+            elif [ "$is_saved" -eq 1 ]; then st_tag="${YELLOW}★ ${RESET}"
+            fi
+
+            local icon
+            icon=$(sig_to_icon "$sig")
+            local bar
+            bar=$(sig_to_bar "$sig")
+            local sec_lbl="${sec:---}"
+            [ "$sec_lbl" = "--" ] && sec_lbl="Open"
+
+            out_lines+=("$(printf "%s %s %s %3d%%  %-4s %-9s %-12s %-12s %s" "$st_tag" "$icon" "$bar" "$sig" "$chan" "$band" "$sec_lbl" "$rate" "$s")")
+        done
+
+        if [ ${#out_lines[@]} -gt 0 ]; then
+            printf "%s\n" "${out_lines[@]}" | sort -k1,1r -k4,4nr | head -n 14
+        else
+            echo -e "  ${DIM}No networks detected. Scanning...${RESET}"
+        fi
+
+        echo ""
+        echo -e "${DIM}Auto-refreshing every 3s | Press 'q' or 'Ctrl-C' to exit | 'r' to rescan immediately${RESET}"
+        
+        local user_key=""
+        read -t 3 -n 1 user_key 2>/dev/null || true
+        if [[ "$user_key" == "q" ]] || [[ "$user_key" == "Q" ]]; then
+            break
+        elif [[ "$user_key" == "r" ]] || [[ "$user_key" == "R" ]]; then
+            nmcli dev wifi rescan >/dev/null 2>&1 || true
+        fi
+    done
+    tput cnorm 2>/dev/null || true
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler (FZF Preview Window & CLI details)
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="${1:-}"
+
+    if [ -z "$target" ] || [[ "$target" == __action_* ]] || [[ "$target" == __divider__ ]] || [[ "$target" == __none__ ]]; then
+        echo -e "${BOLD}${CYAN}=== Wi-Fi Overview ===${RESET}"
+        echo ""
+        cmd_status
+        echo ""
+        echo -e "${BOLD}Keyboard Shortcuts in FZF:${RESET}"
+        echo -e "  ${CYAN}Enter${RESET}   Select / Connect / Manage network"
+        echo -e "  ${CYAN}Ctrl-R${RESET}  Rescan available networks"
+        echo -e "  ${CYAN}Ctrl-C${RESET}  Quick Connect to highlighted SSID"
+        echo -e "  ${CYAN}Ctrl-D${RESET}  Disconnect from active Wi-Fi"
+        echo -e "  ${CYAN}Ctrl-S${RESET}  Open Saved Networks Manager"
+        echo -e "  ${CYAN}Ctrl-W${RESET}  Toggle Wi-Fi Radio ON / OFF"
+        echo -e "  ${CYAN}Ctrl-M${RESET}  Launch Live Monitor Dashboard"
+        echo -e "  ${CYAN}Esc${RESET}     Exit menu"
+        return 0
+    fi
+
+    # Query network information from scan list
+    local active_ssid iface
+    active_ssid=$(get_active_ssid)
+    iface=$(get_wifi_iface)
+
+    local match_line
+    match_line=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list 2>/dev/null | grep -F ":$target:" | head -n 1 || true)
+
+    local p_in_use p_ssid p_bssid p_chan p_freq p_rate p_sig p_bars p_sec
+    if [ -n "$match_line" ]; then
+        local line_sub="${match_line//\\:/$'\001'}"
+        IFS=':' read -r p_in_use p_ssid p_bssid p_chan p_freq p_rate p_sig p_bars p_sec <<< "$line_sub"
+        p_bssid="${p_bssid//$'\001'/:}"
+    fi
+
+    local is_act=0
+    [ "$target" = "$active_ssid" ] || [ "$p_in_use" = "*" ] && is_act=1
+
+    local is_saved=0
+    is_saved_ssid "$target" && is_saved=1
+
+    local sig_num
+    sig_num=$(echo "${p_sig:-0}" | tr -dc '0-9')
+    [ -z "$sig_num" ] && sig_num=0
+
+    echo -e "${BOLD}${CYAN}=== Wi-Fi Network Details ===${RESET}"
+    echo -e "  ${BOLD}SSID:${RESET}         $(sig_to_icon "$sig_num") ${BOLD}$target${RESET} $([ "$is_act" -eq 1 ] && echo -e "${GREEN}(Active / Connected)${RESET}" || ([ "$is_saved" -eq 1 ] && echo -e "${YELLOW}(Saved Profile)${RESET}"))"
+    echo -e "  ${BOLD}Signal:${RESET}       $(sig_to_bar "$sig_num") $sig_num% ($(sig_to_dbm "$sig_num")) [$(sig_quality_label "$sig_num")]"
+    echo -e "  ${BOLD}Band / Freq:${RESET}  $(freq_to_band "${p_freq:---}") (${p_freq:---}, Channel ${p_chan:---})"
+    echo -e "  ${BOLD}Security:${RESET}     $(sec_to_icon "${p_sec:---}") ${p_sec:---}"
+    echo -e "  ${BOLD}Max Bitrate:${RESET}  ${p_rate:---}"
+    echo -e "  ${BOLD}BSSID (AP):${RESET}   ${p_bssid:---}"
+
+    echo ""
+    echo -e "${BOLD}${CYAN}=== Connection Profile ===${RESET}"
+    if [ "$is_saved" -eq 1 ]; then
+        local autoconn uuid
+        autoconn=$(nmcli -t -f connection.autoconnect con show "$target" 2>/dev/null | cut -d: -f2 || echo "unknown")
+        uuid=$(nmcli -t -f connection.uuid con show "$target" 2>/dev/null | cut -d: -f2 || echo "--")
+        echo -e "  ${BOLD}Profile Saved:${RESET} ${GREEN}Yes${RESET} (AutoConnect: $autoconn)"
+        echo -e "  ${BOLD}Profile UUID:${RESET}  ${DIM}$uuid${RESET}"
+    else
+        echo -e "  ${BOLD}Profile Saved:${RESET} ${YELLOW}No${RESET} (New network)"
+    fi
+
+    if [ "$is_act" -eq 1 ]; then
+        echo ""
+        echo -e "${BOLD}${CYAN}=== Active Link Information ===${RESET}"
+        local ip4 gw4 dns4 driver
+        ip4=$(nmcli -t -f IP4.ADDRESS dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
+        gw4=$(nmcli -t -f IP4.GATEWAY dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
+        dns4=$(nmcli -t -f IP4.DNS dev show "$iface" 2>/dev/null | tr '\n' ' ' | sed 's/IP4.DNS\[[0-9]*\]://g' | xargs)
+        driver=$(nmcli -t -f GENERAL.DRIVER dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2-)
+
+        echo -e "  ${BOLD}Interface:${RESET}    ${iface} (${driver:-generic})"
+        echo -e "  ${BOLD}IPv4 Address:${RESET} ${GREEN}${ip4:---}${RESET}"
+        echo -e "  ${BOLD}Gateway:${RESET}      ${gw4:---}"
+        echo -e "  ${BOLD}DNS Server:${RESET}   ${dns4:---}"
+    fi
+
+    echo ""
+    echo -e "${BOLD}Actions & Controls:${RESET}"
+    echo -e "  ${CYAN}Enter${RESET}   $([ "$is_act" -eq 1 ] && echo "Manage connection" || echo "Connect to $target")"
+    echo -e "  ${CYAN}Ctrl-C${RESET}  Quick Connect"
+    echo -e "  ${CYAN}Ctrl-D${RESET}  Disconnect active network"
+    echo -e "  ${CYAN}Ctrl-R${RESET}  Rescan available networks"
+    echo -e "  ${CYAN}Ctrl-M${RESET}  Open Live Monitor"
+}
+
+# ------------------------------------------------------------------------------
 # Interactive TUI Menu (fzf)
 # ------------------------------------------------------------------------------
 
@@ -368,6 +629,8 @@ cmd_interactive() {
         cmd_scan
         return 0
     fi
+
+    local self_bin="${BASH_SOURCE[0]}"
 
     while true; do
         clear
@@ -389,18 +652,15 @@ cmd_interactive() {
 
         # Fetch scanned networks
         local raw_list
-        raw_list=$(nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY,FREQ dev wifi list 2>/dev/null || true)
+        raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list 2>/dev/null || true)
 
-        declare -A SEEN_SIG SEEN_SEC SEEN_BAND SEEN_ACT
+        declare -A SEEN_SIG SEEN_SEC SEEN_BAND SEEN_CHAN SEEN_RATE SEEN_ACT
 
         while IFS= read -r line; do
             [ -z "$line" ] && continue
-            local in_use ssid signal security freq
-            in_use=$(echo "$line" | cut -d: -f1)
-            ssid=$(echo "$line" | cut -d: -f2)
-            signal=$(echo "$line" | cut -d: -f3)
-            security=$(echo "$line" | cut -d: -f4)
-            freq=$(echo "$line" | cut -d: -f5)
+            local line_sub="${line//\\:/$'\001'}"
+            local in_use ssid bssid chan freq rate signal bars security
+            IFS=':' read -r in_use ssid bssid chan freq rate signal bars security <<< "$line_sub"
 
             [ -z "$ssid" ] || [ "$ssid" = "--" ] && continue
             local sig_num
@@ -416,25 +676,28 @@ cmd_interactive() {
                 SEEN_SIG["$ssid"]="$sig_num"
                 SEEN_SEC["$ssid"]="$security"
                 SEEN_BAND["$ssid"]="$(freq_to_band "$freq")"
+                SEEN_CHAN["$ssid"]="$chan"
+                SEEN_RATE["$ssid"]="$rate"
                 SEEN_ACT["$ssid"]="$is_act"
             fi
         done <<< "$raw_list"
 
-        # Build menu items
+        # Build menu items (with tab delimiters for preview and hotkey mapping)
         local menu=()
-        menu+=("󰑐  Rescan Available Networks")
+        menu+=("󰑐  Rescan Available Networks"$'\t'"__action_rescan__")
         if [ -n "$active_ssid" ]; then
-            menu+=("󰤮  Disconnect from \"$active_ssid\"")
+            menu+=("󰤮  Disconnect from \"$active_ssid\""$'\t'"__action_disconnect__")
         fi
-        menu+=("󰛐  Connect to Hidden Network...")
-        menu+=("★  Saved Networks Manager")
+        menu+=("󰢮  Live Wi-Fi Monitor Dashboard"$'\t'"__action_monitor__")
+        menu+=("󰛐  Connect to Hidden Network..."$'\t'"__action_hidden__")
+        menu+=("★  Saved Networks Manager"$'\t'"__action_saved__")
         if [ "$status" = "enabled" ]; then
-            menu+=("󰖪  Turn Wi-Fi OFF")
+            menu+=("󰖪  Turn Wi-Fi OFF"$'\t'"__action_toggle__")
         else
-            menu+=("󰖩  Turn Wi-Fi ON")
+            menu+=("󰖩  Turn Wi-Fi ON"$'\t'"__action_toggle__")
         fi
-        menu+=("󰌢  Launch nmtui (NetworkManager TUI)")
-        menu+=("─────────────────────────────────────────────────────────────")
+        menu+=("󰌢  Launch nmtui (NetworkManager TUI)"$'\t'"__action_nmtui__")
+        menu+=("─────────────────────────────────────────────────────────────"$'\t'"__divider__")
 
         # Network list items
         local net_lines=()
@@ -442,6 +705,8 @@ cmd_interactive() {
             local sig="${SEEN_SIG["$s"]}"
             local sec="${SEEN_SEC["$s"]}"
             local band="${SEEN_BAND["$s"]}"
+            local chan="${SEEN_CHAN["$s"]}"
+            local rate="${SEEN_RATE["$s"]}"
             local is_act="${SEEN_ACT["$s"]}"
             local is_saved=0
             is_saved_ssid "$s" && is_saved=1
@@ -453,47 +718,101 @@ cmd_interactive() {
 
             local icon
             icon=$(sig_to_icon "$sig")
+            local bar
+            bar=$(sig_to_bar "$sig")
             local sec_lbl="${sec:---}"
             [ "$sec_lbl" = "--" ] && sec_lbl="Open"
 
-            net_lines+=("$(printf "%s%s %3d%%  %-7s  %-12s  %s" "$mark" "$icon" "$sig" "$band" "$sec_lbl" "$s")")
+            local disp
+            disp=$(printf "%s%s %s %3d%%  %-7s  %-12s  %s" "$mark" "$icon" "$bar" "$sig" "$band" "$sec_lbl" "$s")
+            net_lines+=("${disp}"$'\t'"${s}")
         done
 
         if [ ${#net_lines[@]} -gt 0 ]; then
             while IFS= read -r sorted_line; do
                 [ -n "$sorted_line" ] && menu+=("$sorted_line")
-            done < <(printf "%s\n" "${net_lines[@]}" | sort -k1,1r -k3,3nr)
+            done < <(printf "%s\n" "${net_lines[@]}" | sort -k1,1r -k4,4nr)
         else
-            menu+=("--- No Wi-Fi networks found ---")
+            menu+=("--- No Wi-Fi networks found ---"$'\t'"__none__")
         fi
 
-        local choice
-        choice=$(printf "%s\n" "${menu[@]}" | fzf \
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-r,ctrl-c,ctrl-d,ctrl-s,ctrl-w,ctrl-m \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
             --prompt="Wi-Fi > " \
-            --header="[$header_info] (Enter to select, Esc to exit)" \
+            --header="[$header_info] (Enter: Select | C-R: Rescan | C-C: Connect | C-D: Discon | C-W: Radio | C-M: Monitor)" \
             --reverse \
-            --height=65% \
+            --height=70% \
             --border=rounded \
             --cycle) || break
 
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
         [ -z "$choice" ] && break
 
-        case "$choice" in
-            *"Rescan Available Networks"*)
+        local sel_arg
+        sel_arg=$(echo "$choice" | cut -f2)
+
+        # Handle global hotkeys
+        case "$key" in
+            ctrl-r)
+                echo -e "${CYAN}Rescanning...${RESET}"
+                nmcli dev wifi rescan >/dev/null 2>&1 || true
+                sleep 1
+                continue
+                ;;
+            ctrl-d)
+                cmd_disconnect
+                sleep 1
+                continue
+                ;;
+            ctrl-w)
+                cmd_toggle
+                sleep 0.5
+                continue
+                ;;
+            ctrl-s)
+                sel_arg="__action_saved__"
+                ;;
+            ctrl-m)
+                cmd_monitor
+                continue
+                ;;
+            ctrl-c)
+                if [ -n "$sel_arg" ] && [[ "$sel_arg" != __* ]]; then
+                    cmd_connect "$sel_arg"
+                    echo "Press enter to continue..."
+                    read -r
+                    continue
+                fi
+                ;;
+        esac
+
+        # Handle item selection
+        case "$sel_arg" in
+            __action_rescan__)
                 echo -e "${CYAN}Rescanning...${RESET}"
                 nmcli dev wifi rescan >/dev/null 2>&1 || true
                 sleep 1
                 ;;
-            *"Disconnect from"*)
+            __action_disconnect__)
                 cmd_disconnect
                 sleep 1
                 ;;
-            *"Connect to Hidden Network"*)
+            __action_monitor__)
+                cmd_monitor
+                ;;
+            __action_hidden__)
                 cmd_hidden
                 echo "Press enter to continue..."
                 read -r
                 ;;
-            *"Saved Networks Manager"*)
+            __action_saved__)
                 local saved_sel
                 saved_sel=$(nmcli -t -f NAME,TYPE con show 2>/dev/null | awk -F: '$2=="802-11-wireless"{print $1}' | fzf \
                     --prompt="Saved Network > " \
@@ -512,36 +831,31 @@ cmd_interactive() {
                     read -r
                 fi
                 ;;
-            *"Turn Wi-Fi OFF"*)
-                nmcli radio wifi off
+            __action_toggle__)
+                cmd_toggle
                 sleep 0.5
                 ;;
-            *"Turn Wi-Fi ON"*)
-                nmcli radio wifi on
-                sleep 1
-                ;;
-            *"Launch nmtui"*)
+            __action_nmtui__)
                 nmtui
                 ;;
-            *"────"*|*"No Wi-Fi networks"*)
+            __divider__|__none__)
                 ;;
             *)
-                # Extracted network selected
-                local sel_ssid
-                # Match SSID at the end of formatted line
-                sel_ssid=$(echo "$choice" | awk '{for (i=6; i<=NF; i++) printf "%s%s", $i, (i<NF?" ":""); print ""}')
+                # Network selected
+                local sel_ssid="$sel_arg"
                 [ -z "$sel_ssid" ] && continue
 
                 if [ "$sel_ssid" = "$active_ssid" ]; then
                     local act
-                    act=$(printf "1. Disconnect\n2. Reconnect\n3. Forget Profile\n4. Show Info\n5. Cancel" | fzf \
+                    act=$(printf "1. Disconnect\n2. Reconnect\n3. Forget Profile\n4. Show Info\n5. Monitor Dashboard\n6. Cancel" | fzf \
                         --prompt="$sel_ssid (Active) > " \
-                        --reverse --height=30% --border=rounded) || true
+                        --reverse --height=35% --border=rounded) || true
                     case "$act" in
                         *"Disconnect"*) cmd_disconnect ;;
                         *"Reconnect"*) cmd_connect "$sel_ssid" ;;
                         *"Forget"*) cmd_forget "$sel_ssid" ;;
                         *"Show Info"*) cmd_status ;;
+                        *"Monitor Dashboard"*) cmd_monitor ;;
                     esac
                     echo "Press enter to continue..."
                     read -r
@@ -557,20 +871,32 @@ cmd_interactive() {
 
 cmd_help() {
     cat << EOF
-${BOLD}wifi${RESET} - Terminal Wi-Fi Connection Manager
+${BOLD}wifi${RESET} - Terminal Wi-Fi Connection & Monitoring Manager
 
 ${BOLD}USAGE:${RESET}
-    wifi                         Launch interactive fzf menu
-    wifi status | s              Display current connection details and IP
-    wifi list | scan | l         Scan and list nearby Wi-Fi networks
+    wifi                         Launch interactive fzf menu with live preview
+    wifi status | s | info       Display detailed connection, IP, signal & hardware info
+    wifi list | scan | l         Scan and list nearby Wi-Fi networks with signal bars
+    wifi monitor | watch | m     Live continuous Wi-Fi monitor dashboard (like Impala)
+    wifi preview <SSID>          Inspect detailed parameters of a network
     wifi connect <SSID> [pass]   Connect to a Wi-Fi network
     wifi disconnect | d          Disconnect from current Wi-Fi
     wifi saved                   List saved Wi-Fi profiles
     wifi forget [SSID]           Delete a saved Wi-Fi profile
     wifi hidden                  Connect to a hidden Wi-Fi network
-    wifi on | off                Turn Wi-Fi radio ON or OFF
+    wifi on | off | toggle       Turn Wi-Fi radio ON or OFF
     wifi tui                     Open NetworkManager TUI (nmtui)
     wifi help | -h               Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}   Select / Connect / Manage network
+    ${CYAN}Ctrl-R${RESET}  Rescan nearby networks immediately
+    ${CYAN}Ctrl-C${RESET}  Quick Connect to highlighted network
+    ${CYAN}Ctrl-D${RESET}  Disconnect from active network
+    ${CYAN}Ctrl-S${RESET}  Open Saved Networks Manager
+    ${CYAN}Ctrl-W${RESET}  Toggle Wi-Fi radio ON / OFF
+    ${CYAN}Ctrl-M${RESET}  Open Live Wi-Fi Monitor Dashboard
+    ${CYAN}Esc${RESET}     Exit
 
 EOF
 }
@@ -585,6 +911,13 @@ case "${1:-}" in
         ;;
     list|scan|l)
         cmd_scan
+        ;;
+    monitor|watch|m)
+        cmd_monitor
+        ;;
+    preview)
+        shift
+        cmd_preview "$@"
         ;;
     connect|c)
         shift
@@ -630,7 +963,6 @@ case "${1:-}" in
         fi
         ;;
     *)
-        # If argument matches a scanned or saved SSID, connect to it directly
         cmd_connect "$@"
         ;;
 esac

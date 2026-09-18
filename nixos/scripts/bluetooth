@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # bluetooth - Terminal Bluetooth Manager (CLI & fzf TUI)
-# Scan, pair, connect, and manage Bluetooth devices via terminal.
+# Scan, pair, connect, monitor, and manage Bluetooth devices via terminal.
 # ==============================================================================
-
 
 # Colors
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
@@ -42,6 +41,10 @@ get_power_status() {
     fi
 }
 
+is_discovering() {
+    bluetoothctl show 2>/dev/null | grep -qi "Discovering: yes"
+}
+
 get_device_icon() {
     local mac="$1"
     local name="$2"
@@ -66,6 +69,24 @@ get_device_icon() {
     else
         echo "󰂯"
     fi
+}
+
+get_device_class_desc() {
+    local icon="$1"
+    if [ -n "$icon" ]; then
+        case "$icon" in
+            *headset*|*headphone*) echo "Audio Headset / Earbuds" ;;
+            *audio*|*speaker*)     echo "Bluetooth Speaker / Audio Sink" ;;
+            *mouse*)               echo "Wireless Mouse / Pointer" ;;
+            *keyboard*)            echo "Wireless Keyboard" ;;
+            *gamepad*|*joystick*)  echo "Gaming Controller" ;;
+            *phone*)               echo "Smartphone" ;;
+            *computer*)            echo "Computer / Laptop" ;;
+            *)                     echo "$icon" ;;
+        esac
+        return
+    fi
+    echo "Bluetooth Device"
 }
 
 resolve_mac() {
@@ -100,6 +121,37 @@ get_device_name() {
     echo "${name:-$mac}"
 }
 
+rssi_to_bar() {
+    local rssi="${1:-}"
+    local r_num
+    r_num=$(echo "$rssi" | tr -dc '0-9-')
+    if [ -z "$r_num" ] || [ "$r_num" = "-" ]; then
+        echo -e "${DIM}[--] N/A${RESET}"
+        return
+    fi
+
+    local pct=$(( (r_num + 100) * 100 / 60 ))
+    [ "$pct" -gt 100 ] && pct=100
+    [ "$pct" -lt 0 ] && pct=0
+
+    local width=10
+    local filled=$(( (pct * width + 50) / 100 ))
+    [ "$filled" -gt "$width" ] && filled="$width"
+    [ "$filled" -lt 0 ] && filled=0
+    local empty=$(( width - filled ))
+    local bar=""
+    for ((i=0; i<filled; i++)); do bar+="█"; done
+    for ((i=0; i<empty; i++)); do bar+="░"; done
+
+    local color="$GREEN"
+    if [ "$pct" -lt 35 ]; then
+        color="$RED"
+    elif [ "$pct" -lt 70 ]; then
+        color="$YELLOW"
+    fi
+    echo -e "${color}[${bar}]${RESET} ${r_num} dBm"
+}
+
 # ------------------------------------------------------------------------------
 # Commands
 # ------------------------------------------------------------------------------
@@ -109,7 +161,7 @@ cmd_status() {
     power=$(get_power_status)
 
     echo -e "${BOLD}${CYAN}=== Bluetooth Status ===${RESET}"
-    echo -e "  ${BOLD}Controller:${RESET}  $([ "$power" = "on" ] && echo -e "${GREEN}Powered ON${RESET}" || echo -e "${RED}Powered OFF${RESET}")"
+    echo -e "  ${BOLD}Controller:${RESET}   $([ "$power" = "on" ] && echo -e "${GREEN}Powered ON${RESET}" || echo -e "${RED}Powered OFF${RESET}")"
 
     if [ "$power" = "off" ]; then
         return 0
@@ -120,13 +172,13 @@ cmd_status() {
     ctrl_mac=$(echo "$ctrl_line" | awk '{print $2}')
     ctrl_name=$(bluetoothctl show 2>/dev/null | grep -E "^\s*Name:" | head -n 1 | cut -d: -f2- | xargs)
 
-    echo -e "  ${BOLD}Device:${RESET}      ${ctrl_name:-Controller} ($ctrl_mac)"
+    echo -e "  ${BOLD}Device:${RESET}       ${ctrl_name:-Controller} ($ctrl_mac)"
 
     local pairable discovering
     pairable=$(bluetoothctl show 2>/dev/null | grep -E "^\s*Pairable:" | head -n 1 | awk '{print $2}')
     discovering=$(bluetoothctl show 2>/dev/null | grep -E "^\s*Discovering:" | head -n 1 | awk '{print $2}')
-    echo -e "  ${BOLD}Pairable:${RESET}    $pairable"
-    echo -e "  ${BOLD}Discovering:${RESET} $discovering"
+    echo -e "  ${BOLD}Pairable:${RESET}     $pairable"
+    echo -e "  ${BOLD}Discovering:${RESET}  $([ "$discovering" = "yes" ] && echo -e "${CYAN}${BOLD}yes (Scanning Active)${RESET}" || echo "no")"
 
     # Connected devices
     local conn_devices=()
@@ -140,15 +192,19 @@ cmd_status() {
         echo -e "  ${DIM}No devices currently connected.${RESET}"
     else
         for mac in "${conn_devices[@]}"; do
-            local dname icon bat_info
+            local dname icon bat_info rssi_info
             dname=$(get_device_name "$mac")
             icon=$(get_device_icon "$mac" "$dname")
             bat_info=$(bluetoothctl info "$mac" 2>/dev/null | grep -i "Battery Percentage" | awk -F'[:()]' '{print $2}' | xargs || true)
+            rssi_info=$(bluetoothctl info "$mac" 2>/dev/null | grep -E "^\s*RSSI:" | head -n 1 | awk '{print $2}' || true)
             
             local bat_str=""
-            [ -n "$bat_info" ] && bat_str=" (Battery: $bat_info%)"
+            [ -n "$bat_info" ] && bat_str=" ${GREEN}(Battery: $bat_info%)${RESET}"
 
-            echo -e "  ${GREEN}✓ $icon ${BOLD}$dname${RESET}${GREEN}$bat_str${RESET} ${DIM}[$mac]${RESET}"
+            local sig_str=""
+            [ -n "$rssi_info" ] && sig_str="  $(rssi_to_bar "$rssi_info")"
+
+            echo -e "  ${GREEN}✓ $icon ${BOLD}$dname${RESET}$bat_str$sig_str ${DIM}[$mac]${RESET}"
         done
     fi
 }
@@ -161,7 +217,7 @@ cmd_list() {
         return 0
     fi
 
-    declare -A CONNECTED_MAP PAIRED_MAP DEVICE_NAMES
+    declare -A CONNECTED_MAP PAIRED_MAP
 
     while read -r _ mac _; do
         [ -n "$mac" ] && CONNECTED_MAP["$mac"]=1
@@ -214,7 +270,7 @@ cmd_list() {
     fi
 
     if [ ${#conn_list[@]} -eq 0 ] && [ ${#paired_list[@]} -eq 0 ] && [ ${#disc_list[@]} -eq 0 ]; then
-        echo -e "${YELLOW}No devices found. Run 'bluetooth scan' to discover nearby devices.${RESET}"
+        echo -e "${YELLOW}No devices found. Run 'bluetooth scan' or press Ctrl-R in interactive mode.${RESET}"
     fi
 }
 
@@ -273,7 +329,6 @@ cmd_disconnect() {
     local mac
 
     if [ -z "$target" ]; then
-        # If no target, find first connected device
         local connected_macs=()
         while read -r _ m _; do
             [ -n "$m" ] && connected_macs+=("$m")
@@ -338,6 +393,25 @@ cmd_pair() {
     fi
 }
 
+cmd_trust() {
+    local target="$1"
+    [ -z "$target" ] && return 1
+    local mac
+    mac=$(resolve_mac "$target") || mac="$target"
+    local dname
+    dname=$(get_device_name "$mac")
+
+    local is_trusted
+    is_trusted=$(bluetoothctl info "$mac" 2>/dev/null | grep -E "^\s*Trusted:" | awk '{print $2}')
+    if [ "$is_trusted" = "yes" ]; then
+        bluetoothctl untrust "$mac" >/dev/null 2>&1
+        echo -e "${YELLOW}Untrusted $dname ($mac).${RESET}"
+    else
+        bluetoothctl trust "$mac" >/dev/null 2>&1
+        echo -e "${GREEN}Trusted $dname ($mac).${RESET}"
+    fi
+}
+
 cmd_remove() {
     local target="$1"
     if [ -z "$target" ]; then
@@ -389,18 +463,143 @@ cmd_toggle() {
     fi
 }
 
+# ------------------------------------------------------------------------------
+# Live Monitor Mode (BlueTUI Equivalent)
+# ------------------------------------------------------------------------------
+
+cmd_monitor() {
+    local power
+    power=$(get_power_status)
+    if [ "$power" = "off" ]; then
+        echo -e "${YELLOW}Powering on Bluetooth for monitor...${RESET}"
+        bluetoothctl power on >/dev/null 2>&1
+        sleep 0.5
+    fi
+
+    echo -e "${CYAN}Starting live Bluetooth monitor dashboard (Press 'q' to quit)...${RESET}"
+    
+    # Start background discovery
+    local scan_pid=""
+    bluetoothctl --timeout 3600 scan on >/dev/null 2>&1 &
+    scan_pid=$!
+
+    tput civis 2>/dev/null || true
+    trap 'kill $scan_pid 2>/dev/null || true; bluetoothctl scan off >/dev/null 2>&1 || true; tput cnorm 2>/dev/null || true; return 0' EXIT INT TERM
+
+    while true; do
+        clear
+        local ctrl_line ctrl_name ctrl_mac pairable discovering
+        ctrl_line=$(bluetoothctl show 2>/dev/null | grep -E "^Controller" | head -n 1)
+        ctrl_mac=$(echo "$ctrl_line" | awk '{print $2}')
+        ctrl_name=$(bluetoothctl show 2>/dev/null | grep -E "^\s*Name:" | head -n 1 | cut -d: -f2- | xargs)
+        pairable=$(bluetoothctl show 2>/dev/null | grep -E "^\s*Pairable:" | head -n 1 | awk '{print $2}')
+        discovering=$(bluetoothctl show 2>/dev/null | grep -E "^\s*Discovering:" | head -n 1 | awk '{print $2}')
+
+        echo -e "${BOLD}${CYAN}╔════════════════════════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${BOLD}${CYAN}║                   󰂯  LIVE BLUETOOTH MONITOR DASHBOARD                          ║${RESET}"
+        echo -e "${BOLD}${CYAN}╚════════════════════════════════════════════════════════════════════════════════╝${RESET}"
+        echo -e "  ${BOLD}Controller:${RESET}  ${ctrl_name:-Controller} ($ctrl_mac)  |  ${BOLD}Pairable:${RESET} $pairable  |  ${BOLD}Scanning:${RESET} ${GREEN}${BOLD}Active 󰑐${RESET}"
+
+        declare -A MON_CONN MON_PAIRED
+        while read -r _ mac _; do [ -n "$mac" ] && MON_CONN["$mac"]=1; done < <(bluetoothctl devices Connected 2>/dev/null || true)
+        while read -r _ mac _; do [ -n "$mac" ] && MON_PAIRED["$mac"]=1; done < <(bluetoothctl devices Paired 2>/dev/null || true)
+
+        local m_conn_lines=()
+        local m_paired_lines=()
+        local m_disc_lines=()
+
+        while read -r _ mac name; do
+            [ -z "$mac" ] && continue
+            [ -z "$name" ] && name="$mac"
+
+            local icon clean_mac clean_name info rssi bat
+            icon=$(get_device_icon "$mac" "$name")
+            clean_mac=$(echo "$mac" | tr -d ":-")
+            clean_name=$(echo "$name" | tr -d ":-")
+
+            info=$(bluetoothctl info "$mac" 2>/dev/null || true)
+            rssi=$(echo "$info" | grep -E "^\s*RSSI:" | head -n 1 | awk '{print $2}' || true)
+            bat=$(echo "$info" | grep -i "Battery Percentage" | head -n 1 | awk -F'[:()]' '{print $2}' | xargs || true)
+
+            local bat_badge="${DIM}--${RESET}"
+            [ -n "$bat" ] && bat_badge="${GREEN}${bat}%${RESET}"
+
+            local sig_bar
+            sig_bar=$(rssi_to_bar "$rssi")
+
+            if [ "${MON_CONN["$mac"]}" = "1" ]; then
+                m_conn_lines+=("$(printf "  ${GREEN}✓ %s %-24s${RESET} %-17s %-10s %s" "$icon" "$name" "$mac" "$bat_badge" "$sig_bar")")
+            elif [ "${MON_PAIRED["$mac"]}" = "1" ]; then
+                m_paired_lines+=("$(printf "  ${YELLOW}★ %s %-24s${RESET} %-17s %-10s %s" "$icon" "$name" "$mac" "$bat_badge" "$sig_bar")")
+            elif [ "$clean_mac" != "$clean_name" ]; then
+                m_disc_lines+=("$(printf "    %s %-24s %-17s %-10s %s" "$icon" "$name" "$mac" "$bat_badge" "$sig_bar")")
+            fi
+        done < <(bluetoothctl devices 2>/dev/null || true)
+
+        echo ""
+        echo -e "${BOLD}${GREEN}Connected Devices (${#m_conn_lines[@]}):${RESET}"
+        printf "  ${BOLD}%-2s %-24s %-17s %-10s %s${RESET}\n" "" "DEVICE" "MAC ADDRESS" "BATTERY" "SIGNAL (RSSI)"
+        echo -e "  ${DIM}--------------------------------------------------------------------------------${RESET}"
+        if [ ${#m_conn_lines[@]} -gt 0 ]; then
+            for l in "${m_conn_lines[@]}"; do echo -e "$l"; done
+        else
+            echo -e "  ${DIM}None connected.${RESET}"
+        fi
+
+        echo ""
+        echo -e "${BOLD}${YELLOW}Paired Devices (${#m_paired_lines[@]}):${RESET}"
+        if [ ${#m_paired_lines[@]} -gt 0 ]; then
+            for l in "${m_paired_lines[@]}"; do echo -e "$l"; done
+        else
+            echo -e "  ${DIM}None paired.${RESET}"
+        fi
+
+        echo ""
+        echo -e "${BOLD}${CYAN}Nearby / Discovered Devices (${#m_disc_lines[@]}):${RESET}"
+        if [ ${#m_disc_lines[@]} -gt 0 ]; then
+            for l in "${m_disc_lines[@]}"; do echo -e "$l"; done | head -n 12
+        else
+            echo -e "  ${DIM}Scanning for nearby advertising devices...${RESET}"
+        fi
+
+        echo ""
+        echo -e "${DIM}Auto-refreshing every 2s | Press 'q' or 'Ctrl-C' to exit${RESET}"
+        
+        local user_key=""
+        read -t 2 -n 1 user_key 2>/dev/null || true
+        if [[ "$user_key" == "q" ]] || [[ "$user_key" == "Q" ]]; then
+            break
+        fi
+    done
+
+    kill $scan_pid 2>/dev/null || true
+    bluetoothctl scan off >/dev/null 2>&1 || true
+    tput cnorm 2>/dev/null || true
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler (FZF Preview Window & CLI details)
+# ------------------------------------------------------------------------------
+
 cmd_preview() {
     local target="${1:-}"
 
-    if [ -z "$target" ] || [ "$target" = "none" ]; then
+    if [ -z "$target" ] || [[ "$target" == __action_* ]] || [[ "$target" == __divider__ ]]; then
         echo -e "${BOLD}${CYAN}=== Bluetooth Overview ===${RESET}"
         echo ""
         cmd_status
         echo ""
-        echo -e "${BOLD}Controls:${RESET}"
-        echo -e "  ${CYAN}↑/↓${RESET}    Navigate items"
-        echo -e "  ${CYAN}Enter${RESET}  Select device to Connect / Pair"
-        echo -e "  ${CYAN}Esc${RESET}    Exit menu"
+        echo -e "${BOLD}Keyboard Shortcuts in FZF:${RESET}"
+        echo -e "  ${CYAN}Enter${RESET}   Select device to Connect / Manage"
+        echo -e "  ${CYAN}Ctrl-R${RESET}  Toggle Continuous Discovery Scan"
+        echo -e "  ${CYAN}Ctrl-C${RESET}  Quick Connect to highlighted device"
+        echo -e "  ${CYAN}Ctrl-D${RESET}  Quick Disconnect highlighted device"
+        echo -e "  ${CYAN}Ctrl-P${RESET}  Quick Pair & Trust highlighted device"
+        echo -e "  ${CYAN}Ctrl-T${RESET}  Toggle Trust on highlighted device"
+        echo -e "  ${CYAN}Ctrl-X${RESET}  Remove / Forget highlighted device"
+        echo -e "  ${CYAN}Ctrl-B${RESET}  Toggle Bluetooth Power ON / OFF"
+        echo -e "  ${CYAN}Ctrl-M${RESET}  Launch Live Monitor Dashboard"
+        echo -e "  ${CYAN}Esc${RESET}     Exit menu"
         return 0
     fi
 
@@ -423,16 +622,31 @@ cmd_preview() {
     local info
     info=$(bluetoothctl info "$mac" 2>/dev/null)
     if [ -n "$info" ]; then
-        local paired connected trusted blocked battery
+        local paired connected trusted blocked battery rssi txpower icon_raw dev_class
         paired=$(echo "$info" | grep -E "^\s*Paired:" | head -n 1 | awk '{print $2}')
         connected=$(echo "$info" | grep -E "^\s*Connected:" | head -n 1 | awk '{print $2}')
         trusted=$(echo "$info" | grep -E "^\s*Trusted:" | head -n 1 | awk '{print $2}')
+        blocked=$(echo "$info" | grep -E "^\s*Blocked:" | head -n 1 | awk '{print $2}')
         battery=$(echo "$info" | grep -i "Battery Percentage" | head -n 1 | awk -F'[:()]' '{print $2}' | xargs)
+        rssi=$(echo "$info" | grep -E "^\s*RSSI:" | head -n 1 | awk '{print $2}')
+        txpower=$(echo "$info" | grep -E "^\s*TxPower:" | head -n 1 | awk '{print $2}')
+        icon_raw=$(echo "$info" | grep -E "^\s*Icon:" | head -n 1 | awk '{print $2}')
+        dev_class=$(echo "$info" | grep -E "^\s*Class:" | head -n 1 | awk '{print $2}')
 
+        echo -e "  ${BOLD}Category:${RESET}  $(get_device_class_desc "$icon_raw" "$dev_class" "$dname")"
+        echo -e "  ${BOLD}Status:${RESET}    $([ "$connected" = "yes" ] && echo -e "${GREEN}${BOLD}Connected${RESET}" || echo -e "${DIM}Disconnected${RESET}")"
         echo -e "  ${BOLD}Paired:${RESET}    $([ "$paired" = "yes" ] && echo -e "${GREEN}yes${RESET}" || echo -e "${YELLOW}no${RESET}")"
-        echo -e "  ${BOLD}Connected:${RESET} $([ "$connected" = "yes" ] && echo -e "${GREEN}${BOLD}yes${RESET}" || echo -e "${DIM}no${RESET}")"
         echo -e "  ${BOLD}Trusted:${RESET}   $([ "$trusted" = "yes" ] && echo -e "${GREEN}yes${RESET}" || echo -e "${DIM}no${RESET}")"
-        [ -n "$battery" ] && echo -e "  ${BOLD}Battery:${RESET}   ${GREEN}${BOLD}$battery%${RESET}"
+        [ "$blocked" = "yes" ] && echo -e "  ${BOLD}Blocked:${RESET}   ${RED}yes${RESET}"
+
+        if [ -n "$battery" ]; then
+            echo -e "  ${BOLD}Battery:${RESET}   ${GREEN}${BOLD}$battery%${RESET}"
+        fi
+
+        if [ -n "$rssi" ]; then
+            echo -e "  ${BOLD}Signal:${RESET}    $(rssi_to_bar "$rssi")"
+        fi
+        [ -n "$txpower" ] && echo -e "  ${BOLD}Tx Power:${RESET}  $txpower dBm"
 
         local uuids
         uuids=$(echo "$info" | grep -E "^\s*UUID:" | awk '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | sed 's/(.*)//g' | tr -s ' ' | head -n 6)
@@ -444,6 +658,15 @@ cmd_preview() {
             done <<< "$uuids"
         fi
     fi
+
+    echo ""
+    echo -e "${BOLD}Available Actions:${RESET}"
+    echo -e "  ${CYAN}Enter${RESET}   Open device action menu"
+    echo -e "  ${CYAN}Ctrl-C${RESET}  Quick Connect"
+    echo -e "  ${CYAN}Ctrl-D${RESET}  Quick Disconnect"
+    echo -e "  ${CYAN}Ctrl-P${RESET}  Pair & Trust"
+    echo -e "  ${CYAN}Ctrl-T${RESET}  Toggle Trust"
+    echo -e "  ${CYAN}Ctrl-X${RESET}  Remove / Forget device"
 }
 
 # ------------------------------------------------------------------------------
@@ -458,13 +681,22 @@ cmd_interactive() {
         return 0
     fi
 
-    local self_bin="$0"
-    [ -x "$self_bin" ] || self_bin="bluetooth"
+    local self_bin="${BASH_SOURCE[0]}"
+
+    local scan_bg_pid=""
+    cleanup_interactive() {
+        if [ -n "$scan_bg_pid" ]; then
+            kill "$scan_bg_pid" 2>/dev/null || true
+        fi
+        bluetoothctl scan off >/dev/null 2>&1 || true
+    }
+    trap cleanup_interactive EXIT INT TERM
 
     while true; do
         clear
-        local power
+        local power discovering_state
         power=$(get_power_status)
+        is_discovering && discovering_state=1 || discovering_state=0
 
         local header_info=""
         if [ "$power" = "off" ]; then
@@ -472,10 +704,12 @@ cmd_interactive() {
         else
             local conn_count
             conn_count=$(bluetoothctl devices Connected 2>/dev/null | wc -l)
-            header_info="Bluetooth: ON ($conn_count connected)"
+            local scan_badge="Scan: Idle"
+            [ "$discovering_state" -eq 1 ] && scan_badge="${GREEN}SCANNING ACTIVE 󰑐${RESET}"
+            header_info="BT: ON ($conn_count conn) | $scan_badge"
         fi
 
-        declare -A CONNECTED_MAP PAIRED_MAP DEVICE_NAMES
+        declare -A CONNECTED_MAP PAIRED_MAP
 
         while read -r _ mac _; do
             [ -n "$mac" ] && CONNECTED_MAP["$mac"]=1
@@ -486,14 +720,19 @@ cmd_interactive() {
         done < <(bluetoothctl devices Paired 2>/dev/null || true)
 
         local menu=()
-        menu+=("󰑐  Scan for Nearby Devices (5s)")
-        if [ "$power" = "on" ]; then
-            menu+=("󰂲  Turn Bluetooth OFF")
+        if [ "$discovering_state" -eq 1 ]; then
+            menu+=("󰑐  Stop Continuous Discovery Scan"$'\t'"__action_toggle_scan__")
         else
-            menu+=("󰂯  Turn Bluetooth ON")
+            menu+=("󰑐  Start Continuous Discovery Scan"$'\t'"__action_toggle_scan__")
         fi
-        menu+=("󰌢  Open bluetoothctl Console")
-        menu+=("─────────────────────────────────────────────────────────────")
+        menu+=("󰢮  Live Bluetooth Monitor Dashboard"$'\t'"__action_monitor__")
+        if [ "$power" = "on" ]; then
+            menu+=("󰂲  Turn Bluetooth OFF"$'\t'"__action_power__")
+        else
+            menu+=("󰂯  Turn Bluetooth ON"$'\t'"__action_power__")
+        fi
+        menu+=("󰌢  Open bluetoothctl Console"$'\t'"__action_ctl__")
+        menu+=("─────────────────────────────────────────────────────────────"$'\t'"__divider__")
 
         local dev_lines=()
         while read -r _ mac name; do
@@ -517,98 +756,179 @@ cmd_interactive() {
                 state_str="[Beacon]"
             fi
 
-            # Format line: Prefix Icon Name [Tab] MAC [Tab] State
-            dev_lines+=("$(printf "%s%s  %-26s\t%s\t%s" "$prefix" "$icon" "$name" "$mac" "$state_str")")
+            local disp
+            disp=$(printf "%s%s  %-26s  %-12s" "$prefix" "$icon" "$name" "$state_str")
+            dev_lines+=("${disp}"$'\t'"${mac}"$'\t'"${state_str}")
         done < <(bluetoothctl devices 2>/dev/null || true)
 
         if [ ${#dev_lines[@]} -gt 0 ]; then
-            # Sort connected first, then paired, then available
             while IFS= read -r sorted_line; do
                 [ -n "$sorted_line" ] && menu+=("$sorted_line")
             done < <(printf "%s\n" "${dev_lines[@]}" | sort -k1,1r)
         else
-            menu+=("--- No Bluetooth devices found. Choose Scan above. ---")
+            menu+=("--- No Bluetooth devices found ---"$'\t'"__none__")
         fi
 
-        # Pass to fzf with preview of device info
-        local choice
-        choice=$(printf "%s\n" "${menu[@]}" | fzf \
-            --prompt="Bluetooth > " \
-            --header="[$header_info] (Enter to select, Esc to exit)" \
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-r,ctrl-c,ctrl-d,ctrl-p,ctrl-t,ctrl-x,ctrl-b,ctrl-m \
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:48%:wrap \
+            --prompt="Bluetooth > " \
+            --header="[$header_info] (Enter: Menu | C-R: Scan | C-C: Conn | C-D: Discon | C-P: Pair | C-T: Trust | C-X: Forget | C-M: Mon)" \
             --reverse \
-            --height=65% \
+            --height=70% \
             --border=rounded \
             --cycle) || break
 
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
         [ -z "$choice" ] && break
 
-        case "$choice" in
-            *"Scan for Nearby Devices"*)
-                cmd_scan 5
-                echo "Press enter to continue..."
-                read -r
+        local sel_arg sel_state
+        sel_arg=$(echo "$choice" | cut -f2)
+        sel_state=$(echo "$choice" | cut -f3)
+
+        # Handle global hotkeys
+        case "$key" in
+            ctrl-r)
+                if [ "$discovering_state" -eq 1 ]; then
+                    [ -n "$scan_bg_pid" ] && kill "$scan_bg_pid" 2>/dev/null || true
+                    bluetoothctl scan off >/dev/null 2>&1 || true
+                    scan_bg_pid=""
+                else
+                    bluetoothctl --timeout 300 scan on >/dev/null 2>&1 &
+                    scan_bg_pid=$!
+                fi
+                sleep 0.5
+                continue
                 ;;
-            *"Turn Bluetooth OFF"*)
-                bluetoothctl power off
+            ctrl-b)
+                cmd_toggle
+                sleep 0.5
+                continue
+                ;;
+            ctrl-m)
+                cmd_monitor
+                continue
+                ;;
+            ctrl-c)
+                if [ -n "$sel_arg" ] && [[ "$sel_arg" != __* ]]; then
+                    cmd_connect "$sel_arg"
+                    echo "Press enter to continue..."
+                    read -r
+                    continue
+                fi
+                ;;
+            ctrl-d)
+                if [ -n "$sel_arg" ] && [[ "$sel_arg" != __* ]]; then
+                    cmd_disconnect "$sel_arg"
+                    echo "Press enter to continue..."
+                    read -r
+                    continue
+                fi
+                ;;
+            ctrl-p)
+                if [ -n "$sel_arg" ] && [[ "$sel_arg" != __* ]]; then
+                    cmd_pair "$sel_arg"
+                    echo "Press enter to continue..."
+                    read -r
+                    continue
+                fi
+                ;;
+            ctrl-t)
+                if [ -n "$sel_arg" ] && [[ "$sel_arg" != __* ]]; then
+                    cmd_trust "$sel_arg"
+                    sleep 0.5
+                    continue
+                fi
+                ;;
+            ctrl-x)
+                if [ -n "$sel_arg" ] && [[ "$sel_arg" != __* ]]; then
+                    cmd_remove "$sel_arg"
+                    echo "Press enter to continue..."
+                    read -r
+                    continue
+                fi
+                ;;
+        esac
+
+        # Handle item selection
+        case "$sel_arg" in
+            __action_toggle_scan__)
+                if [ "$discovering_state" -eq 1 ]; then
+                    [ -n "$scan_bg_pid" ] && kill "$scan_bg_pid" 2>/dev/null || true
+                    bluetoothctl scan off >/dev/null 2>&1 || true
+                    scan_bg_pid=""
+                else
+                    bluetoothctl --timeout 300 scan on >/dev/null 2>&1 &
+                    scan_bg_pid=$!
+                fi
                 sleep 0.5
                 ;;
-            *"Turn Bluetooth ON"*)
-                bluetoothctl power on
-                sleep 1
+            __action_monitor__)
+                cmd_monitor
                 ;;
-            *"Open bluetoothctl"*)
+            __action_power__)
+                cmd_toggle
+                sleep 0.5
+                ;;
+            __action_ctl__)
                 bluetoothctl
                 ;;
-            *"────"*|*"No Bluetooth devices found"*)
+            __divider__|__none__)
                 ;;
             *)
-                local sel_mac sel_state sel_name
-                sel_mac=$(echo "$choice" | cut -f2)
-                sel_state=$(echo "$choice" | cut -f3)
+                local sel_mac="$sel_arg"
+                local sel_name
                 sel_name=$(get_device_name "$sel_mac")
-
                 [ -z "$sel_mac" ] && continue
 
                 if [ "$sel_state" = "[Connected]" ]; then
                     local act
-                    act=$(printf "1. Disconnect\n2. Forget / Remove\n3. Show Info\n4. Cancel" | fzf \
+                    act=$(printf "1. Disconnect\n2. Toggle Trust\n3. Forget / Remove\n4. Show Info\n5. Monitor Dashboard\n6. Cancel" | fzf \
                         --prompt="$sel_name (Connected) > " \
-                        --reverse --height=25% --border=rounded) || true
+                        --reverse --height=30% --border=rounded) || true
                     [ -z "$act" ] || [[ "$act" =~ Cancel ]] && continue
                     case "$act" in
                         *"Disconnect"*) cmd_disconnect "$sel_mac" ;;
+                        *"Toggle Trust"*) cmd_trust "$sel_mac" ;;
                         *"Forget"*) cmd_remove "$sel_mac" ;;
                         *"Show Info"*) cmd_info "$sel_mac" ;;
+                        *"Monitor Dashboard"*) cmd_monitor ;;
                     esac
                     echo "Press enter to continue..."
                     read -r
                 elif [ "$sel_state" = "[Paired]" ]; then
                     local act
-                    act=$(printf "1. Connect\n2. Forget / Remove\n3. Show Info\n4. Cancel" | fzf \
+                    act=$(printf "1. Connect\n2. Toggle Trust\n3. Forget / Remove\n4. Show Info\n5. Monitor Dashboard\n6. Cancel" | fzf \
                         --prompt="$sel_name (Paired) > " \
-                        --reverse --height=25% --border=rounded) || true
+                        --reverse --height=30% --border=rounded) || true
                     [ -z "$act" ] || [[ "$act" =~ Cancel ]] && continue
                     case "$act" in
                         *"Connect"*) cmd_connect "$sel_mac" ;;
+                        *"Toggle Trust"*) cmd_trust "$sel_mac" ;;
                         *"Forget"*) cmd_remove "$sel_mac" ;;
                         *"Show Info"*) cmd_info "$sel_mac" ;;
+                        *"Monitor Dashboard"*) cmd_monitor ;;
                     esac
                     echo "Press enter to continue..."
                     read -r
                 else
                     local act
-                    act=$(printf "1. Pair & Connect\n2. Ignore / Remove\n3. Show Info\n4. Cancel" | fzf \
+                    act=$(printf "1. Pair & Connect\n2. Toggle Trust\n3. Ignore / Remove\n4. Show Info\n5. Monitor Dashboard\n6. Cancel" | fzf \
                         --prompt="$sel_name (New Device) > " \
-                        --reverse --height=25% --border=rounded) || true
+                        --reverse --height=30% --border=rounded) || true
                     [ -z "$act" ] || [[ "$act" =~ Cancel ]] && continue
                     case "$act" in
                         *"Pair & Connect"*) cmd_pair "$sel_mac" ;;
+                        *"Toggle Trust"*) cmd_trust "$sel_mac" ;;
                         *"Ignore"*) cmd_remove "$sel_mac" ;;
                         *"Show Info"*) cmd_info "$sel_mac" ;;
+                        *"Monitor Dashboard"*) cmd_monitor ;;
                     esac
                     echo "Press enter to continue..."
                     read -r
@@ -616,25 +936,41 @@ cmd_interactive() {
                 ;;
         esac
     done
+    cleanup_interactive
 }
 
 cmd_help() {
     cat << EOF
-${BOLD}bluetooth${RESET} - Terminal Bluetooth Device Manager
+${BOLD}bluetooth${RESET} - Terminal Bluetooth Device & Monitoring Manager
 
 ${BOLD}USAGE:${RESET}
     bluetooth                       Launch interactive fzf menu with live preview
-    bluetooth status | s            Display controller state and connected devices
+    bluetooth status | s            Display controller state, signal & connected devices
     bluetooth list | l [--all]      List paired and discovered devices
     bluetooth scan [seconds]        Scan for nearby devices (default: 5s)
+    bluetooth monitor | watch | m   Live continuous Bluetooth monitor dashboard (like BlueTUI)
+    bluetooth preview <device|MAC>  Inspect detailed parameters of a device
     bluetooth connect <device|MAC>  Connect to a Bluetooth device
     bluetooth disconnect [dev|MAC] Disconnect device
     bluetooth pair <device|MAC>     Pair, trust, and connect to a device
+    bluetooth trust <device|MAC>    Toggle trust on a device
     bluetooth remove <device|MAC>   Unpair / remove a device
     bluetooth info <device|MAC>     Show detailed info and battery
-    bluetooth on | off              Power Bluetooth controller ON or OFF
+    bluetooth on | off | toggle     Power Bluetooth controller ON or OFF
     bluetooth ctl                   Open interactive bluetoothctl console
     bluetooth help | -h             Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}   Select device to Connect / Manage
+    ${CYAN}Ctrl-R${RESET}  Toggle Continuous Background Discovery Scan
+    ${CYAN}Ctrl-C${RESET}  Quick Connect to highlighted device
+    ${CYAN}Ctrl-D${RESET}  Quick Disconnect highlighted device
+    ${CYAN}Ctrl-P${RESET}  Quick Pair & Trust highlighted device
+    ${CYAN}Ctrl-T${RESET}  Toggle Trust on highlighted device
+    ${CYAN}Ctrl-X${RESET}  Remove / Forget highlighted device
+    ${CYAN}Ctrl-B${RESET}  Toggle Bluetooth Power ON / OFF
+    ${CYAN}Ctrl-M${RESET}  Open Live Bluetooth Monitor Dashboard
+    ${CYAN}Esc${RESET}     Exit
 
 EOF
 }
@@ -655,6 +991,9 @@ case "${1:-}" in
         shift
         cmd_scan "$@"
         ;;
+    monitor|watch|m)
+        cmd_monitor
+        ;;
     connect|c)
         shift
         cmd_connect "$@"
@@ -666,6 +1005,10 @@ case "${1:-}" in
     pair|p)
         shift
         cmd_pair "$@"
+        ;;
+    trust|t)
+        shift
+        cmd_trust "$@"
         ;;
     remove|forget|rm)
         shift
@@ -706,7 +1049,6 @@ case "${1:-}" in
         fi
         ;;
     *)
-        # Try connecting if argument matches device
         cmd_connect "$@"
         ;;
 esac
