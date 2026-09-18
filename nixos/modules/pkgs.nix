@@ -233,6 +233,9 @@ in
     ueberzugpp
     nload
     termshark
+    pkgs_unstable.impala
+    pkgs_unstable.wiremix
+    pkgs_unstable.bluetui
 
     # Browser
     firefox
