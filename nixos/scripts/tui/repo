@@ -29,6 +29,8 @@ else
     RESET=''
 fi
 
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
 SEARCH_DIRS=(
     "$HOME/Code"
     "$HOME/Code/Vault"
@@ -427,7 +429,7 @@ cmd_interactive() {
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:48%:wrap \
-            --prompt="Repo ($current_scope) > " \
+            --prompt="  Repo ($current_scope) > " \
             --header="[$header_info] (Enter: Open $EDITOR | Ctrl-E: IDE | Ctrl-P: Pull | Ctrl-U: Push | Ctrl-D: Diff | Ctrl-F: Yazi | Tab: Filter | Esc: Exit)" \
             --reverse \
             --height=70% \

@@ -29,6 +29,8 @@ else
     RESET=''
 fi
 
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
 CODE_DIRS=(
     "$HOME/Code"
     "$HOME/Code/Vault"
@@ -471,7 +473,7 @@ cmd_interactive() {
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:48%:wrap \
-            --prompt="Tmux > " \
+            --prompt="  Tmux > " \
             --header="[$header_info] (Enter: Open/Attach | Ctrl-K: Kill | Ctrl-N: New | Ctrl-L: Lazygit | Ctrl-R: Refresh | Esc: Exit)" \
             --reverse \
             --height=70% \

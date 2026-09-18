@@ -29,6 +29,8 @@ else
     RESET=''
 fi
 
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
 DOTFILES_DIR="${DOTFILES_DIR:-$HOME/Code/Dotfiles}"
 HAKUSPACE_DIR="${HAKUSPACE_DIR:-$HOME/hakuspace-control}"
 
@@ -276,7 +278,7 @@ cmd_edit() {
     elif [ ${#matched[@]} -gt 1 ]; then
         echo -e "${CYAN}Multiple configs matched '$query'. Select one to edit:${RESET}"
         local selected
-        selected=$(printf "%s\n" "${matched[@]}" | fzf --height=40% --reverse --prompt="Edit > ") || return 0
+        selected=$(printf "%s\n" "${matched[@]}" | fzf --height=40% --reverse --border=rounded --prompt="Edit > ") || return 0
         [ -n "$selected" ] && open_in_editor "$selected"
     else
         # Direct file check
@@ -634,7 +636,7 @@ cmd_interactive() {
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:48%:wrap \
-            --prompt="Config ($current_scope) > " \
+            --prompt="󰒓  Config ($current_scope) > " \
             --header="[$header_info] (Enter: Edit in \$EDITOR | Ctrl-E: IDE | Ctrl-D: Diff | Ctrl-F: Yazi | Ctrl-O: Actions | Tab: Filter | Esc: Exit)" \
             --reverse \
             --height=70% \

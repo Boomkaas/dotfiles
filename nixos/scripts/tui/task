@@ -29,6 +29,8 @@ else
     RESET=''
 fi
 
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
 # Ensure Mango IPC socket is discovered if running under Wayland
 if [ -z "${MANGO_INSTANCE_SIGNATURE:-}" ]; then
     export MANGO_INSTANCE_SIGNATURE=$(ls /run/user/$UID/mango-*.sock 2>/dev/null | head -n1 || true)
@@ -396,7 +398,7 @@ cmd_interactive() {
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:48%:wrap \
-            --prompt="Task > " \
+            --prompt="󰌢  Task > " \
             --header="[$header_info] (Enter: Select | Ctrl-F: Focus | Ctrl-K: Term | Ctrl-X: Kill | Ctrl-Z: Pause | Esc: Exit)" \
             --reverse \
             --height=70% \

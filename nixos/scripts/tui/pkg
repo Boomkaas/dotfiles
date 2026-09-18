@@ -29,6 +29,8 @@ else
     RESET=''
 fi
 
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
 PKGS_FILE="${PKGS_FILE:-$HOME/Code/Dotfiles/nixos/modules/pkgs.nix}"
 
 notify() {
@@ -298,7 +300,7 @@ cmd_interactive() {
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:48%:wrap \
-            --prompt="Pkg ($current_scope) > " \
+            --prompt="📦 Pkg ($current_scope) > " \
             --header="[$header_info] (Enter: Ephemeral Shell | Ctrl-Y: Copy | Ctrl-O: Edit in pkgs.nix | Ctrl-W: Web | Tab: Filter | Esc: Exit)" \
             --reverse \
             --height=70% \

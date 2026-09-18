@@ -29,6 +29,8 @@ else
     RESET=''
 fi
 
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
 notify() {
     local urgency="${1:-normal}"
     local icon="${2:-drive-harddisk}"
@@ -376,7 +378,7 @@ cmd_interactive() {
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:48%:wrap \
-            --prompt="Disk ($current_scope) > " \
+            --prompt="󰋊  Disk ($current_scope) > " \
             --header="[$header_info] (Enter: Actions | Ctrl-C: Clean Nix | Ctrl-O: Optimise | Ctrl-M: Mount/Unmount | Ctrl-F: Yazi | Tab: Filter | Esc: Exit)" \
             --reverse \
             --height=70% \

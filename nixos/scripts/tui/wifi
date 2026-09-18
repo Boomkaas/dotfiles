@@ -29,6 +29,8 @@ else
     RESET=''
 fi
 
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
 # ------------------------------------------------------------------------------
 # Helper Functions
 # ------------------------------------------------------------------------------
@@ -370,7 +372,7 @@ cmd_forget() {
             return 0
         fi
         if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
-            target=$(echo "$saved" | fzf --prompt="Select profile to forget: " --height=40% --reverse --border)
+            target=$(echo "$saved" | fzf --prompt="Select profile to forget: " --height=40% --reverse --border=rounded)
         else
             echo "$saved"
             read -rp "Enter profile name to forget: " target
@@ -743,8 +745,8 @@ cmd_interactive() {
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:48%:wrap \
-            --prompt="Wi-Fi > " \
-            --header="[$header_info] (Enter: Select | C-R: Rescan | C-C: Connect | C-D: Discon | C-W: Radio | C-M: Monitor)" \
+            --prompt="󰖩  Wi-Fi > " \
+            --header="[$header_info] (Enter: Select | Ctrl-R: Rescan | Ctrl-C: Connect | Ctrl-D: Discon | Ctrl-W: Radio | Ctrl-M: Monitor)" \
             --reverse \
             --height=70% \
             --border=rounded \

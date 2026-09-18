@@ -29,6 +29,8 @@ else
     RESET=''
 fi
 
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
 spawn() { ( setsid "$@" & ) >/dev/null 2>&1; }
 
 # ------------------------------------------------------------------------------
@@ -351,7 +353,7 @@ cmd_interactive() {
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:48%:wrap \
-            --prompt="Theme > " \
+            --prompt="󰏘  Theme > " \
             --header="[$header_info] (Enter: Select | Ctrl-R: Refresh | Esc: Exit)" \
             --reverse \
             --height=70% \

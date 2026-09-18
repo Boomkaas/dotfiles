@@ -29,6 +29,8 @@ else
     RESET=''
 fi
 
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
 spawn() { ( setsid "$@" & ) >/dev/null 2>&1; }
 
 # ------------------------------------------------------------------------------
@@ -394,7 +396,7 @@ cmd_interactive() {
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:48%:wrap \
-            --prompt="Settings > " \
+            --prompt="󰒓  Settings > " \
             --header="[$header_info] (Enter: Select | Ctrl-R: Refresh | Esc: Exit)" \
             --reverse \
             --height=70% \
@@ -446,7 +448,11 @@ cmd_interactive() {
                 sleep 0.5
                 ;;
             clipboard)
-                $HOME/.local/bin/clipboard_menu.sh
+                if [ -x "$HOME/.local/bin/clip" ]; then
+                    $HOME/.local/bin/clip
+                else
+                    $HOME/.local/bin/clipboard_menu.sh
+                fi
                 ;;
             dnd)
                 cmd_dnd_toggle
@@ -463,13 +469,21 @@ cmd_interactive() {
                 $HOME/.local/bin/shutdown.sh
                 ;;
             process)
-                $HOME/.local/bin/process_menu.sh
+                if [ -x "$HOME/.local/bin/task" ]; then
+                    $HOME/.local/bin/task
+                else
+                    $HOME/.local/bin/process_menu.sh
+                fi
                 ;;
             gtk)
                 $HOME/.local/bin/gtk_theme_menu.sh
                 ;;
             config)
-                $HOME/.local/bin/config_menu.sh
+                if [ -x "$HOME/.local/bin/conf" ]; then
+                    $HOME/.local/bin/conf
+                else
+                    $HOME/.local/bin/config_menu.sh
+                fi
                 ;;
             warp)
                 $HOME/.local/bin/warp_toggle.sh
@@ -494,10 +508,18 @@ cmd_interactive() {
                 sleep 0.5
                 ;;
             disk)
-                $HOME/.local/bin/disk_menu.sh
+                if [ -x "$HOME/.local/bin/disk" ]; then
+                    $HOME/.local/bin/disk
+                else
+                    $HOME/.local/bin/disk_menu.sh
+                fi
                 ;;
             clean)
-                $HOME/.local/bin/clean_menu.sh
+                if [ -x "$HOME/.local/bin/disk" ]; then
+                    $HOME/.local/bin/disk clean
+                else
+                    $HOME/.local/bin/clean_menu.sh
+                fi
                 ;;
             custom_menu)
                 ${EDITOR:-nvim} "$HOME/hakuspace-control/hakumenu-general-custom.sh"
