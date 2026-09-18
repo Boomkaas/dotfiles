@@ -523,13 +523,13 @@ mod_scripts() {
   done < <(find "$SCRIPTS_DIR" -name "*.sh" -print0 2>/dev/null)
 
   # Scripts without extension
-  for name in awake bluetooth wifi setting theme epic twitch share audio nixos gens tm project service services task tasks conf configs disk storage repo repos gitui ports port clip clips log logs journal container containers vm pkg pkgs; do
+  for name in awake bluetooth wifi setting theme epic twitch share audio nixos gens tm project service services task tasks conf configs disk storage repo repos gitui ports port clip clips log logs journal container containers vm pkg pkgs s; do
     local f="$SCRIPTS_DIR/$name"
     [[ -f "$f" ]] && check "bash -n: $name" bash -n "$f"
   done
 
   # TUI scripts (dedicated folder)
-  for name in wifi bluetooth setting theme share audio nixos tm service task conf disk repo ports clip log container pkg; do
+  for name in wifi bluetooth setting theme share audio nixos tm service task conf disk repo ports clip log container pkg s; do
     local f="$SCRIPTS_DIR/tui/$name"
     [[ -f "$f" ]] && check "bash -n: tui/$name" bash -n "$f"
   done

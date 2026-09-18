@@ -1,0 +1,483 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# s - Master TUI Command Center & Script Launcher (CLI & fzf TUI)
+# Unified access to all 18 dotfiles TUI tools across system, network, dev & UI.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
+TUI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-utilities-terminal}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Tool Registry Definition
+# Format: CMD | CATEGORY | ICON | TITLE | ALIASES | SHORT_DESC
+# Categories: network, system, dev, desktop
+# ------------------------------------------------------------------------------
+get_tool_registry() {
+    cat <<EOF
+wifi|network|󰖩 |Wi-Fi Network & Scanning Manager|wifi|Scan networks, QR codes, WPS, monitor signal
+bluetooth|network|󰂯 |Bluetooth Device & Audio Manager|bt|Pair, connect, trust, battery %, agent monitor
+ports|network|🌐|Live Ports, Sockets & Dev Servers|port, net|Inspect listening ports, kill stuck dev servers
+share|network|󰝰 |Samba & Hamachi Local File Sharing|share|Samba folders, Hamachi VPN, mount remote CIFS
+nixos|system| |NixOS Generations & Rollback Manager|gens|List generations, diff closures, rollback, gc
+service|system|󰒓 |Systemd Services & Daemons Manager|services|Control user/system units, view logs, restart
+disk|system|󰋊 |Storage, USB Drives & Nix Store Cleaner|storage|Partitions, USB auto-mount/eject, nh clean, gc
+task|system|󰌢 |Process & Mango Wayland Window Controller|tasks|List windows, focus, SIGTERM/SIGKILL, freeze
+log|system|📜|Systemd Journal & Kernel Log Explorer|logs, journal|Filter system errors, dmesg, boot logs, follow
+repo|dev| |Multi-Repository Git Dashboard|repos, gitui|Radar across all git projects, pull/push, status
+tm|dev| |Tmux Sessions & Git Projects Dashboard|project|Manage tmux sessions, jump to projects, panes
+pkg|dev|📦|Nix Package Explorer & Ephemeral Shells|pkgs|Inspect declared pkgs, test in nix-shell, copy
+container|dev|🐳|Docker Containers & Libvirt VM Manager|containers, vm|Start, stop, restart, follow logs, shell
+conf|dev|󰒓 |Dotfiles & Config Picker with Preview|config, configs|Bat preview, git diff, jump to configs in nvim
+audio|desktop|󰕾 |PipeWire & WirePlumber Audio Mixer|audio|Volume slider, mute, node routing, ALC256 test
+setting|desktop|󰒓 |System Settings & Wayland Controls|settings|Brightness, volume, power profile, idle, DND
+theme|desktop|󰏘 |Themes, Wallpapers & Waybar Customizer|theme|Switch Waybar layouts, wallpapers, fonts, cava
+clip|desktop|📋|Wayland Clipboard & Snippet History|clips, clipboard|Cliphist decode, bat preview, pin snippets
+EOF
+}
+
+# Resolves command or alias to canonical script path
+resolve_tool_script() {
+    local query="$1"
+    local canonical=""
+
+    while IFS='|' read -r cmd cat icon title aliases desc; do
+        [ -z "$cmd" ] && continue
+        if [ "$query" = "$cmd" ]; then
+            canonical="$cmd"
+            break
+        fi
+        IFS=',' read -ra alias_arr <<< "$aliases"
+        for a in "${alias_arr[@]}"; do
+            local clean_a
+            clean_a="$(echo "$a" | tr -d ' ')"
+            if [ "$query" = "$clean_a" ]; then
+                canonical="$cmd"
+                break 2
+            fi
+        done
+    done < <(get_tool_registry)
+
+    if [ -n "$canonical" ] && [ -f "$TUI_DIR/$canonical" ]; then
+        echo "$TUI_DIR/$canonical"
+        return 0
+    fi
+    return 1
+}
+
+# ------------------------------------------------------------------------------
+# Live Telemetry Snippets for Previews
+# ------------------------------------------------------------------------------
+get_live_telemetry() {
+    local cmd="$1"
+    case "$cmd" in
+        wifi)
+            local net
+            net=$(nmcli -t -f ACTIVE,SSID,SIGNAL dev wifi 2>/dev/null | grep '^yes' | cut -d: -f2,3)
+            if [ -n "$net" ]; then
+                local ssid sig
+                ssid=$(echo "$net" | cut -d: -f1)
+                sig=$(echo "$net" | cut -d: -f2)
+                echo -e "${GREEN}● Connected:${RESET} ${ssid} (${sig}% signal)"
+            else
+                echo -e "${YELLOW}○ Disconnected${RESET}"
+            fi
+            ;;
+        bluetooth)
+            local dev
+            dev=$(bluetoothctl devices Connected 2>/dev/null | head -n 1 | cut -d' ' -f3-)
+            if [ -n "$dev" ]; then
+                echo -e "${GREEN}● Connected Device:${RESET} ${dev}"
+            else
+                echo -e "${DIM}○ No Bluetooth device currently connected${RESET}"
+            fi
+            ;;
+        audio)
+            local vol
+            vol=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null || echo "Volume: 50%")
+            echo -e "${CYAN}● Default Sink Output:${RESET} ${vol}"
+            ;;
+        ports)
+            local lcnt
+            lcnt=$(ss -tulpn 2>/dev/null | grep -c LISTEN || echo "0")
+            echo -e "${MAGENTA}● Active Listening Sockets:${RESET} ${lcnt} servers running"
+            ;;
+        nixos)
+            local gen
+            gen=$(nixos-rebuild list-generations 2>/dev/null | grep current | awk '{print "Generation " $1 " (" $2 " " $3 ")"}')
+            [ -z "$gen" ] && gen="Current flake generation active"
+            echo -e "${BLUE}● NixOS System:${RESET} ${gen}"
+            ;;
+        service)
+            local failed
+            failed=$(systemctl --failed --no-legend 2>/dev/null | wc -l || echo "0")
+            if [ "$failed" -eq 0 ]; then
+                echo -e "${GREEN}● Systemd Health:${RESET} All services healthy (0 failed)"
+            else
+                echo -e "${RED}● Systemd Alert:${RESET} ${failed} service(s) currently failed!"
+            fi
+            ;;
+        disk)
+            local dinfo
+            dinfo=$(df -h / 2>/dev/null | awk 'NR==2 {print $3 " used / " $2 " (" $5 ", " $4 " free)"}')
+            echo -e "${YELLOW}● Root Storage (/):${RESET} ${dinfo}"
+            ;;
+        task)
+            local wcnt
+            wcnt=$(pgrep -u "$USER" | wc -l || echo "0")
+            echo -e "${CYAN}● User Processes:${RESET} ${wcnt} active processes"
+            ;;
+        log)
+            local err_cnt
+            err_cnt=$(journalctl -p 3 -xb -n 50 --no-pager 2>/dev/null | grep -c -E '(error|fail|crit)' || echo "0")
+            echo -e "${RED}● Recent Boot Alerts:${RESET} ${err_cnt} error events recorded"
+            ;;
+        repo)
+            local dcnt=0
+            if [ -d "$HOME/Code" ]; then
+                while IFS= read -r g; do
+                    local r="$(dirname "$g")"
+                    [ -n "$(git -C "$r" status --porcelain 2>/dev/null)" ] && ((dcnt++))
+                done < <(find "$HOME/Code" -maxdepth 3 -name ".git" -type d 2>/dev/null)
+            fi
+            echo -e "${MAGENTA}● Git Repositories:${RESET} ${dcnt} local repo(s) with uncommitted work"
+            ;;
+        tm)
+            local scnt=0
+            scnt=$(tmux list-sessions 2>/dev/null | wc -l || echo "0")
+            echo -e "${GREEN}● Tmux Sessions:${RESET} ${scnt} active session(s)"
+            ;;
+        pkg)
+            local pcnt=0
+            [ -f "$HOME/Code/Dotfiles/nixos/modules/pkgs.nix" ] && pcnt=$(grep -c -E '^\s+[a-zA-Z0-9_\.\-]+$' "$HOME/Code/Dotfiles/nixos/modules/pkgs.nix" || echo "0")
+            echo -e "${BLUE}● Nix System Packages:${RESET} ~${pcnt} packages declared in pkgs.nix"
+            ;;
+        container)
+            local ccnt=0
+            command -v docker >/dev/null 2>&1 && ccnt=$(docker ps -q 2>/dev/null | wc -l || echo "0")
+            echo -e "${CYAN}● Docker Containers:${RESET} ${ccnt} container(s) running"
+            ;;
+        conf)
+            local mod_cnt=0
+            [ -d "$HOME/Code/Dotfiles/.git" ] && mod_cnt=$(git -C "$HOME/Code/Dotfiles" status --porcelain 2>/dev/null | wc -l || echo "0")
+            echo -e "${YELLOW}● Dotfiles Repo:${RESET} ${mod_cnt} modified file(s)"
+            ;;
+        setting)
+            local pmode
+            pmode=$(powerprofilesctl get 2>/dev/null || echo "balanced")
+            echo -e "${CYAN}● Power Profile:${RESET} ${pmode}"
+            ;;
+        theme)
+            local wb
+            wb=$(basename "$(readlink -f "$HOME/.config/waybar/config.jsonc" 2>/dev/null || readlink -f "$HOME/.config/waybar/config" 2>/dev/null || echo "default")")
+            echo -e "${MAGENTA}● Active Waybar Layout:${RESET} ${wb}"
+            ;;
+        clip)
+            local hcnt=0
+            command -v cliphist >/dev/null 2>&1 && hcnt=$(cliphist list 2>/dev/null | wc -l || echo "0")
+            echo -e "${WHITE}● Clipboard History:${RESET} ${hcnt} items in memory"
+            ;;
+        share)
+            local h_ip
+            h_ip=$(ip -4 addr show ham0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "offline")
+            echo -e "${CYAN}● Hamachi VPN:${RESET} ${h_ip}"
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler
+# ------------------------------------------------------------------------------
+cmd_preview() {
+    local target="$1"
+    if [ -z "$target" ]; then
+        echo -e "${DIM}Select a tool from the list to preview details and capabilities.${RESET}"
+        return 0
+    fi
+
+    case "$target" in
+        action:toggle_scope)
+            cat <<EOF
+${BOLD}${CYAN}Scope Filtering${RESET}
+Cycle through tool categories:
+  • ${BOLD}all${RESET}     - All 18 registered TUI tools
+  • ${BOLD}network${RESET} - Wi-Fi, Bluetooth, Ports & Socket Controller, Sharing
+  • ${BOLD}system${RESET}  - NixOS Manager, Systemd Services, Disks, Tasks, Logs
+  • ${BOLD}dev${RESET}     - Git Repos, Tmux, Nix Packages, Containers, Configs
+  • ${BOLD}desktop${RESET} - System Settings, Themes & Wallpapers, Audio Mixer, Clipboard
+
+${DIM}Shortcut:${RESET} Press ${BOLD}TAB${RESET} at any time.
+EOF
+            return 0
+            ;;
+        action:show_help)
+            cat <<EOF
+${BOLD}${CYAN}TUI Hub Shortcuts${RESET}
+  • ${BOLD}Enter${RESET}   - Launch the highlighted tool immediately
+  • ${BOLD}Ctrl-O${RESET}  - Open script source code in Neovim (\$EDITOR)
+  • ${BOLD}Ctrl-H${RESET}  - View the command-line help manual for the tool
+  • ${BOLD}Ctrl-C${RESET}  - Copy tool command name to clipboard
+  • ${BOLD}Tab${RESET}     - Filter tools by category (network/system/dev/desktop)
+  • ${BOLD}Esc${RESET}     - Exit launcher
+EOF
+            return 0
+            ;;
+    esac
+
+    local script_f="$TUI_DIR/$target"
+    if [ ! -f "$script_f" ]; then
+        echo -e "${RED}Script not found: ${script_f}${RESET}"
+        return 0
+    fi
+
+    # Look up registry info
+    local r_cmd r_cat r_icon r_title r_aliases r_desc
+    while IFS='|' read -r c cat icon title aliases desc; do
+        if [ "$c" = "$target" ]; then
+            r_cmd="$c"; r_cat="$cat"; r_icon="$icon"; r_title="$title"; r_aliases="$aliases"; r_desc="$desc"
+            break
+        fi
+    done < <(get_tool_registry)
+
+    echo -e "${BOLD}${r_icon}  ${r_title}${RESET}"
+    echo -e "${BOLD}⚡ Command:${RESET}    ${BOLD}${CYAN}${r_cmd}${RESET}  (Aliases: ${r_aliases})"
+    echo -e "${BOLD}📁 Category:${RESET}   ${r_cat^^}"
+    echo -e "${BOLD}📍 Path:${RESET}       ${script_f}"
+    echo "─────────────────────────────────────────────────────────────────────────────"
+
+    # Live telemetry
+    echo -e "${YELLOW}${BOLD}── Live System Status ───────────────────────────────────────${RESET}"
+    get_live_telemetry "$target"
+    echo ""
+
+    # Capabilities and description
+    echo -e "${CYAN}${BOLD}── Description & Capabilities ───────────────────────────────${RESET}"
+    echo -e "$r_desc"
+    echo ""
+
+    # Hotkeys / help snippet from script
+    echo -e "${MAGENTA}${BOLD}── Interactive Hotkeys inside ${r_cmd} ─────────────────────────────${RESET}"
+    "$script_f" help 2>/dev/null | sed -n '/INTERACTIVE HOTKEYS/,/^$/p' | tail -n +2 | head -n 12 || echo "Launch with Enter to view hotkeys"
+}
+
+# ------------------------------------------------------------------------------
+# Interactive Hub Dashboard
+# ------------------------------------------------------------------------------
+cmd_interactive() {
+    local self_bin
+    self_bin="$(readlink -f "$0")"
+
+    local current_scope="all"
+    local scopes=("all" "network" "system" "dev" "desktop")
+
+    while true; do
+        clear
+
+        local scope_label
+        case "$current_scope" in
+            all) scope_label="${CYAN}All Tools (18)${RESET}" ;;
+            network) scope_label="${YELLOW}Network & Wireless (4)${RESET}" ;;
+            system) scope_label="${MAGENTA}System & Hardware (5)${RESET}" ;;
+            dev) scope_label="${GREEN}Developer & Workspace (5)${RESET}" ;;
+            desktop) scope_label="${BLUE}Desktop & Media (4)${RESET}" ;;
+        esac
+
+        local header_info="Scope: $scope_label | Hub: 18 Tools Available"
+
+        # Next scope for Tab
+        local next_scope="all"
+        for i in "${!scopes[@]}"; do
+            if [ "${scopes[$i]}" = "$current_scope" ]; then
+                local next_idx=$(( (i + 1) % ${#scopes[@]} ))
+                next_scope="${scopes[$next_idx]}"
+                break
+            fi
+        done
+
+        local menu=()
+        menu+=("󰌢  [TAB] Switch Scope (Next: ${next_scope})"$'\t'"action:toggle_scope")
+
+        while IFS='|' read -r cmd cat icon title aliases desc; do
+            [ -z "$cmd" ] && continue
+            if [ "$current_scope" != "all" ] && [ "$current_scope" != "$cat" ]; then
+                continue
+            fi
+
+            local label
+            label=$(printf "%s  %-12s %-40s [%s]" "$icon" "$cmd" "$title" "$cat")
+            menu+=("${label}"$'\t'"$cmd")
+        done < <(get_tool_registry)
+
+        # Invoke fzf
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-o,ctrl-h,ctrl-c,ctrl-r,tab \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="⚡ Scripts > " \
+            --header="[$header_info] (Enter: Launch Tool | Ctrl-O: Edit Script | Ctrl-H: Manual | Tab: Filter | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local target_cmd
+        target_cmd=$(echo "$choice" | cut -f2)
+
+        # Tab scope switcher
+        if [ "$key" = "tab" ] || [ "$target_cmd" = "action:toggle_scope" ]; then
+            current_scope="$next_scope"
+            continue
+        fi
+
+        local script_path="$TUI_DIR/$target_cmd"
+
+        case "$key" in
+            ctrl-o)
+                [ -f "$script_path" ] && "${EDITOR:-nvim}" "$script_path"
+                continue
+                ;;
+            ctrl-h)
+                clear
+                [ -f "$script_path" ] && "$script_path" help | (command -v bat >/dev/null 2>&1 && bat --color=always -p || cat)
+                echo ""
+                echo -ne "${BOLD}Press Enter to return...${RESET}"
+                read -r
+                continue
+                ;;
+            ctrl-c)
+                command -v wl-copy >/dev/null 2>&1 && echo -n "$target_cmd" | wl-copy && notify "normal" "edit-copy" "Copied" "Copied '$target_cmd' to clipboard"
+                continue
+                ;;
+            ctrl-r) continue ;;
+        esac
+
+        # Default Enter: Launch selected script!
+        if [ -f "$script_path" ]; then
+            clear
+            exec "$script_path"
+        fi
+    done
+}
+
+cmd_list() {
+    echo -e "${BOLD}Unified TUI Scripts Registry (18 Tools):${RESET}\n"
+    printf "%-12s %-10s %-40s %s\n" "COMMAND" "CATEGORY" "DESCRIPTION" "ALIASES"
+    echo "─────────────────────────────────────────────────────────────────────────────────────────────"
+    while IFS='|' read -r cmd cat icon title aliases desc; do
+        [ -z "$cmd" ] && continue
+        printf "%s %-10s %-10s %-40s (%s)\n" "$icon" "$cmd" "[$cat]" "$title" "$aliases"
+    done < <(get_tool_registry)
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}s${RESET} - Master TUI Command Center & Script Launcher (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    s                               Launch interactive TUI hub to browse and launch all tools
+    s <tool> [args...]              Directly run any TUI script (e.g. 's wifi', 's disk clean')
+    s list                          Print formatted table of all 18 available TUI tools
+    s preview <tool>                Internal preview generator for fzf
+    s help                          Show this help message
+
+${BOLD}SUPPORTED TOOLS & ALIASES:${RESET}
+    ${CYAN}wifi${RESET}                        Wi-Fi network & scanning manager
+    ${CYAN}bluetooth${RESET} (bt)               Bluetooth devices & battery manager
+    ${CYAN}ports${RESET} (port, net)            Live ports, listening sockets & process killer
+    ${CYAN}share${RESET}                       Samba folders & Hamachi VPN sharing
+    ${CYAN}nixos${RESET} (gens)                 NixOS generations & rollback manager
+    ${CYAN}service${RESET} (services)           Systemd user & system services
+    ${CYAN}disk${RESET} (storage)               Partitions, USB auto-mount/eject & Nix GC
+    ${CYAN}task${RESET} (tasks)                 Process & Mango Wayland window controller
+    ${CYAN}log${RESET} (logs, journal)          Systemd journal & kernel dmesg explorer
+    ${CYAN}repo${RESET} (repos, gitui)          Multi-repository Git workspace radar
+    ${CYAN}tm${RESET} (project)                 Tmux session & project manager
+    ${CYAN}pkg${RESET} (pkgs)                   Nix package explorer & ephemeral shells
+    ${CYAN}container${RESET} (containers, vm)   Docker container & Libvirt VM manager
+    ${CYAN}conf${RESET} (config, configs)       Dotfiles & config picker with syntax preview
+    ${CYAN}audio${RESET}                       PipeWire & WirePlumber mixer
+    ${CYAN}setting${RESET} (settings)           System settings & desktop toggles
+    ${CYAN}theme${RESET}                       Themes, wallpapers & Waybar layout switcher
+    ${CYAN}clip${RESET} (clips, clipboard)      Wayland clipboard history & snippets
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf hub):${RESET}
+    ${CYAN}Enter${RESET}       Launch selected tool directly
+    ${CYAN}Ctrl-O${RESET}      Open tool script code in \$EDITOR (Neovim)
+    ${CYAN}Ctrl-H${RESET}      View full manual / help for selected tool
+    ${CYAN}Ctrl-C${RESET}      Copy tool command name to clipboard
+    ${CYAN}Tab${RESET}         Cycle category filter (all -> network -> system -> dev -> desktop)
+    ${CYAN}Esc / Ctrl-C${RESET} Exit hub
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+case "${1:-}" in
+    list|ls) cmd_list ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    "")
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            cmd_list
+        fi
+        ;;
+    *)
+        # Check if argument is a registered tool or alias
+        target_script=$(resolve_tool_script "$1")
+        if [ -n "$target_script" ]; then
+            shift
+            exec "$target_script" "$@"
+        else
+            echo -e "${RED}✘ Unknown tool or command:${RESET} $1"
+            echo -e "${DIM}Run 's list' or 's help' to see all 18 available tools.${RESET}"
+            exit 1
+        fi
+        ;;
+esac

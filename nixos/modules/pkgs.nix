@@ -151,6 +151,9 @@ let
   pkgs-tool = pkgs.writeShellScriptBin "pkgs" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/pkg "$@"
   '';
+  s-cmd = pkgs.writeShellScriptBin "s" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/s "$@"
+  '';
   nixtest = pkgs.writeShellScriptBin "nixtest" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
   '';
@@ -562,6 +565,7 @@ in
     vm-cmd
     pkg-tool
     pkgs-tool
+    s-cmd
     nixtest
 
     # Archive
