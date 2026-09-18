@@ -1,0 +1,578 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# task - Terminal Process & Mango Wayland Window Controller (CLI & fzf TUI)
+# Inspect, focus, manage graphical windows, and control processes with live stats.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+# Ensure Mango IPC socket is discovered if running under Wayland
+if [ -z "${MANGO_INSTANCE_SIGNATURE:-}" ]; then
+    export MANGO_INSTANCE_SIGNATURE=$(ls /run/user/$UID/mango-*.sock 2>/dev/null | head -n1 || true)
+fi
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-utilities-system-monitor}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 2500
+    fi
+}
+
+resolve_app_name() {
+    local raw_app="$1"
+    local pid="$2"
+    local app="$raw_app"
+
+    # Clean wrapper prefixes/suffixes
+    app="${app#.}"
+    app="${app%-wrapped}"
+    app="${app%-wrappe}"
+
+    if [ -z "$app" ] || [ "$app" = "electron" ] || [ "$app" = "python" ]; then
+        if [ -n "$pid" ] && [ -r "/proc/$pid/cmdline" ]; then
+            local cmdline
+            cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || echo "")
+            local cmd_lower="${cmdline,,}"
+            if [[ "$cmd_lower" =~ (obsidian) ]]; then app="Obsidian"
+            elif [[ "$cmd_lower" =~ (discord) ]]; then app="Discord"
+            elif [[ "$cmd_lower" =~ (telegram) ]]; then app="Telegram"
+            elif [[ "$cmd_lower" =~ (antigravity) ]]; then app="Antigravity"
+            elif [[ "$cmd_lower" =~ (code) ]]; then app="VS Code"
+            elif [ -n "$cmdline" ]; then
+                app=$(basename "$(echo "$cmdline" | awk '{print $1}')")
+            fi
+        fi
+    fi
+
+    echo "${app:-Unknown}"
+}
+
+app_to_icon() {
+    local app="${1,,}"
+    if [[ "$app" =~ (firefox|zen) ]]; then echo ""
+    elif [[ "$app" =~ (chrome|chromium|brave) ]]; then echo ""
+    elif [[ "$app" =~ (telegram) ]]; then echo "󰭹"
+    elif [[ "$app" =~ (discord) ]]; then echo "󰭹"
+    elif [[ "$app" =~ (antigravity|code|codex) ]]; then echo ""
+    elif [[ "$app" =~ (kitty|terminal|alacritty|foot) ]]; then echo ""
+    elif [[ "$app" =~ (tmux) ]]; then echo ""
+    elif [[ "$app" =~ (thunar|files|nautilus) ]]; then echo ""
+    elif [[ "$app" =~ (obsidian) ]]; then echo "󰠮"
+    elif [[ "$app" =~ (spotify) ]]; then echo ""
+    elif [[ "$app" =~ (mpv|vlc|media) ]]; then echo ""
+    elif [[ "$app" =~ (pipewire|wireplumber) ]]; then echo "󰓃"
+    elif [[ "$app" =~ (python|node|go|rust) ]]; then echo "󰘐"
+    else echo "󰍛"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Parsers & State
+# ------------------------------------------------------------------------------
+
+# Returns lines: WID<TAB>PID<TAB>APPID<TAB>TAG<TAB>FOCUSED(1/0)<TAB>TITLE
+parse_windows() {
+    if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
+        mmsg get all-clients 2>/dev/null | jq -r '.clients[] | [ .id, .pid, .appid, (.tags[0] // 1), (if .is_focused then 1 else 0 end), (.title | gsub("\t|\n"; " ")) ] | @tsv' 2>/dev/null
+    fi
+}
+
+# Returns lines: PID<TAB>PPID<TAB>CPU<TAB>MEM<TAB>STAT<TAB>COMM
+parse_procs() {
+    local sort_by="${1:-cpu}"
+    local sort_flag="-%cpu"
+    [ "$sort_by" = "mem" ] && sort_flag="-%mem"
+
+    ps -u "$USER" -o pid,ppid,pcpu,pmem,stat,comm --no-headers --sort="$sort_flag" 2>/dev/null | while read -r p_pid p_ppid p_cpu p_mem p_stat p_comm; do
+        [ -z "$p_pid" ] && continue
+        [ "$p_pid" = "$$" ] || [ "$p_pid" = "$PPID" ] && continue
+        [ "$p_ppid" = "2" ] && continue
+        [[ "$p_comm" =~ ^(\[|kworker|rcu|migration|ps|jq|awk|sed|grep|sleep|mmsg|rofi) ]] && continue
+        [[ "$p_comm" =~ (Web Content|Isolated Web|RDD Process|Utility Process|WebExtensions|Privileged Cont) ]] && continue
+        echo -e "${p_pid}\t${p_ppid}\t${p_cpu}\t${p_mem}\t${p_stat}\t${p_comm}"
+    done
+}
+
+# ------------------------------------------------------------------------------
+# Headless CLI Commands
+# ------------------------------------------------------------------------------
+
+cmd_list() {
+    echo -e "${BOLD}${CYAN}=== Active Graphical Windows (Wayland/Mango) ===${RESET}"
+    local win_count=0
+    while IFS=$'\t' read -r wid wpid wappid wtag wfocused wtitle; do
+        [ -z "$wid" ] && continue
+        ((win_count++))
+        local mark=" "
+        [ "$wfocused" -eq 1 ] && mark="${GREEN}★${RESET}"
+        local a_name
+        a_name=$(resolve_app_name "$wappid" "$wpid")
+        local icon
+        icon=$(app_to_icon "$a_name")
+        printf " %b [%-7s] %b %-14s — %-36s (PID: %s)\n" "$mark" "WS $wtag" "$icon" "$a_name" "${wtitle:0:36}" "$wpid"
+    done < <(parse_windows)
+    [ "$win_count" -eq 0 ] && echo -e "  ${DIM}No graphical client windows found.${RESET}"
+    echo ""
+
+    echo -e "${BOLD}${CYAN}=== Top User Processes (by %CPU) ===${RESET}"
+    printf " %-7s %-7s %-8s %-8s %-6s %s\n" "PID" "PPID" "%CPU" "%MEM" "STAT" "COMMAND"
+    echo -e "${DIM}────────────────────────────────────────────────────────────${RESET}"
+    local count=0
+    while IFS=$'\t' read -r pid ppid cpu mem stat comm; do
+        [ -z "$pid" ] && continue
+        local a_name
+        a_name=$(resolve_app_name "$comm" "$pid")
+        local icon
+        icon=$(app_to_icon "$a_name")
+        printf " %-7s %-7s %-8s %-8s %-6s %b %s\n" "$pid" "$ppid" "${cpu}%" "${mem}%" "$stat" "$icon" "$a_name"
+        ((count++))
+        [ "$count" -ge 15 ] && break
+    done < <(parse_procs "cpu")
+    echo ""
+}
+
+cmd_focus() {
+    local target="$1"
+    if [ -z "$target" ]; then
+        echo -e "${RED}Usage: task focus <wid|pid>${RESET}" >&2
+        return 1
+    fi
+
+    # Find window id
+    local target_wid=""
+    while IFS=$'\t' read -r wid wpid _ _ _ _; do
+        if [ "$wid" = "$target" ] || [ "$wpid" = "$target" ]; then
+            target_wid="$wid"
+            break
+        fi
+    done < <(parse_windows)
+
+    if [ -n "$target_wid" ] && command -v mmsg >/dev/null 2>&1; then
+        mmsg dispatch focus "client,$target_wid" 2>/dev/null
+        echo -e "${GREEN}Focused window ID: $target_wid${RESET}"
+    else
+        echo -e "${RED}Window not found for target: $target${RESET}" >&2
+        return 1
+    fi
+}
+
+cmd_kill() {
+    local pid="$1"
+    local sig="${2:-15}"
+    if [ -z "$pid" ]; then
+        echo -e "${RED}Usage: task kill <pid> [sig]${RESET}" >&2
+        return 1
+    fi
+
+    if kill -s "$sig" "$pid" 2>/dev/null; then
+        notify normal "utilities-system-monitor" "Process Signal Sent" "Sent signal $sig to PID $pid"
+        echo -e "${GREEN}Sent signal $sig to PID $pid.${RESET}"
+    else
+        echo -e "${RED}Failed to send signal $sig to PID $pid (Permission denied or process ended).${RESET}" >&2
+        return 1
+    fi
+}
+
+cmd_pause() {
+    cmd_kill "$1" "19"  # SIGSTOP
+}
+
+cmd_resume() {
+    cmd_kill "$1" "18"  # SIGCONT
+}
+
+# ------------------------------------------------------------------------------
+# Preview Function (for fzf side panel)
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="$1"
+    [ -z "$target" ] && return 0
+
+    local type payload
+    type="${target%%:*}"
+    payload="${target#*:}"
+
+    case "$type" in
+        win)
+            local wid wpid wname
+            IFS=':' read -r wid wpid wname <<< "$payload"
+
+            echo -e "${BOLD}${CYAN}=== Wayland Window: $wname ===${RESET}"
+            echo -e "  ${BOLD}Window ID:${RESET}     $wid"
+            echo -e "  ${BOLD}Process PID:${RESET}   $wpid"
+
+            if [ -d "/proc/$wpid" ]; then
+                local exe cwd cmdline rss
+                exe=$(readlink -f "/proc/$wpid/exe" 2>/dev/null || echo "Unknown")
+                cwd=$(readlink -f "/proc/$wpid/cwd" 2>/dev/null || echo "Unknown")
+                cmdline=$(tr '\0' ' ' < "/proc/$wpid/cmdline" 2>/dev/null | head -c 120 || echo "Unknown")
+                rss=$(grep -oP 'VmRSS:\s*\K[^\n]+' "/proc/$wpid/status" 2>/dev/null || echo "Unknown")
+
+                echo -e "  ${BOLD}Memory (RSS):${RESET}  $rss"
+                echo -e "  ${BOLD}Executable:${RESET}    ${DIM}$exe${RESET}"
+                echo -e "  ${BOLD}Working Dir:${RESET}   ${DIM}$cwd${RESET}"
+                echo -e "  ${BOLD}Command Line:${RESET}  ${DIM}${cmdline}${RESET}"
+            else
+                echo -e "${DIM}(Process details no longer available)${RESET}"
+            fi
+
+            echo ""
+            echo -e "${BOLD}${WHITE}Actions & Hotkeys:${RESET}"
+            echo -e "  ${CYAN}Enter${RESET}   Open window actions (Focus, Close, Fullscreen, Kill)"
+            echo -e "  ${CYAN}Ctrl-F${RESET}  Bring window to front & focus"
+            echo -e "  ${CYAN}Ctrl-K${RESET}  Gracefully terminate window process"
+            echo -e "  ${CYAN}Ctrl-X${RESET}  Force kill window process (SIGKILL)"
+            ;;
+
+        proc)
+            local pid pcomm
+            IFS=':' read -r pid pcomm <<< "$payload"
+
+            echo -e "${BOLD}${CYAN}=== Process: $pcomm (PID: $pid) ===${RESET}"
+
+            if [ -d "/proc/$pid" ]; then
+                local state ppid threads rss vmsize cwd cmdline fd_count
+                state=$(grep -oP 'State:\s*\K[^\n]+' "/proc/$pid/status" 2>/dev/null || echo "Unknown")
+                ppid=$(grep -oP 'PPid:\s*\K[^\n]+' "/proc/$pid/status" 2>/dev/null || echo "Unknown")
+                threads=$(grep -oP 'Threads:\s*\K[^\n]+' "/proc/$pid/status" 2>/dev/null || echo "Unknown")
+                rss=$(grep -oP 'VmRSS:\s*\K[^\n]+' "/proc/$pid/status" 2>/dev/null || echo "Unknown")
+                vmsize=$(grep -oP 'VmSize:\s*\K[^\n]+' "/proc/$pid/status" 2>/dev/null || echo "Unknown")
+                cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || echo "Unknown")
+                cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | head -c 120 || echo "Unknown")
+                fd_count=$(ls -1 "/proc/$pid/fd" 2>/dev/null | wc -l || echo "0")
+
+                local s_badge="${GREEN}$state${RESET}"
+                [[ "$state" =~ (stopped|T) ]] && s_badge="${YELLOW}STOPPED (Paused)${RESET}"
+                [[ "$state" =~ (zombie|Z) ]] && s_badge="${RED}ZOMBIE${RESET}"
+
+                echo -e "  ${BOLD}State:${RESET}         $s_badge"
+                echo -e "  ${BOLD}Parent PID:${RESET}    $ppid"
+                echo -e "  ${BOLD}Threads:${RESET}       $threads"
+                echo -e "  ${BOLD}Memory (RSS):${RESET}  $rss"
+                echo -e "  ${BOLD}Virtual Size:${RESET}  $vmsize"
+                echo -e "  ${BOLD}Open Handles:${RESET}  ~$fd_count file descriptors"
+                echo -e "  ${BOLD}Working Dir:${RESET}   ${DIM}$cwd${RESET}"
+                echo -e "  ${BOLD}Command Line:${RESET}  ${DIM}${cmdline}${RESET}"
+            else
+                echo -e "${DIM}(Process ended or terminated)${RESET}"
+            fi
+
+            echo ""
+            echo -e "${BOLD}${WHITE}Actions & Hotkeys:${RESET}"
+            echo -e "  ${CYAN}Enter${RESET}   Open process actions"
+            echo -e "  ${CYAN}Ctrl-K${RESET}  Terminate process (SIGTERM / 15)"
+            echo -e "  ${CYAN}Ctrl-X${RESET}  Force kill process (SIGKILL / 9)"
+            echo -e "  ${CYAN}Ctrl-Z${RESET}  Pause / Freeze execution (SIGSTOP)"
+            echo -e "  ${CYAN}Ctrl-C${RESET}  Resume frozen process (SIGCONT)"
+            ;;
+
+        action)
+            case "$payload" in
+                pause)
+                    echo -e "${BOLD}${CYAN}=== Freeze Process (SIGSTOP) ===${RESET}"
+                    echo -e "Sends SIGSTOP to pause process execution without closing it."
+                    echo -e "Useful for throttling CPU hogs temporarily."
+                    echo ""
+                    echo -e "  ${BOLD}Hotkey:${RESET} ${CYAN}Ctrl-Z${RESET}"
+                    ;;
+                resume)
+                    echo -e "${BOLD}${CYAN}=== Resume Process (SIGCONT) ===${RESET}"
+                    echo -e "Sends SIGCONT to unfreeze a previously paused process."
+                    echo ""
+                    echo -e "  ${BOLD}Hotkey:${RESET} ${CYAN}Ctrl-C${RESET}"
+                    ;;
+                htop)
+                    echo -e "${BOLD}${CYAN}=== Launch Interactive Process Viewer ===${RESET}"
+                    echo -e "Launches htop or top in full terminal mode for real-time"
+                    echo -e "CPU core meters and memory charts."
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive TUI Menu (fzf)
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    if ! command -v fzf >/dev/null 2>&1; then
+        cmd_list
+        return 0
+    fi
+
+    local self_bin="${BASH_SOURCE[0]}"
+
+    while true; do
+        clear
+        declare -A WIN_PIDS
+        local menu=()
+        local win_cnt=0 proc_cnt=0 top_proc=""
+
+        # 1. Graphical Windows
+        local raw_windows
+        raw_windows=$(parse_windows)
+        if [ -n "$raw_windows" ]; then
+            while IFS=$'\t' read -r wid wpid wappid wtag wfocused wtitle; do
+                [ -z "$wid" ] && continue
+                WIN_PIDS["$wpid"]=1
+                ((win_cnt++))
+
+                local a_name
+                a_name=$(resolve_app_name "$wappid" "$wpid")
+                local icon
+                icon=$(app_to_icon "$a_name")
+                local star=""
+                [ "$wfocused" -eq 1 ] && star="★ "
+
+                local tag_str="WS $wtag"
+                [ "$wtag" = "0" ] && tag_str="Scratch"
+
+                local clean_title="${wtitle:0:36}"
+                [ -z "$clean_title" ] && clean_title="$a_name"
+
+                menu+=("${icon}  [Win: ${tag_str} ${star}] ${a_name} — ${clean_title} (PID: ${wpid})"$'\t'"win:${wid}:${wpid}:${a_name}")
+            done <<< "$raw_windows"
+        fi
+
+        # 2. Background / CLI Processes
+        local raw_procs
+        raw_procs=$(parse_procs "cpu")
+        local bg_count=0
+        if [ -n "$raw_procs" ]; then
+            while IFS=$'\t' read -r pid ppid cpu mem stat comm; do
+                [ -z "$pid" ] && continue
+                [ -n "${WIN_PIDS["$pid"]+x}" ] && continue
+                ((proc_cnt++))
+                ((bg_count++))
+                [ -z "$top_proc" ] && top_proc="$comm ($cpu%)"
+
+                local a_name
+                a_name=$(resolve_app_name "$comm" "$pid")
+                local icon
+                icon=$(app_to_icon "$a_name")
+
+                menu+=("${icon}  [Proc: ${stat}] ${a_name} (CPU: ${cpu}% | MEM: ${mem}%) (PID: ${pid})"$'\t'"proc:${pid}:${a_name}")
+                [ "$bg_count" -ge 35 ] && break
+            done <<< "$raw_procs"
+        fi
+
+        # 3. Quick Actions
+        menu+=("󰘳  Launch Full Process Monitor (htop/top)"$'\t'"action:htop")
+
+        local header_info="Windows: $win_cnt | Processes: $proc_cnt | Top CPU: ${top_proc:-None}"
+
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-r,ctrl-k,ctrl-x,ctrl-z,ctrl-c,ctrl-f \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Task > " \
+            --header="[$header_info] (Enter: Select | Ctrl-F: Focus | Ctrl-K: Term | Ctrl-X: Kill | Ctrl-Z: Pause | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local sel_arg
+        sel_arg=$(echo "$choice" | cut -f2)
+        local item_type="${sel_arg%%:*}"
+        local item_payload="${sel_arg#*:}"
+
+        # Hotkey handlers
+        case "$key" in
+            ctrl-r)
+                continue
+                ;;
+            ctrl-f)
+                if [ "$item_type" = "win" ]; then
+                    local w_id
+                    w_id=$(echo "$item_payload" | cut -d: -f1)
+                    cmd_focus "$w_id"
+                    break
+                fi
+                continue
+                ;;
+            ctrl-k)
+                local p_id
+                if [ "$item_type" = "win" ]; then
+                    p_id=$(echo "$item_payload" | cut -d: -f2)
+                else
+                    p_id=$(echo "$item_payload" | cut -d: -f1)
+                fi
+                cmd_kill "$p_id" "15"
+                sleep 0.5
+                continue
+                ;;
+            ctrl-x)
+                local p_id
+                if [ "$item_type" = "win" ]; then
+                    p_id=$(echo "$item_payload" | cut -d: -f2)
+                else
+                    p_id=$(echo "$item_payload" | cut -d: -f1)
+                fi
+                cmd_kill "$p_id" "9"
+                sleep 0.5
+                continue
+                ;;
+            ctrl-z)
+                local p_id
+                if [ "$item_type" = "win" ]; then
+                    p_id=$(echo "$item_payload" | cut -d: -f2)
+                else
+                    p_id=$(echo "$item_payload" | cut -d: -f1)
+                fi
+                cmd_pause "$p_id"
+                sleep 0.5
+                continue
+                ;;
+            ctrl-c)
+                local p_id
+                if [ "$item_type" = "win" ]; then
+                    p_id=$(echo "$item_payload" | cut -d: -f2)
+                else
+                    p_id=$(echo "$item_payload" | cut -d: -f1)
+                fi
+                cmd_resume "$p_id"
+                sleep 0.5
+                continue
+                ;;
+        esac
+
+        # Enter pressed
+        case "$item_type" in
+            win)
+                local wid wpid wname
+                IFS=':' read -r wid wpid wname <<< "$item_payload"
+                local act
+                act=$(printf "1. Focus / Bring to Front\n2. Close Window (Graceful)\n3. Toggle Fullscreen (Mango)\n4. Toggle Floating (Mango)\n5. Terminate Process (SIGTERM / 15)\n6. Force Kill (SIGKILL / 9)\n7. Cancel" | fzf \
+                    --prompt="Window [$wname] > " \
+                    --height=35% \
+                    --reverse \
+                    --border=rounded) || continue
+                case "$act" in
+                    1*) cmd_focus "$wid"; break ;;
+                    2*) [ -n "$MANGO_INSTANCE_SIGNATURE" ] && mmsg dispatch close "client,$wid" 2>/dev/null; sleep 0.5 ;;
+                    3*) [ -n "$MANGO_INSTANCE_SIGNATURE" ] && mmsg dispatch togglefullscreen "client,$wid" 2>/dev/null ;;
+                    4*) [ -n "$MANGO_INSTANCE_SIGNATURE" ] && mmsg dispatch togglefloating "client,$wid" 2>/dev/null ;;
+                    5*) cmd_kill "$wpid" "15"; sleep 0.5 ;;
+                    6*) cmd_kill "$wpid" "9"; sleep 0.5 ;;
+                esac
+                ;;
+
+            proc)
+                local pid pname
+                IFS=':' read -r pid pname <<< "$item_payload"
+                local act
+                act=$(printf "1. Terminate Process (SIGTERM / 15)\n2. Force Kill (SIGKILL / 9)\n3. Pause / Freeze (SIGSTOP)\n4. Resume Execution (SIGCONT)\n5. Cancel" | fzf \
+                    --prompt="Process [$pname : $pid] > " \
+                    --height=30% \
+                    --reverse \
+                    --border=rounded) || continue
+                case "$act" in
+                    1*) cmd_kill "$pid" "15"; sleep 0.5 ;;
+                    2*) cmd_kill "$pid" "9"; sleep 0.5 ;;
+                    3*) cmd_pause "$pid"; sleep 0.5 ;;
+                    4*) cmd_resume "$pid"; sleep 0.5 ;;
+                esac
+                ;;
+
+            action)
+                case "$item_payload" in
+                    htop)
+                        clear
+                        if command -v htop >/dev/null 2>&1; then
+                            htop
+                        else
+                            top
+                        fi
+                        ;;
+                esac
+                ;;
+        esac
+    done
+}
+
+cmd_help() {
+    cat <<EOF
+${BOLD}task${RESET} - Terminal Process & Mango Wayland Window Controller (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    task                            Launch interactive fzf menu with live preview
+    task list                       List active windows and top background processes
+    task focus <wid|pid>            Focus and bring graphical window to front
+    task kill <pid> [sig]           Send signal to process (default: SIGTERM / 15)
+    task force-kill <pid>           Force kill process immediately (SIGKILL / 9)
+    task pause <pid>                Pause / freeze process execution (SIGSTOP)
+    task resume <pid>               Resume frozen process execution (SIGCONT)
+    task preview <target>           Internal preview generator for fzf
+    task help                       Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}       Open window/process contextual action submenu
+    ${CYAN}Ctrl-F${RESET}      Focus graphical window immediately
+    ${CYAN}Ctrl-K${RESET}      Gracefully terminate process (SIGTERM)
+    ${CYAN}Ctrl-X${RESET}      Force kill process immediately (SIGKILL)
+    ${CYAN}Ctrl-Z${RESET}      Pause / Freeze process (SIGSTOP)
+    ${CYAN}Ctrl-C${RESET}      Resume frozen process (SIGCONT)
+    ${CYAN}Ctrl-R${RESET}      Refresh window and process list
+    ${CYAN}Esc / Ctrl-C${RESET} Exit menu
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    list|ls) cmd_list ;;
+    focus) cmd_focus "$2" ;;
+    kill|term) cmd_kill "$2" "${3:-15}" ;;
+    force-kill|kill9) cmd_kill "$2" "9" ;;
+    pause|freeze) cmd_pause "$2" ;;
+    resume|unfreeze) cmd_resume "$2" ;;
+    preview) cmd_preview "$2" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            cmd_list
+        fi
+        ;;
+esac
