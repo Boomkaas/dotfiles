@@ -1,0 +1,553 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# theme - Terminal Theme, Wallpaper & Desktop Customizer (CLI & fzf TUI)
+# Manage wallpapers, Waybar layouts, accent colors, dockbar, visualizer & pets.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+spawn() { ( setsid "$@" & ) >/dev/null 2>&1; }
+
+# ------------------------------------------------------------------------------
+# State Getters
+# ------------------------------------------------------------------------------
+
+get_mono_status() {
+    local s
+    s=$(cat "$HOME/.local/state/haku_theme/monochrome_wallpaper" 2>/dev/null || echo "1")
+    [ "$s" = "1" ] && echo "ON" || echo "OFF"
+}
+
+get_cava_status() {
+    [ -f /tmp/cava-layer.pid ] && echo "ON" || echo "OFF"
+}
+
+get_dockbar_status() {
+    local s
+    s=$(cat "$HOME/.local/state/haku_theme/dockbar_manual_state" 2>/dev/null || echo "0")
+    [ "$s" = "1" ] && echo "ON" || echo "OFF"
+}
+
+get_desktop_icons_status() {
+    local s
+    s=$(cat "$HOME/.local/state/haku_theme/desktop_icons_state" 2>/dev/null || echo "0")
+    [ "$s" = "1" ] && echo "ON" || echo "OFF"
+}
+
+get_pet_status() {
+    if pgrep -f bongocat-all >/dev/null 2>&1; then
+        echo "ON"
+    else
+        echo "OFF"
+    fi
+}
+
+get_lively_status() {
+    if pgrep -x mpvpaper >/dev/null 2>&1; then
+        echo "ON"
+    else
+        echo "OFF"
+    fi
+}
+
+get_accent_color() {
+    local col
+    col=$(sed -nE 's/^\s*@define-color\s+accent_color\s+(#[0-9a-fA-F]{6})\s*;.*$/\1/p' "$HOME/.local/state/haku_theme/colors.css" 2>/dev/null | head -n1)
+    echo "${col:-#cd9c61}"
+}
+
+get_waybar_layout() {
+    local l
+    l=$(cat "$HOME/.local/state/haku_theme/waybar_current_mode" 2>/dev/null || echo "jakoolit-top-sleek")
+    echo "$l"
+}
+
+get_rofi_theme() {
+    local r
+    r=$(sed -nE 's/^\s*@theme\s+"([^"]+)".*$/\1/p' "$HOME/.config/rofi/config.rasi" 2>/dev/null | head -n1)
+    echo "${r:-horizontal}"
+}
+
+# ------------------------------------------------------------------------------
+# Actions
+# ------------------------------------------------------------------------------
+
+cmd_status() {
+    echo -e "${BOLD}${CYAN}=== Theme & Appearance Status ===${RESET}"
+    echo -e "  ${BOLD}Accent Color:${RESET}       $(get_accent_color)"
+    echo -e "  ${BOLD}Waybar Layout:${RESET}      $(get_waybar_layout)"
+    echo -e "  ${BOLD}Rofi Theme:${RESET}         $(get_rofi_theme)"
+    echo -e "  ${BOLD}Monochrome Filter:${RESET}  $([ "$(get_mono_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
+    echo -e "  ${BOLD}Cava Visualizer:${RESET}    $([ "$(get_cava_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
+    echo -e "  ${BOLD}Dockbar:${RESET}            $([ "$(get_dockbar_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
+    echo -e "  ${BOLD}Desktop Icons:${RESET}      $([ "$(get_desktop_icons_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
+    echo -e "  ${BOLD}Desktop Pet:${RESET}        $([ "$(get_pet_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
+    echo -e "  ${BOLD}Lively Video:${RESET}       $([ "$(get_lively_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
+}
+
+cmd_pet_toggle() {
+    if pgrep -f bongocat-all >/dev/null 2>&1; then
+        pkill -f bongocat-all
+        echo -e "${YELLOW}Desktop Pet hidden.${RESET}"
+    else
+        spawn pet Dodomon
+        echo -e "${GREEN}Desktop Pet spawned!${RESET}"
+    fi
+}
+
+cmd_open_folder() {
+    local target="$1"
+    if [ -t 1 ] && command -v yazi >/dev/null 2>&1; then
+        yazi "$target"
+    else
+        spawn thunar "$target"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler (Unified TUI Standard)
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="${1:-}"
+
+    if [ -z "$target" ] || [[ "$target" == __* ]] || [[ "$target" == overview ]]; then
+        echo -e "${BOLD}${CYAN}=== Theme & Appearance Overview ===${RESET}"
+        echo ""
+        cmd_status
+        echo ""
+        echo -e "${BOLD}Keyboard Shortcuts in FZF:${RESET}"
+        echo -e "  ${CYAN}Enter${RESET}   Select item / Apply customization"
+        echo -e "  ${CYAN}Ctrl-R${RESET}  Refresh theme status"
+        echo -e "  ${CYAN}Esc${RESET}     Exit menu"
+        return 0
+    fi
+
+    case "$target" in
+        wallpaper)
+            local wp_count
+            wp_count=$(find "$HOME/Pictures/Wallpapers" -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.webp" \) 2>/dev/null | wc -l || echo "0")
+            echo -e "${BOLD}${CYAN}=== Change Wallpaper ===${RESET}"
+            echo -e "  ${BOLD}Engine:${RESET}          awww (Wayland Wallpaper Daemon)"
+            echo -e "  ${BOLD}Available Images:${RESET} $wp_count in ~/Pictures/Wallpapers"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Open interactive visual gallery selector with thumbnails"
+            ;;
+        random_wp)
+            echo -e "${BOLD}${CYAN}=== Randomize Wallpaper ===${RESET}"
+            echo -e "  ${BOLD}Description:${RESET} Randomly selects a wallpaper from your collection"
+            echo -e "  and applies smooth animated transitions."
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Select and switch to random wallpaper immediately"
+            ;;
+        mono_wp)
+            local mono
+            mono=$(get_mono_status)
+            echo -e "${BOLD}${CYAN}=== Monochrome Wallpaper Filter ===${RESET}"
+            echo -e "  ${BOLD}Status:${RESET} $([ "$mono" = "ON" ] && echo -e "${GREEN}Enabled (Grayscale)${RESET}" || echo -e "${DIM}Disabled (Color)${RESET}")"
+            echo ""
+            echo -e "${BOLD}Description:${RESET}"
+            echo -e "  Converts active wallpaper to high-contrast monochrome using"
+            echo -e "  ImageMagick cache without modifying source image files."
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Toggle monochrome wallpaper filter"
+            ;;
+        waybar_rand)
+            echo -e "${BOLD}${CYAN}=== Randomize Waybar Layout ===${RESET}"
+            echo -e "  ${BOLD}Description:${RESET} Shuffles to a random Waybar preset layout"
+            echo -e "  from the 30+ available themes in ~/.config/waybar."
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Apply random Waybar layout immediately"
+            ;;
+        waybar_select)
+            local current count
+            current=$(get_waybar_layout)
+            count=$(find "$HOME/.config/waybar" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l || echo "0")
+            echo -e "${BOLD}${CYAN}=== Switch Waybar Layout ===${RESET}"
+            echo -e "  ${BOLD}Current Preset:${RESET} ${GREEN}${BOLD}$current${RESET}"
+            echo -e "  ${BOLD}Available:${RESET}      $count presets"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Open interactive Waybar layout selector menu"
+            ;;
+        rofi_theme)
+            local rofi
+            rofi=$(get_rofi_theme)
+            echo -e "${BOLD}${CYAN}=== Switch Rofi Theme ===${RESET}"
+            echo -e "  ${BOLD}Current Style:${RESET} ${GREEN}${BOLD}$rofi${RESET}"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Open Rofi theme and layout selector"
+            ;;
+        lively_video)
+            local lively
+            lively=$(get_lively_status)
+            echo -e "${BOLD}${CYAN}=== Lively Video Wallpaper ===${RESET}"
+            echo -e "  ${BOLD}Player Engine:${RESET} mpvpaper"
+            echo -e "  ${BOLD}Status:${RESET}        $([ "$lively" = "ON" ] && echo -e "${GREEN}Playing${RESET}" || echo -e "${DIM}Stopped${RESET}")"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Select and play animated video wallpaper from ~/Videos/Wallpapers"
+            ;;
+        lively_stop)
+            echo -e "${BOLD}${CYAN}=== Stop Lively Video ===${RESET}"
+            echo -e "  ${BOLD}Description:${RESET} Terminates mpvpaper and restores static wallpaper"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Stop video wallpaper execution"
+            ;;
+        accent_picker)
+            echo -e "${BOLD}${CYAN}=== Screen Accent Picker ===${RESET}"
+            echo -e "  ${BOLD}Tool:${RESET} hyprpicker"
+            echo ""
+            echo -e "${BOLD}Description:${RESET}"
+            echo -e "  Allows clicking any pixel on screen to extract color,"
+            echo -e "  update theme CSS, and automatically re-render Waybar."
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Launch eyedropper on screen"
+            ;;
+        accent_preset)
+            local col
+            col=$(get_accent_color)
+            echo -e "${BOLD}${CYAN}=== Custom Accent Presets ===${RESET}"
+            echo -e "  ${BOLD}Current Hex:${RESET} ${GREEN}${BOLD}$col${RESET}"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Open palette of handpicked complementary accent colors"
+            ;;
+        gtk_look)
+            echo -e "${BOLD}${CYAN}=== GTK Appearance ===${RESET}"
+            echo -e "  ${BOLD}Controls:${RESET} GTK3/4 themes, icons, fonts, and cursors"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Launch visual GTK customization tool (nwg-look)"
+            ;;
+        font_change)
+            echo -e "${BOLD}${CYAN}=== Global Font & Size ===${RESET}"
+            echo -e "  ${BOLD}Target:${RESET} Waybar, terminals, and desktop font configurations"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Choose global typeface and point size"
+            ;;
+        cava_vis)
+            local cava
+            cava=$(get_cava_status)
+            echo -e "${BOLD}${CYAN}=== Cava Audio Visualizer ===${RESET}"
+            echo -e "  ${BOLD}Status:${RESET} $([ "$cava" = "ON" ] && echo -e "${GREEN}Active (Underbar On)${RESET}" || echo -e "${DIM}Inactive${RESET}")"
+            echo ""
+            echo -e "${BOLD}Description:${RESET}"
+            echo -e "  Renders a low-latency spectrum bar underneath Waybar"
+            echo -e "  synced to currently playing audio streams."
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Toggle Cava visualizer underbar"
+            ;;
+        dockbar_toggle)
+            local dock
+            dock=$(get_dockbar_status)
+            echo -e "${BOLD}${CYAN}=== Toggle Dockbar ===${RESET}"
+            echo -e "  ${BOLD}Status:${RESET} $([ "$dock" = "ON" ] && echo -e "${GREEN}Shown (Manual)${RESET}" || echo -e "${DIM}Hidden / Auto${RESET}")"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Toggle Waybar bottom dockbar visibility"
+            ;;
+        desktop_icons)
+            local icons
+            icons=$(get_desktop_icons_status)
+            echo -e "${BOLD}${CYAN}=== Desktop Icons ===${RESET}"
+            echo -e "  ${BOLD}Status:${RESET} $([ "$icons" = "ON" ] && echo -e "${GREEN}Active (Icons Displayed)${RESET}" || echo -e "${DIM}Hidden${RESET}")"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Toggle desktop launcher icons layer"
+            ;;
+        pet_companion)
+            local pet
+            pet=$(get_pet_status)
+            echo -e "${BOLD}${CYAN}=== Desktop Pet Companion ===${RESET}"
+            echo -e "  ${BOLD}Engine:${RESET} wayland-vpets (bongocat-all)"
+            echo -e "  ${BOLD}Status:${RESET} $([ "$pet" = "ON" ] && echo -e "${GREEN}Active on Desktop${RESET}" || echo -e "${DIM}Hidden${RESET}")"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Toggle animated pet overlay on desktop"
+            ;;
+        folder_wp)
+            echo -e "${BOLD}${CYAN}=== Open Wallpapers Folder ===${RESET}"
+            echo -e "  ${BOLD}Location:${RESET} ~/Pictures/Wallpapers"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Browse wallpaper files in file manager"
+            ;;
+        folder_video)
+            echo -e "${BOLD}${CYAN}=== Open Lively Videos Folder ===${RESET}"
+            echo -e "  ${BOLD}Location:${RESET} ~/Videos/Wallpapers"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Browse animated wallpaper videos in file manager"
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive TUI Menu (fzf)
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    if ! command -v fzf >/dev/null 2>&1; then
+        cmd_status
+        return 0
+    fi
+
+    local self_bin="${BASH_SOURCE[0]}"
+
+    while true; do
+        clear
+        local mono cava dock icons pet lively accent waybar rofi
+        mono=$(get_mono_status)
+        cava=$(get_cava_status)
+        dock=$(get_dockbar_status)
+        icons=$(get_desktop_icons_status)
+        pet=$(get_pet_status)
+        lively=$(get_lively_status)
+        accent=$(get_accent_color)
+        waybar=$(get_waybar_layout)
+        rofi=$(get_rofi_theme)
+
+        local header_info="Accent: $accent | Waybar: $waybar"
+
+        local menu=()
+        menu+=("󰏜  Change Wallpaper (Visual Gallery)"$'\t'"wallpaper")
+        menu+=("🎲 Randomize Wallpaper Now"$'\t'"random_wp")
+        menu+=("󰄄  Monochrome Wallpaper Toggle ($mono)"$'\t'"mono_wp")
+        menu+=("🎲 Randomize Waybar Layout Now"$'\t'"waybar_rand")
+        menu+=("  Switch Waybar Layout ($waybar)"$'\t'"waybar_select")
+        menu+=("  Switch Rofi Theme ($rofi)"$'\t'"rofi_theme")
+        menu+=("󱜏  Change Lively Video Wallpaper ($lively)"$'\t'"lively_video")
+        menu+=("󱛹  Stop Lively Video Wallpaper"$'\t'"lively_stop")
+        menu+=("󰈊  Pick Accent Color from Screen (Eyedropper)"$'\t'"accent_picker")
+        menu+=("  Custom Accent Color & Presets ($accent)"$'\t'"accent_preset")
+        menu+=("󰏘  GTK Look & Feel (Themes, Icons, Cursors)"$'\t'"gtk_look")
+        menu+=("  Change Global Font & Size"$'\t'"font_change")
+        menu+=("󰝚  Cava Underbar Audio Visualizer ($cava)"$'\t'"cava_vis")
+        menu+=("󱂩  Toggle Dockbar ($dock)"$'\t'"dockbar_toggle")
+        menu+=("  Desktop Icons ($icons)"$'\t'"desktop_icons")
+        menu+=("🐾 Desktop Pet Companion ($pet)"$'\t'"pet_companion")
+        menu+=("󱁤  Open Wallpapers Folder"$'\t'"folder_wp")
+        menu+=("󱁤  Open Lively Videos Folder"$'\t'"folder_video")
+
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-r \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Theme > " \
+            --header="[$header_info] (Enter: Select | Ctrl-R: Refresh | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        [ "$key" = "ctrl-r" ] && continue
+
+        local sel_arg
+        sel_arg=$(echo "$choice" | cut -f2)
+
+        case "$sel_arg" in
+            wallpaper)
+                $HOME/.local/bin/wallpaper_select.sh
+                ;;
+            random_wp)
+                $HOME/.local/bin/random_wallpaper.sh
+                sleep 0.5
+                ;;
+            mono_wp)
+                $HOME/.local/bin/monochrome_wallpaper_toggle.sh
+                sleep 0.5
+                ;;
+            waybar_rand)
+                $HOME/.local/bin/waybar_manager.sh --random
+                sleep 0.5
+                ;;
+            waybar_select)
+                $HOME/.local/bin/waybar_manager.sh --select
+                ;;
+            rofi_theme)
+                $HOME/.local/bin/rofi_theme_switcher.sh
+                ;;
+            lively_video)
+                $HOME/.local/bin/wallpaper_video_select.sh
+                ;;
+            lively_stop)
+                $HOME/.local/bin/wallpaper_video_select.sh --exit
+                sleep 0.5
+                ;;
+            accent_picker)
+                $HOME/.local/bin/accent_color_picker.sh
+                sleep 0.5
+                ;;
+            accent_preset)
+                $HOME/.local/bin/change_theme.sh
+                ;;
+            gtk_look)
+                if command -v nwg-look >/dev/null 2>&1; then
+                    spawn nwg-look
+                else
+                    $HOME/.local/bin/gtk_theme_menu.sh
+                fi
+                ;;
+            font_change)
+                $HOME/.local/bin/change_theme.sh
+                ;;
+            cava_vis)
+                $HOME/.local/bin/cava_manager.sh
+                sleep 0.5
+                ;;
+            dockbar_toggle)
+                $HOME/.local/bin/dockbar_manager.sh --toggle
+                sleep 0.5
+                ;;
+            desktop_icons)
+                $HOME/.local/bin/desktop_icons_manager.sh --toggle
+                sleep 0.5
+                ;;
+            pet_companion)
+                cmd_pet_toggle
+                sleep 0.5
+                ;;
+            folder_wp)
+                cmd_open_folder "$HOME/Pictures/Wallpapers"
+                ;;
+            folder_video)
+                cmd_open_folder "$HOME/Videos/Wallpapers"
+                ;;
+        esac
+    done
+}
+
+cmd_help() {
+    cat << EOF
+${BOLD}theme${RESET} - Terminal Theme, Wallpaper & Desktop Customizer
+
+${BOLD}USAGE:${RESET}
+    theme                           Launch interactive fzf menu with live preview
+    theme status | s                Display current theme parameters
+    theme preview <target>          Inspect component preview and options
+    theme wallpaper | wp            Open visual wallpaper picker
+    theme random | rand             Randomize wallpaper now
+    theme mono | monochrome         Toggle monochrome wallpaper mode
+    theme lively                    Select animated video wallpaper
+    theme lively-stop               Stop animated video wallpaper
+    theme accent                    Pick accent color from screen
+    theme waybar [layout]           Switch Waybar layout preset
+    theme rofi                      Switch Rofi launcher theme
+    theme gtk                       Open GTK look & appearance customizer
+    theme font                      Change global font and size
+    theme cava                      Toggle Cava underbar visualizer
+    theme dock                      Toggle Waybar dockbar
+    theme icons                     Toggle desktop icons
+    theme pet                       Toggle desktop companion pet
+    theme help | -h                 Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}   Select item / Apply customization
+    ${CYAN}Ctrl-R${RESET}  Refresh theme status
+    ${CYAN}Esc${RESET}     Exit
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Entrypoint
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    status|s|info)
+        cmd_status
+        ;;
+    preview)
+        shift
+        cmd_preview "$@"
+        ;;
+    wallpaper|wp)
+        $HOME/.local/bin/wallpaper_select.sh
+        ;;
+    random|rand)
+        $HOME/.local/bin/random_wallpaper.sh
+        ;;
+    mono|monochrome)
+        $HOME/.local/bin/monochrome_wallpaper_toggle.sh
+        ;;
+    lively)
+        $HOME/.local/bin/wallpaper_video_select.sh
+        ;;
+    lively-stop)
+        $HOME/.local/bin/wallpaper_video_select.sh --exit
+        ;;
+    accent|color)
+        $HOME/.local/bin/accent_color_picker.sh
+        ;;
+    waybar)
+        shift
+        if [ -n "${1:-}" ]; then
+            $HOME/.local/bin/waybar_manager.sh "$1"
+        else
+            $HOME/.local/bin/waybar_manager.sh --select
+        fi
+        ;;
+    rofi)
+        $HOME/.local/bin/rofi_theme_switcher.sh
+        ;;
+    gtk|appearance)
+        if command -v nwg-look >/dev/null 2>&1; then
+            spawn nwg-look
+        else
+            $HOME/.local/bin/gtk_theme_menu.sh
+        fi
+        ;;
+    font)
+        $HOME/.local/bin/change_theme.sh
+        ;;
+    cava)
+        $HOME/.local/bin/cava_manager.sh
+        ;;
+    dock|dockbar)
+        $HOME/.local/bin/dockbar_manager.sh --toggle
+        ;;
+    icons)
+        $HOME/.local/bin/desktop_icons_manager.sh --toggle
+        ;;
+    pet)
+        cmd_pet_toggle
+        ;;
+    help|-h|--help)
+        cmd_help
+        ;;
+    "")
+        if [ -t 0 ] && [ -t 1 ]; then
+            cmd_interactive
+        else
+            cmd_status
+            echo ""
+            cmd_help
+        fi
+        ;;
+    *)
+        cmd_interactive
+        ;;
+esac

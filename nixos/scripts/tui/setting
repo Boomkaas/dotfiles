@@ -1,0 +1,648 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# setting - Terminal System Settings & Controls Manager (CLI & fzf TUI)
+# Control network, audio, power, display, system maintenance & desktop behavior.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+spawn() { ( setsid "$@" & ) >/dev/null 2>&1; }
+
+# ------------------------------------------------------------------------------
+# State Getters
+# ------------------------------------------------------------------------------
+
+get_night_status() {
+    if pgrep -x "hyprsunset" >/dev/null 2>&1 || pgrep -x "gammastep" >/dev/null 2>&1; then
+        echo "ON"
+    else
+        echo "OFF"
+    fi
+}
+
+get_idle_status() {
+    if command -v awake &>/dev/null && awake status -q; then
+        echo "ON"
+    elif [[ -f "$HOME/.local/state/haku_theme/idle_inhibit" ]] && [[ "$(cat "$HOME/.local/state/haku_theme/idle_inhibit" 2>/dev/null)" == "1" ]]; then
+        echo "ON"
+    else
+        echo "OFF"
+    fi
+}
+
+get_warp_status() {
+    if command -v warp-cli &>/dev/null && warp-cli status 2>/dev/null | grep -q 'Connected'; then
+        echo "ON"
+    else
+        echo "OFF"
+    fi
+}
+
+get_dnd_status() {
+    if command -v swaync-client &>/dev/null && [[ "$(swaync-client --get-dnd 2>/dev/null)" == "true" ]]; then
+        echo "ON"
+    else
+        echo "OFF"
+    fi
+}
+
+get_power_profile() {
+    if command -v powerprofilesctl &>/dev/null; then
+        powerprofilesctl get 2>/dev/null || echo "balanced"
+    else
+        echo "balanced"
+    fi
+}
+
+get_dock_autohide() {
+    local s
+    s=$(cat "$HOME/.local/state/haku_theme/dockbar_autohide_state" 2>/dev/null || echo "0")
+    [ "$s" = "1" ] && echo "ON" || echo "OFF"
+}
+
+get_dock_exclusive() {
+    local s
+    s=$(grep -oP '"exclusive":\s*\K(true|false)' ~/.config/waybar/dockbar/config 2>/dev/null || echo "false")
+    [ "$s" = "true" ] && echo "ON" || echo "OFF"
+}
+
+get_dock_iconsize() {
+    local s
+    s=$(grep -oP '"icon-size":\s*\K\d+' ~/.config/waybar/dockbar/config 2>/dev/null || echo "40")
+    echo "${s}px"
+}
+
+# ------------------------------------------------------------------------------
+# Actions
+# ------------------------------------------------------------------------------
+
+cmd_status() {
+    echo -e "${BOLD}${CYAN}=== System Settings Status ===${RESET}"
+    echo -e "  ${BOLD}Screen Awake Inhibit:${RESET} $([ "$(get_idle_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
+    echo -e "  ${BOLD}Night Light:${RESET}          $([ "$(get_night_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
+    echo -e "  ${BOLD}Do Not Disturb:${RESET}       $([ "$(get_dnd_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
+    echo -e "  ${BOLD}Power Profile:${RESET}        ${GREEN}$(get_power_profile)${RESET}"
+    echo -e "  ${BOLD}Cloudflare WARP VPN:${RESET}  $([ "$(get_warp_status)" = "ON" ] && echo -e "${GREEN}Connected${RESET}" || echo -e "${DIM}Disconnected${RESET}")"
+    echo -e "  ${BOLD}Dockbar Auto-hide:${RESET}    $([ "$(get_dock_autohide)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
+    echo -e "  ${BOLD}Dockbar Exclusive:${RESET}    $([ "$(get_dock_exclusive)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
+    echo -e "  ${BOLD}Dockbar Icon Size:${RESET}    $(get_dock_iconsize)"
+}
+
+cmd_dnd_toggle() {
+    if command -v swaync-client &>/dev/null; then
+        swaync-client -d -sw
+        local st
+        st=$(swaync-client --get-dnd 2>/dev/null)
+        if [ "$st" = "true" ]; then
+            echo -e "${GREEN}Do Not Disturb: Enabled${RESET}"
+        else
+            echo -e "${YELLOW}Do Not Disturb: Disabled${RESET}"
+        fi
+    fi
+}
+
+cmd_powerprofile_cycle() {
+    if command -v powerprofilesctl &>/dev/null; then
+        local cur next
+        cur=$(powerprofilesctl get 2>/dev/null || echo "balanced")
+        case "$cur" in
+            balanced) next="performance" ;;
+            performance) next="power-saver" ;;
+            *) next="balanced" ;;
+        esac
+        powerprofilesctl set "$next"
+        echo -e "${GREEN}Power profile switched to: ${BOLD}$next${RESET}"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler (Unified TUI Standard)
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="${1:-}"
+
+    if [ -z "$target" ] || [[ "$target" == __* ]] || [[ "$target" == overview ]]; then
+        echo -e "${BOLD}${CYAN}=== System Settings Overview ===${RESET}"
+        echo ""
+        cmd_status
+        echo ""
+        echo -e "${BOLD}Keyboard Shortcuts in FZF:${RESET}"
+        echo -e "  ${CYAN}Enter${RESET}   Select item / Toggle setting"
+        echo -e "  ${CYAN}Ctrl-R${RESET}  Refresh settings status"
+        echo -e "  ${CYAN}Esc${RESET}     Exit menu"
+        return 0
+    fi
+
+    case "$target" in
+        wifi)
+            local status iface active_ssid
+            status=$(nmcli -t -f WIFI g 2>/dev/null || echo "disabled")
+            iface=$(nmcli -t -f DEVICE,TYPE dev 2>/dev/null | awk -F: '$2=="wifi"{print $1; exit}')
+            active_ssid=$(nmcli -t -f ACTIVE,SSID dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}')
+            echo -e "${BOLD}${CYAN}=== Wi-Fi & Network Settings ===${RESET}"
+            echo -e "  ${BOLD}Radio:${RESET}     $([ "$status" = "enabled" ] && echo -e "${GREEN}Enabled (ON)${RESET}" || echo -e "${RED}Disabled (OFF)${RESET}")"
+            echo -e "  ${BOLD}Interface:${RESET} ${iface:---}"
+            echo -e "  ${BOLD}Network:${RESET}   ${GREEN}${active_ssid:-Not connected}${RESET}"
+            if [ -n "$active_ssid" ]; then
+                local ip
+                ip=$(nmcli -t -f IP4.ADDRESS dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
+                echo -e "  ${BOLD}IPv4:${RESET}      ${ip:---}"
+            fi
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Launch interactive Wi-Fi manager"
+            ;;
+        bluetooth)
+            local power discovering conn_count
+            power=$(bluetoothctl show 2>/dev/null | grep -qi "Powered: yes" && echo "ON" || echo "OFF")
+            conn_count=$(bluetoothctl devices Connected 2>/dev/null | wc -l)
+            echo -e "${BOLD}${CYAN}=== Bluetooth Manager ===${RESET}"
+            echo -e "  ${BOLD}Controller:${RESET} $([ "$power" = "ON" ] && echo -e "${GREEN}Powered ON${RESET}" || echo -e "${RED}Powered OFF${RESET}")"
+            echo -e "  ${BOLD}Connected:${RESET}  $conn_count device(s)"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Launch interactive Bluetooth manager"
+            ;;
+        audio)
+            local vol_raw vol_val is_muted
+            vol_raw=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null || echo "Volume: 0.50")
+            vol_val=$(echo "$vol_raw" | grep -oP '\d+\.\d+' || echo "0.50")
+            is_muted=$(echo "$vol_raw" | grep -qi "MUTED" && echo "MUTED" || echo "UNMUTED")
+            local pct
+            pct=$(awk -v v="$vol_val" 'BEGIN { printf "%d", (v * 100) + 0.5 }')
+            echo -e "${BOLD}${CYAN}=== Audio & Volume Mixer ===${RESET}"
+            echo -e "  ${BOLD}Volume:${RESET}    ${GREEN}$pct%${RESET}"
+            echo -e "  ${BOLD}State:${RESET}     $([ "$is_muted" = "MUTED" ] && echo -e "${RED}Muted${RESET}" || echo -e "${GREEN}Active${RESET}")"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Open Rofi audio selector & volume controls"
+            ;;
+        awake)
+            local idle
+            idle=$(get_idle_status)
+            echo -e "${BOLD}${CYAN}=== Screen Awake Inhibit ===${RESET}"
+            echo -e "  ${BOLD}Awake Mode:${RESET} $([ "$idle" = "ON" ] && echo -e "${GREEN}${BOLD}ON (Inhibiting Inactivity)${RESET}" || echo -e "${DIM}OFF (Normal Power Saving)${RESET}")"
+            echo ""
+            echo -e "${BOLD}Description:${RESET}"
+            echo -e "  When ON, prevents screen locking, DPMS display turn-off,"
+            echo -e "  system suspend, and automated night presence shutdown."
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Toggle awake mode state"
+            ;;
+        night)
+            local night
+            night=$(get_night_status)
+            echo -e "${BOLD}${CYAN}=== Night Light / Eye Care ===${RESET}"
+            echo -e "  ${BOLD}Filter State:${RESET} $([ "$night" = "ON" ] && echo -e "${GREEN}ON (Warm Color Active)${RESET}" || echo -e "${DIM}OFF (Neutral Color)${RESET}")"
+            echo -e "  ${BOLD}Engine:${RESET}       hyprsunset / gammastep"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Toggle blue-light filter"
+            ;;
+        clipboard)
+            local count
+            count=$(cliphist list 2>/dev/null | wc -l || echo "0")
+            echo -e "${BOLD}${CYAN}=== Clipboard History ===${RESET}"
+            echo -e "  ${BOLD}Engine:${RESET}       cliphist + wl-clipboard"
+            echo -e "  ${BOLD}History Size:${RESET} $count clip(s)"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Open interactive clipboard selector"
+            ;;
+        dnd)
+            local dnd
+            dnd=$(get_dnd_status)
+            echo -e "${BOLD}${CYAN}=== Do Not Disturb ===${RESET}"
+            echo -e "  ${BOLD}Mode:${RESET} $([ "$dnd" = "ON" ] && echo -e "${YELLOW}Silent / Muted (ON)${RESET}" || echo -e "${GREEN}Normal Notifications (OFF)${RESET}")"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Toggle Do Not Disturb in SwayNC"
+            ;;
+        powerprofile)
+            local profile
+            profile=$(get_power_profile)
+            echo -e "${BOLD}${CYAN}=== Power Profile ===${RESET}"
+            echo -e "  ${BOLD}Current:${RESET}   ${GREEN}${BOLD}$profile${RESET}"
+            echo -e "  ${BOLD}Available:${RESET} balanced, performance, power-saver"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Cycle to next power profile mode"
+            ;;
+        lock)
+            echo -e "${BOLD}${CYAN}=== Lock Screen ===${RESET}"
+            echo -e "  ${BOLD}Screen Locker:${RESET} hyprlock"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Lock the current session immediately"
+            ;;
+        power)
+            echo -e "${BOLD}${CYAN}=== Power & Session Menu ===${RESET}"
+            echo -e "  ${BOLD}Options:${RESET} Shutdown, Reboot, Suspend, Logout, Lock"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Open power control options"
+            ;;
+        process)
+            echo -e "${BOLD}${CYAN}=== Task & Process Manager ===${RESET}"
+            echo -e "  ${BOLD}Tools:${RESET} htop, btop, process_menu.sh"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Inspect running processes, search & terminate tasks"
+            ;;
+        gtk)
+            echo -e "${BOLD}${CYAN}=== GTK Appearance ===${RESET}"
+            echo -e "  ${BOLD}GTK3/4 Theme:${RESET} adw-gtk3"
+            echo -e "  ${BOLD}Icon Theme:${RESET}   Papirus-Dark"
+            echo -e "  ${BOLD}Cursor Theme:${RESET} Bibata-Modern-Ice"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Open GTK appearance customization"
+            ;;
+        config)
+            echo -e "${BOLD}${CYAN}=== Open Config Files ===${RESET}"
+            echo -e "  ${BOLD}Configs:${RESET} Hyprland, Waybar, MangoWM, Fish, Kitty, Neovim"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Quick-open configuration files in editor"
+            ;;
+        warp)
+            local warp
+            warp=$(get_warp_status)
+            echo -e "${BOLD}${CYAN}=== Cloudflare WARP VPN ===${RESET}"
+            echo -e "  ${BOLD}Tunnel:${RESET} $([ "$warp" = "ON" ] && echo -e "${GREEN}Connected${RESET}" || echo -e "${DIM}Disconnected${RESET}")"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Toggle Cloudflare WARP connection"
+            ;;
+        colorpicker)
+            echo -e "${BOLD}${CYAN}=== Screen Color Picker ===${RESET}"
+            echo -e "  ${BOLD}Tool:${RESET} hyprpicker"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Pick hex color from screen and copy to clipboard"
+            ;;
+        dockbar_autohide)
+            local d_auto
+            d_auto=$(get_dock_autohide)
+            echo -e "${BOLD}${CYAN}=== Dockbar Auto-hide ===${RESET}"
+            echo -e "  ${BOLD}State:${RESET} $([ "$d_auto" = "ON" ] && echo -e "${GREEN}Enabled${RESET}" || echo -e "${DIM}Disabled${RESET}")"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Toggle dockbar automatic hide/show on hover"
+            ;;
+        dockbar_exclusive)
+            local d_excl
+            d_excl=$(get_dock_exclusive)
+            echo -e "${BOLD}${CYAN}=== Dockbar Exclusive Zone ===${RESET}"
+            echo -e "  ${BOLD}State:${RESET} $([ "$d_excl" = "ON" ] && echo -e "${GREEN}Enabled${RESET}" || echo -e "${DIM}Disabled${RESET}")"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Toggle whether dock reserves desktop window area"
+            ;;
+        dockbar_size)
+            local d_size
+            d_size=$(get_dock_iconsize)
+            echo -e "${BOLD}${CYAN}=== Dockbar Icon Size ===${RESET}"
+            echo -e "  ${BOLD}Current Size:${RESET} $d_size"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Adjust launcher icon size"
+            ;;
+        disk)
+            local root_free
+            root_free=$(df -h / | awk 'NR==2 {print $4 " free of " $2}')
+            echo -e "${BOLD}${CYAN}=== Disk & Storage Manager ===${RESET}"
+            echo -e "  ${BOLD}Root (/):${RESET}     $root_free"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Open interactive storage inspector"
+            ;;
+        clean)
+            echo -e "${BOLD}${CYAN}=== Clean System Garbage ===${RESET}"
+            echo -e "  ${BOLD}Targets:${RESET} Nix old generations, user cache, trash"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Launch system cleanup utility"
+            ;;
+        custom_menu)
+            echo -e "${BOLD}${CYAN}=== Custom Menu Editor ===${RESET}"
+            echo -e "  ${BOLD}File:${RESET} ~/hakuspace-control/hakumenu-general-custom.sh"
+            echo ""
+            echo -e "${BOLD}Action:${RESET} Open custom script in editor"
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive TUI Menu (fzf)
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    if ! command -v fzf >/dev/null 2>&1; then
+        cmd_status
+        return 0
+    fi
+
+    local self_bin="${BASH_SOURCE[0]}"
+
+    while true; do
+        clear
+        local night idle warp dnd profile d_auto d_excl d_size
+        night=$(get_night_status)
+        idle=$(get_idle_status)
+        warp=$(get_warp_status)
+        dnd=$(get_dnd_status)
+        profile=$(get_power_profile)
+        d_auto=$(get_dock_autohide)
+        d_excl=$(get_dock_exclusive)
+        d_size=$(get_dock_iconsize)
+
+        local header_info="Profile: $profile | Awake: $idle | Night: $night | DND: $dnd"
+
+        local menu=()
+        menu+=("󰖩  Wi-Fi & Network Settings"$'\t'"wifi")
+        menu+=("󰂯  Bluetooth Manager"$'\t'"bluetooth")
+        menu+=("  Audio & Volume Mixer"$'\t'"audio")
+        menu+=("󰒲  Keep Screen Awake ($idle)"$'\t'"awake")
+        menu+=("󰃝  Night Light / Eye Care ($night)"$'\t'"night")
+        menu+=("󰅌  Clipboard History"$'\t'"clipboard")
+        menu+=("󰂚  Do Not Disturb ($dnd)"$'\t'"dnd")
+        menu+=("󱐋  Power Profile ($profile)"$'\t'"powerprofile")
+        menu+=("󰌾  Lock Screen"$'\t'"lock")
+        menu+=("  Power & Session Menu"$'\t'"power")
+        menu+=("󰍛  Task & Process Manager"$'\t'"process")
+        menu+=("󰏘  GTK Look & Appearance"$'\t'"gtk")
+        menu+=("󱁤  Open Config Files & Settings"$'\t'"config")
+        menu+=("󰖟  Cloudflare WARP VPN ($warp)"$'\t'"warp")
+        menu+=("󰈊  Color Picker (Screen Eyedropper)"$'\t'"colorpicker")
+        menu+=("󱂩  Dockbar Auto-hide Toggle ($d_auto)"$'\t'"dockbar_autohide")
+        menu+=("󱂩  Dockbar Exclusive Toggle ($d_excl)"$'\t'"dockbar_exclusive")
+        menu+=("󱂩  Dockbar Icon Size Change ($d_size)"$'\t'"dockbar_size")
+        menu+=("󰋊  Disk & Storage Manager"$'\t'"disk")
+        menu+=("󰚰  Clean System Garbage & Cache"$'\t'"clean")
+        menu+=("󱁤  Edit Custom General Menu"$'\t'"custom_menu")
+
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-r \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="Settings > " \
+            --header="[$header_info] (Enter: Select | Ctrl-R: Refresh | Esc: Exit)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        [ "$key" = "ctrl-r" ] && continue
+
+        local sel_arg
+        sel_arg=$(echo "$choice" | cut -f2)
+
+        case "$sel_arg" in
+            wifi)
+                if [ -x "$HOME/.local/bin/wifi" ]; then
+                    $HOME/.local/bin/wifi
+                else
+                    $HOME/.local/bin/wifi_menu.sh
+                fi
+                ;;
+            bluetooth)
+                if [ -x "$HOME/.local/bin/bluetooth" ]; then
+                    $HOME/.local/bin/bluetooth
+                else
+                    $HOME/.local/bin/bluetooth_menu.sh
+                fi
+                ;;
+            audio)
+                $HOME/.local/bin/audio_menu.sh
+                ;;
+            awake)
+                if command -v awake >/dev/null 2>&1; then
+                    awake toggle
+                else
+                    $HOME/.local/bin/idle_inhibit.sh
+                fi
+                sleep 0.5
+                ;;
+            night)
+                $HOME/.local/bin/nightlight_toggle.sh
+                sleep 0.5
+                ;;
+            clipboard)
+                $HOME/.local/bin/clipboard_menu.sh
+                ;;
+            dnd)
+                cmd_dnd_toggle
+                sleep 0.5
+                ;;
+            powerprofile)
+                cmd_powerprofile_cycle
+                sleep 0.5
+                ;;
+            lock)
+                $HOME/.local/bin/lock.sh
+                ;;
+            power)
+                $HOME/.local/bin/shutdown.sh
+                ;;
+            process)
+                $HOME/.local/bin/process_menu.sh
+                ;;
+            gtk)
+                $HOME/.local/bin/gtk_theme_menu.sh
+                ;;
+            config)
+                $HOME/.local/bin/config_menu.sh
+                ;;
+            warp)
+                $HOME/.local/bin/warp_toggle.sh
+                sleep 0.5
+                ;;
+            colorpicker)
+                local color
+                color=$(hyprpicker -a 2>/dev/null || true)
+                [ -n "$color" ] && echo "Picked color: $color"
+                sleep 0.5
+                ;;
+            dockbar_autohide)
+                $HOME/.local/bin/dockbar_manager.sh --auto-hide
+                sleep 0.5
+                ;;
+            dockbar_exclusive)
+                $HOME/.local/bin/dockbar_manager.sh --exclusive
+                sleep 0.5
+                ;;
+            dockbar_size)
+                $HOME/.local/bin/dockbar_manager.sh --icon-size
+                sleep 0.5
+                ;;
+            disk)
+                $HOME/.local/bin/disk_menu.sh
+                ;;
+            clean)
+                $HOME/.local/bin/clean_menu.sh
+                ;;
+            custom_menu)
+                ${EDITOR:-nvim} "$HOME/hakuspace-control/hakumenu-general-custom.sh"
+                ;;
+        esac
+    done
+}
+
+cmd_help() {
+    cat << EOF
+${BOLD}setting${RESET} - Terminal System Settings & Controls Manager
+
+${BOLD}USAGE:${RESET}
+    setting                         Launch interactive fzf menu with live preview
+    setting status | s              Display current system toggles and status
+    setting preview <target>        Inspect setting parameter preview
+    setting wifi                    Manage Wi-Fi connections
+    setting bluetooth | bt          Manage Bluetooth devices
+    setting audio                   Open Audio & Volume Mixer
+    setting awake                   Toggle screen awake / idle inhibitor
+    setting nightlight | night      Toggle night light / blue light filter
+    setting clipboard | clip        Open clipboard history
+    setting dnd                     Toggle Do Not Disturb notifications
+    setting powerprofile [mode]     Cycle or set power profile (balanced/performance/power-saver)
+    setting lock                    Lock screen immediately
+    setting power                   Open power & shutdown menu
+    setting process | top           Open process manager
+    setting appearance | gtk        Open GTK look & appearance menu
+    setting configs                 Open configuration files selector
+    setting warp                    Toggle Cloudflare WARP VPN
+    setting colorpicker             Pick color from screen
+    setting dockbar [autohide|exclusive|size] Control Waybar dockbar
+    setting disk                    Open disk & storage manager
+    setting clean                   Clean system garbage and cache
+    setting help | -h               Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}   Select item / Toggle setting
+    ${CYAN}Ctrl-R${RESET}  Refresh settings status
+    ${CYAN}Esc${RESET}     Exit
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Entrypoint
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    status|s|info)
+        cmd_status
+        ;;
+    preview)
+        shift
+        cmd_preview "$@"
+        ;;
+    wifi)
+        shift
+        if [ -x "$HOME/.local/bin/wifi" ]; then
+            $HOME/.local/bin/wifi "$@"
+        else
+            $HOME/.local/bin/wifi_menu.sh "$@"
+        fi
+        ;;
+    bluetooth|bt)
+        shift
+        if [ -x "$HOME/.local/bin/bluetooth" ]; then
+            $HOME/.local/bin/bluetooth "$@"
+        else
+            $HOME/.local/bin/bluetooth_menu.sh "$@"
+        fi
+        ;;
+    audio|volume)
+        $HOME/.local/bin/audio_menu.sh
+        ;;
+    awake|idle)
+        if command -v awake >/dev/null 2>&1; then
+            awake toggle
+        else
+            $HOME/.local/bin/idle_inhibit.sh
+        fi
+        ;;
+    nightlight|night)
+        $HOME/.local/bin/nightlight_toggle.sh
+        ;;
+    clipboard|clip)
+        $HOME/.local/bin/clipboard_menu.sh
+        ;;
+    dnd)
+        cmd_dnd_toggle
+        ;;
+    powerprofile|profile)
+        shift
+        if [ -n "${1:-}" ] && command -v powerprofilesctl >/dev/null 2>&1; then
+            powerprofilesctl set "$1"
+        else
+            cmd_powerprofile_cycle
+        fi
+        ;;
+    lock)
+        $HOME/.local/bin/lock.sh
+        ;;
+    power|shutdown)
+        $HOME/.local/bin/shutdown.sh
+        ;;
+    process|tasks)
+        $HOME/.local/bin/process_menu.sh
+        ;;
+    appearance|gtk)
+        $HOME/.local/bin/gtk_theme_menu.sh
+        ;;
+    configs|config)
+        $HOME/.local/bin/config_menu.sh
+        ;;
+    warp|vpn)
+        $HOME/.local/bin/warp_toggle.sh
+        ;;
+    colorpicker|picker)
+        color=$(hyprpicker -a 2>/dev/null || true)
+        [ -n "$color" ] && echo "Picked color: $color"
+        ;;
+    dockbar)
+        shift
+        case "${1:-}" in
+            autohide) $HOME/.local/bin/dockbar_manager.sh --auto-hide ;;
+            exclusive) $HOME/.local/bin/dockbar_manager.sh --exclusive ;;
+            size) $HOME/.local/bin/dockbar_manager.sh --icon-size ;;
+            *) $HOME/.local/bin/dockbar_manager.sh --toggle ;;
+        esac
+        ;;
+    disk)
+        $HOME/.local/bin/disk_menu.sh
+        ;;
+    clean)
+        $HOME/.local/bin/clean_menu.sh
+        ;;
+    help|-h|--help)
+        cmd_help
+        ;;
+    "")
+        if [ -t 0 ] && [ -t 1 ]; then
+            cmd_interactive
+        else
+            cmd_status
+            echo ""
+            cmd_help
+        fi
+        ;;
+    *)
+        cmd_interactive
+        ;;
+esac

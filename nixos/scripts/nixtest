@@ -528,6 +528,12 @@ mod_scripts() {
     [[ -f "$f" ]] && check "bash -n: $name" bash -n "$f"
   done
 
+  # TUI scripts (dedicated folder)
+  for name in wifi bluetooth setting theme share; do
+    local f="$SCRIPTS_DIR/tui/$name"
+    [[ -f "$f" ]] && check "bash -n: tui/$name" bash -n "$f"
+  done
+
   # Python script
   check "agy-tokens.py: python3 syntax" \
     python3 -m py_compile "$SCRIPTS_DIR/agy-tokens.py"

@@ -44,7 +44,25 @@ let
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/share_menu.sh "$@"
   '';
   share = pkgs.writeShellScriptBin "share" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/share "$@"
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/share "$@"
+  '';
+  wifi = pkgs.writeShellScriptBin "wifi" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/wifi "$@"
+  '';
+  bluetooth = pkgs.writeShellScriptBin "bluetooth" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/bluetooth "$@"
+  '';
+  bt = pkgs.writeShellScriptBin "bt" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/bluetooth "$@"
+  '';
+  setting = pkgs.writeShellScriptBin "setting" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/setting "$@"
+  '';
+  settings = pkgs.writeShellScriptBin "settings" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/setting "$@"
+  '';
+  theme = pkgs.writeShellScriptBin "theme" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/theme "$@"
   '';
   nixtest = pkgs.writeShellScriptBin "nixtest" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
@@ -422,6 +440,12 @@ in
     config-menu
     share
     share-menu
+    wifi
+    bluetooth
+    bt
+    setting
+    settings
+    theme
     nixtest
 
     # Archive
