@@ -1,0 +1,2320 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# tunnelbear - TunnelBear VPN Manager for Linux / NixOS (CLI & fzf TUI)
+# Uses NetworkManager & official OpenVPN configurations.
+# Features account login info, quota/GB remaining tracking, & usage-based sorting.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/tunnelbear"
+OVPN_DIR="$CONFIG_DIR/ovpn"
+AUTH_FILE="$CONFIG_DIR/auth.txt"
+USAGE_FILE="$CONFIG_DIR/usage.json"
+APPS_FILE="$CONFIG_DIR/apps.json"
+MODE_FILE="$CONFIG_DIR/mode.txt"
+BIND_SRC="$CONFIG_DIR/tb-bind.c"
+BIND_LIB="$CONFIG_DIR/tb-bind.so"
+PROXY_PID_FILE="/tmp/tunnelbear_proxy_$UID.pid"
+PROXY_PORT="${TB_PROXY_PORT:-10808}"
+PROXY_SCRIPT="$CONFIG_DIR/tb-proxy.py"
+SHIM_DIR="${XDG_DATA_HOME:-$HOME/.local}/bin"
+SESSION_FILE="/tmp/tunnelbear_session_$UID.json"
+S3_ZIP_URL="https://tunnelbear.s3.amazonaws.com/support/linux/openvpn.zip"
+
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
+# ------------------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------------------
+
+get_active_con() {
+    nmcli -t -f NAME,TYPE,STATE con show --active 2>/dev/null | awk -F: '$2=="vpn" && $1 ~ /^TunnelBear/ { print $1; exit }'
+}
+
+get_active_country() {
+    local con
+    con=$(get_active_con)
+    if [ -n "$con" ]; then
+        echo "${con#TunnelBear }"
+    fi
+}
+
+get_public_ip() {
+    curl -s --max-time 2.5 https://ipinfo.io/ip 2>/dev/null || curl -s --max-time 2.5 https://icanhazip.com 2>/dev/null || echo "Unknown"
+}
+
+country_to_flag() {
+    local c="$1"
+    case "$c" in
+        "Argentina") echo "🇦🇷" ;;
+        "Australia") echo "🇦🇺" ;;
+        "Austria") echo "🇦🇹" ;;
+        "Belgium") echo "🇧🇪" ;;
+        "Brazil") echo "🇧🇷" ;;
+        "Bulgaria") echo "🇧🇬" ;;
+        "Canada") echo "🇨🇦" ;;
+        "Chile") echo "🇨🇱" ;;
+        "Colombia") echo "🇨🇴" ;;
+        "Cyprus") echo "🇨🇾" ;;
+        "Czech Republic") echo "🇨🇿" ;;
+        "Denmark") echo "🇩🇰" ;;
+        "Finland") echo "🇫🇮" ;;
+        "France") echo "🇫🇷" ;;
+        "Germany") echo "🇩🇪" ;;
+        "Greece") echo "🇬🇷" ;;
+        "Hungary") echo "🇭🇺" ;;
+        "Ireland") echo "🇮🇪" ;;
+        "Italy") echo "🇮🇹" ;;
+        "Japan") echo "🇯🇵" ;;
+        "Kenya") echo "🇰🇪" ;;
+        "Latvia") echo "🇱🇻" ;;
+        "Lithuania") echo "🇱🇹" ;;
+        "Malaysia") echo "🇲🇾" ;;
+        "Mexico") echo "🇲🇽" ;;
+        "Moldova") echo "🇲🇩" ;;
+        "Netherlands") echo "🇳🇱" ;;
+        "New Zealand") echo "🇳🇿" ;;
+        "Nigeria") echo "🇳🇬" ;;
+        "Norway") echo "🇳🇴" ;;
+        "Peru") echo "🇵🇪" ;;
+        "Poland") echo "🇵🇱" ;;
+        "Portugal") echo "🇵🇹" ;;
+        "Romania") echo "🇷🇴" ;;
+        "Serbia") echo "🇷🇸" ;;
+        "Singapore") echo "🇸🇬" ;;
+        "Slovenia") echo "🇸🇮" ;;
+        "South Africa") echo "🇿🇦" ;;
+        "South Korea") echo "🇰🇷" ;;
+        "Spain") echo "🇪🇸" ;;
+        "Sweden") echo "🇸🇪" ;;
+        "Switzerland") echo "🇨🇭" ;;
+        "Taiwan") echo "🇹🇼" ;;
+        "United Kingdom") echo "🇬🇧" ;;
+        "United States"*) echo "🇺🇸" ;;
+        *) echo "🐻" ;;
+    esac
+}
+
+ensure_configs() {
+    mkdir -p "$OVPN_DIR"
+    local count
+    count=$(find "$OVPN_DIR" -maxdepth 1 -name "*.ovpn" 2>/dev/null | wc -l)
+    if [ "$count" -lt 5 ]; then
+        echo -e "${CYAN}TunnelBear server configurations not found in $OVPN_DIR.${RESET}"
+        echo -e "${CYAN}Downloading official TunnelBear OpenVPN profiles...${RESET}"
+        cmd_update
+    fi
+}
+
+get_auth_user() {
+    if [ -f "$AUTH_FILE" ]; then
+        sed -n '1p' "$AUTH_FILE" | xargs
+    fi
+}
+
+get_auth_pass() {
+    if [ -f "$AUTH_FILE" ]; then
+        sed -n '2p' "$AUTH_FILE" | xargs
+    fi
+}
+
+ensure_auth() {
+    local user pass
+    user=$(get_auth_user)
+    pass=$(get_auth_pass)
+    if [ -n "$user" ] && [ -n "$pass" ]; then
+        AUTH_USER="$user"
+        AUTH_PASS="$pass"
+        return 0
+    fi
+
+    echo -e "${YELLOW}TunnelBear account credentials required to connect.${RESET}"
+    echo -e "${DIM}These will be used to authenticate with TunnelBear OpenVPN servers.${RESET}"
+    echo ""
+    read -rp "TunnelBear Account Email: " AUTH_USER
+    if [ -z "$AUTH_USER" ]; then
+        echo -e "${RED}Error: Email cannot be empty.${RESET}" >&2
+        return 1
+    fi
+
+    read -rsp "TunnelBear Account Password: " AUTH_PASS
+    echo ""
+    if [ -z "$AUTH_PASS" ]; then
+        echo -e "${RED}Error: Password cannot be empty.${RESET}" >&2
+        return 1
+    fi
+
+    read -rp "Save credentials securely to $AUTH_FILE? [Y/n]: " save_opt
+    if [[ ! "$save_opt" =~ ^[Nn]$ ]]; then
+        mkdir -p "$CONFIG_DIR"
+        printf "%s\n%s\n" "$AUTH_USER" "$AUTH_PASS" > "$AUTH_FILE"
+        chmod 600 "$AUTH_FILE"
+        echo -e "${GREEN}✓ Credentials saved with permissions 600.${RESET}"
+    fi
+    return 0
+}
+
+# ------------------------------------------------------------------------------
+# Split Tunneling, Routing Mode & Proxy Helpers
+# ------------------------------------------------------------------------------
+
+get_mode() {
+    if [ -f "$MODE_FILE" ]; then
+        local m
+        m=$(cat "$MODE_FILE" 2>/dev/null | tr -d '[:space:]')
+        if [ "$m" = "full" ]; then
+            echo "full"
+            return 0
+        fi
+    fi
+    echo "split"
+}
+
+get_tun_ip() {
+    local ip
+    local con
+    con=$(get_active_con)
+    if [ -n "$con" ]; then
+        ip=$(nmcli -t -f IP4.ADDRESS con show "$con" 2>/dev/null | head -n 1 | cut -d: -f2 | cut -d/ -f1)
+        if [ -n "$ip" ]; then
+            echo "$ip"
+            return 0
+        fi
+    fi
+    ip=$(ip -4 -o addr show dev tun0 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+    if [ -n "$ip" ]; then
+        echo "$ip"
+        return 0
+    fi
+    local dev
+    dev=$(ip -o link show type tun 2>/dev/null | head -n 1 | awk -F': ' '{print $2}')
+    if [ -n "$dev" ]; then
+        ip=$(ip -4 -o addr show dev "$dev" 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+        [ -n "$ip" ] && echo "$ip" && return 0
+    fi
+    return 1
+}
+
+is_proxy_running() {
+    if systemctl --user is-active --quiet tunnelbear-proxy.service 2>/dev/null; then
+        return 0
+    fi
+    if [ -f "$PROXY_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$PROXY_PID_FILE" 2>/dev/null | tr -d '[:space:]')
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+        rm -f "$PROXY_PID_FILE"
+    fi
+    return 1
+}
+
+start_proxy() {
+    if is_proxy_running; then
+        return 0
+    fi
+    ensure_proxy_script
+    if command -v systemd-run >/dev/null 2>&1 && [ -d "/run/user/$UID/systemd" ]; then
+        systemd-run --user --unit=tunnelbear-proxy python3 "$PROXY_SCRIPT" >/dev/null 2>&1 || true
+    else
+        nohup python3 "$PROXY_SCRIPT" >/dev/null 2>&1 &
+        local pid=$!
+        disown "$pid" 2>/dev/null || true
+        echo "$pid" > "$PROXY_PID_FILE"
+    fi
+
+    # Wait briefly for proxy to listen on PROXY_PORT
+    local i=0
+    while [ $i -lt 15 ]; do
+        if python3 -c "import socket; s=socket.socket(); s.connect(('127.0.0.1', $PROXY_PORT)); s.close()" 2>/dev/null; then
+            return 0
+        fi
+        sleep 0.1
+        ((i++)) || true
+    done
+    return 0
+}
+
+stop_proxy() {
+    if systemctl --user is-active --quiet tunnelbear-proxy.service 2>/dev/null; then
+        systemctl --user stop tunnelbear-proxy.service 2>/dev/null || true
+    fi
+    if [ -f "$PROXY_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$PROXY_PID_FILE" 2>/dev/null | tr -d '[:space:]')
+        if [ -n "$pid" ]; then
+            kill "$pid" 2>/dev/null || true
+        fi
+        rm -f "$PROXY_PID_FILE"
+    fi
+}
+
+ensure_bind_lib() {
+    [ -f "$BIND_LIB" ] && return 0
+    mkdir -p "$CONFIG_DIR"
+    cat << 'EOF' > "$BIND_SRC"
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <dlfcn.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <errno.h>
+
+static int (*real_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrlen) = NULL;
+
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+    if (!real_connect) {
+        real_connect = dlsym(RTLD_NEXT, "connect");
+        if (!real_connect) {
+            errno = EACCES;
+            return -1;
+        }
+    }
+
+    if (addr && addr->sa_family == AF_INET) {
+        const struct sockaddr_in *dest_in = (const struct sockaddr_in *)addr;
+        uint32_t dest_ip = ntohl(dest_in->sin_addr.s_addr);
+
+        if ((dest_ip >> 24) != 127 && (dest_ip >> 24) != 255) {
+            const char *bind_ip_str = getenv("TB_BIND_IP");
+            if (bind_ip_str && *bind_ip_str) {
+                struct sockaddr_in bound_addr;
+                socklen_t bound_len = sizeof(bound_addr);
+                if (getsockname(sockfd, (struct sockaddr *)&bound_addr, &bound_len) == 0) {
+                    if (bound_addr.sin_addr.s_addr == INADDR_ANY) {
+                        struct sockaddr_in local_addr;
+                        memset(&local_addr, 0, sizeof(local_addr));
+                        local_addr.sin_family = AF_INET;
+                        local_addr.sin_port = 0;
+                        if (inet_pton(AF_INET, bind_ip_str, &local_addr.sin_addr) > 0) {
+                            bind(sockfd, (struct sockaddr *)&local_addr, sizeof(local_addr));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return real_connect(sockfd, addr, addrlen);
+}
+EOF
+    if command -v gcc >/dev/null 2>&1; then
+        gcc -fPIC -shared -O2 "$BIND_SRC" -o "$BIND_LIB" -ldl 2>/dev/null || true
+    fi
+}
+
+find_real_bin() {
+    local target="$1"
+    if [ -f "$target" ] && [ -x "$target" ]; then
+        echo "$target"
+        return 0
+    fi
+    local shim="$SHIM_DIR/$target"
+    local p
+    IFS=: read -ra dirs <<< "$PATH"
+    for d in "${dirs[@]}"; do
+        [ "$d" = "$SHIM_DIR" ] && continue
+        if [ -x "$d/$target" ] && [ ! -d "$d/$target" ]; then
+            echo "$d/$target"
+            return 0
+        fi
+    done
+    return 1
+}
+
+py_apps() {
+    python3 - "$@" << 'PYEOF'
+import json, os, sys
+from datetime import datetime
+
+CONFIG_DIR = os.path.expanduser('~/.config/tunnelbear')
+APPS_FILE = os.path.join(CONFIG_DIR, 'apps.json')
+
+def load_apps():
+    if os.path.exists(APPS_FILE):
+        try:
+            with open(APPS_FILE) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_apps(apps):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(APPS_FILE, 'w') as f:
+        json.dump(apps, f, indent=2)
+
+action = sys.argv[1] if len(sys.argv) > 1 else 'list'
+
+if action == 'list':
+    apps = load_apps()
+    for name, info in sorted(apps.items()):
+        target = info.get('target', '')
+        shim = info.get('shim', '')
+        added = info.get('added_at', '')
+        exists = os.path.exists(target)
+        shim_ok = os.path.exists(shim)
+        print(f'{name}\t{target}\t{shim}\t{exists}\t{shim_ok}\t{added}')
+
+elif action == 'add':
+    name = sys.argv[2]
+    target = sys.argv[3]
+    shim = sys.argv[4]
+    apps = load_apps()
+    apps[name] = {
+        'target': target,
+        'shim': shim,
+        'added_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+    save_apps(apps)
+    print('OK')
+
+elif action == 'remove':
+    name = sys.argv[2]
+    apps = load_apps()
+    if name in apps:
+        info = apps.pop(name)
+        save_apps(apps)
+        print(info.get('shim', ''))
+    else:
+        print('')
+
+elif action == 'get':
+    name = sys.argv[2]
+    apps = load_apps()
+    if name in apps:
+        print(json.dumps(apps[name]))
+    else:
+        print('{}')
+PYEOF
+}
+
+ensure_proxy_script() {
+    [ -f "$PROXY_SCRIPT" ] && return 0
+    mkdir -p "$CONFIG_DIR"
+    cat << 'PYEOF' > "$PROXY_SCRIPT"
+import socket, struct, fcntl, select, threading, sys, os, signal
+from urllib.parse import urlparse
+
+PORT = int(os.environ.get('TB_PROXY_PORT', 10808))
+
+def get_tun_ip():
+    for ifname in ['tun0', 'tun1', 'tun2']:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            return socket.inet_ntoa(fcntl.ioctl(
+                s.fileno(),
+                0x8915, # SIOCGIFADDR
+                struct.pack('256s', ifname[:15].encode('utf-8'))
+            )[20:24])
+        except Exception:
+            pass
+        finally:
+            s.close()
+    try:
+        for iface in os.listdir('/sys/class/net'):
+            if iface.startswith('tun'):
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                try:
+                    return socket.inet_ntoa(fcntl.ioctl(
+                        s.fileno(),
+                        0x8915,
+                        struct.pack('256s', iface[:15].encode('utf-8'))
+                    )[20:24])
+                except Exception:
+                    pass
+                finally:
+                    s.close()
+    except Exception:
+        pass
+    return None
+
+def forward_duplex(sock1, sock2):
+    sockets = [sock1, sock2]
+    try:
+        while sockets:
+            rlist, _, _ = select.select(sockets, [], [], 60)
+            if not rlist:
+                break
+            for s in list(rlist):
+                if s not in sockets:
+                    continue
+                other = sock2 if s is sock1 else sock1
+                try:
+                    data = s.recv(16384)
+                except Exception:
+                    data = b''
+                if not data:
+                    try:
+                        other.shutdown(socket.SHUT_WR)
+                    except Exception:
+                        pass
+                    if s in sockets:
+                        sockets.remove(s)
+                else:
+                    try:
+                        other.sendall(data)
+                    except Exception:
+                        return
+    except Exception:
+        pass
+    finally:
+        try: sock1.close()
+        except Exception: pass
+        try: sock2.close()
+        except Exception: pass
+
+def handle_client(client):
+    try:
+        client.settimeout(10)
+        first = client.recv(1)
+        if not first:
+            client.close()
+            return
+        client.settimeout(None)
+
+        tun_ip = get_tun_ip()
+        if not tun_ip:
+            client.close()
+            return
+
+        if first == b'\x05':
+            # SOCKS5 Handshake
+            nmethods = ord(client.recv(1))
+            _ = client.recv(nmethods)
+            client.sendall(b'\x05\x00') # No auth
+            ver, cmd, _, atyp = client.recv(4)
+            if atyp == 1:
+                target_ip = socket.inet_ntoa(client.recv(4))
+            elif atyp == 3:
+                domain_len = ord(client.recv(1))
+                target_ip = client.recv(domain_len).decode('utf-8', errors='ignore')
+            else:
+                client.close()
+                return
+            port_bytes = client.recv(2)
+            target_port = int.from_bytes(port_bytes, 'big')
+
+            remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            remote.bind((tun_ip, 0))
+            remote.connect((target_ip, target_port))
+            client.sendall(b'\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00')
+            forward_duplex(client, remote)
+        else:
+            # HTTP / CONNECT
+            line = first
+            while not line.endswith(b'\r\n'):
+                c = client.recv(1)
+                if not c:
+                    break
+                line += c
+            line_str = line.decode('iso-8859-1', errors='ignore')
+            parts = line_str.strip().split()
+            if not parts:
+                client.close()
+                return
+            method = parts[0].upper()
+            if method == 'CONNECT':
+                host_port = parts[1].split(':')
+                target_host = host_port[0]
+                target_port = int(host_port[1]) if len(host_port) > 1 else 443
+                while True:
+                    hdr = b''
+                    while not hdr.endswith(b'\r\n'):
+                        c = client.recv(1)
+                        if not c: break
+                        hdr += c
+                    if hdr == b'\r\n' or not hdr:
+                        break
+                remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                remote.bind((tun_ip, 0))
+                remote.connect((target_host, target_port))
+                client.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
+                forward_duplex(client, remote)
+            else:
+                parsed = urlparse(parts[1])
+                target_host = parsed.hostname or parts[1]
+                target_port = parsed.port or 80
+                remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                remote.bind((tun_ip, 0))
+                remote.connect((target_host, target_port))
+                remote.sendall(line)
+                forward_duplex(client, remote)
+    except Exception:
+        try: client.close()
+        except Exception: pass
+
+srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+srv.bind(('127.0.0.1', PORT))
+srv.listen(100)
+
+def sig_handler(sig, frame):
+    try: srv.close()
+    except Exception: pass
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, sig_handler)
+signal.signal(signal.SIGINT, sig_handler)
+try:
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+except Exception:
+    pass
+
+while True:
+    try:
+        c, _ = srv.accept()
+        t = threading.Thread(target=handle_client, args=(c,))
+        t.daemon = True
+        t.start()
+    except Exception:
+        break
+PYEOF
+}
+
+run_proxy_daemon() {
+    ensure_proxy_script
+    exec python3 "$PROXY_SCRIPT"
+}
+
+# ------------------------------------------------------------------------------
+# State & Quota Manager (Python-backed for robust JSON)
+# ------------------------------------------------------------------------------
+
+py_tracker() {
+    python3 -c "
+import json, os, sys, glob
+from datetime import datetime
+
+CONFIG_DIR = os.path.expanduser('~/.config/tunnelbear')
+USAGE_FILE = os.path.join(CONFIG_DIR, 'usage.json')
+AUTH_FILE = os.path.join(CONFIG_DIR, 'auth.txt')
+OVPN_DIR = os.path.join(CONFIG_DIR, 'ovpn')
+
+def load_data():
+    data = {
+        'plan': 'free',
+        'monthly_quota_bytes': 2 * 1024 * 1024 * 1024, # 2 GB fallback default
+        'used_bytes': 0,
+        'countries': {}
+    }
+    if os.path.exists(USAGE_FILE):
+        try:
+            with open(USAGE_FILE) as f:
+                data.update(json.load(f))
+        except Exception:
+            pass
+    return data
+
+def save_data(data):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(USAGE_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+def sync_live(data, force=False):
+    if not os.path.exists(AUTH_FILE):
+        return data, False, 'No credentials file found'
+    try:
+        with open(AUTH_FILE) as f:
+            user = f.readline().strip()
+            pwd = f.readline().strip()
+    except Exception as e:
+        return data, False, str(e)
+    if not user or not pwd:
+        return data, False, 'Empty credentials'
+
+    now_ts = datetime.now().timestamp()
+    last_sync_ts = data.get('last_sync_ts', 0)
+    if not force and (now_ts - last_sync_ts < 900) and 'remaining_bytes' in data:
+        return data, True, 'Cached'
+
+    try:
+        import urllib.request, http.cookiejar, uuid
+        cj = http.cookiejar.CookieJar()
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+
+        token_url = 'https://prod-api-dashboard.tunnelbear.com/dashboard/web/v2/token'
+        payload = json.dumps({
+            'username': user,
+            'password': pwd,
+            'grant_type': 'password',
+            'device': f'browser-{uuid.uuid4()}'
+        }).encode('utf-8')
+
+        common_headers = {
+            'Content-Type': 'application/json',
+            'Origin': 'https://www.tunnelbear.com',
+            'Referer': 'https://www.tunnelbear.com/',
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0',
+            'tunnelbear-app-id': 'com.tunnelbear.web',
+            'tunnelbear-app-version': '1.0.0',
+            'tunnelbear-platform': 'Firefox',
+            'tunnelbear-platform-version': '130.0'
+        }
+
+        req = urllib.request.Request(token_url, data=payload, headers=common_headers)
+        resp = opener.open(req, timeout=10)
+        token_data = json.loads(resp.read().decode())
+        token = token_data.get('access_token')
+        if not token:
+            return data, False, 'Token missing from response'
+
+        csrf_token = resp.headers.get('tb-csrf-token', '')
+
+        cookie_url = 'https://prod-api-dashboard.tunnelbear.com/dashboard/web/v2/tokenCookie'
+        cookie_req = urllib.request.Request(cookie_url, data=b'{}', headers={
+            'Authorization': f'Bearer {token}',
+            **common_headers
+        })
+        cookie_resp = opener.open(cookie_req, timeout=10)
+        if not csrf_token:
+            csrf_token = cookie_resp.headers.get('tb-csrf-token', '')
+
+        auth_headers = {
+            'Authorization': f'Bearer {token}',
+            'Origin': 'https://www.tunnelbear.com',
+            'Referer': 'https://www.tunnelbear.com/',
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0',
+            'tunnelbear-app-id': 'com.tunnelbear.web',
+            'tunnelbear-app-version': '1.0.0',
+            'tunnelbear-platform': 'Firefox',
+            'tunnelbear-platform-version': '130.0'
+        }
+        if csrf_token:
+            auth_headers['TB-CSRF-Token'] = csrf_token
+
+        next_reset = ''
+        try:
+            acc_url = 'https://prod-api-dashboard.tunnelbear.com/dashboard/web/v2/account'
+            acc_req = urllib.request.Request(acc_url, headers=auth_headers)
+            acc_resp = opener.open(acc_req, timeout=10)
+            acc_data = json.loads(acc_resp.read().decode())
+            next_reset = acc_data.get('nextDataReset', '')
+        except Exception:
+            pass
+
+        user_url = 'https://prod-api-core.tunnelbear.com/core/web/api/getUserDetails'
+        user_req = urllib.request.Request(user_url, headers=auth_headers)
+        user_resp = opener.open(user_req, timeout=10)
+        user_data = json.loads(user_resp.read().decode())
+
+        data_left = int(user_data.get('dataLeft', 0))
+        data_cap = int(user_data.get('dataCap', 0))
+        bear_type = user_data.get('bearType', 'Little TunnelBear')
+        full_ver = str(user_data.get('fullVersion', '0')) == '1'
+
+        data['email'] = user
+        data['cloud_verified'] = True
+        data['last_sync_ts'] = now_ts
+        data['last_sync_str'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        data['bear_type'] = bear_type
+        data['full_version'] = full_ver
+        data['next_reset'] = next_reset
+        if full_ver:
+            data['plan'] = 'unlimited'
+        elif data_cap > 0:
+            data['plan'] = bear_type
+            data['monthly_quota_bytes'] = data_cap
+            data['remaining_bytes'] = data_left
+            data['used_bytes'] = max(0, data_cap - data_left)
+
+        save_data(data)
+        return data, True, 'Success'
+    except Exception as e:
+        return data, False, str(e)
+
+action = sys.argv[1] if len(sys.argv) > 1 else 'status'
+
+if action == 'sync':
+    d = load_data()
+    d, ok, msg = sync_live(d, force=True)
+    out = {'success': ok, 'message': msg}
+    if ok:
+        out.update({
+            'email': d.get('email', ''),
+            'bear_type': d.get('bear_type', ''),
+            'remaining_bytes': d.get('remaining_bytes', 0),
+            'quota_bytes': d.get('monthly_quota_bytes', 0),
+            'next_reset': d.get('next_reset', '')
+        })
+    print(json.dumps(out))
+
+elif action == 'get_quota_info':
+    d = load_data()
+    user = ''
+    if os.path.exists(AUTH_FILE):
+        try:
+            with open(AUTH_FILE) as f:
+                user = f.readline().strip()
+        except Exception:
+            pass
+
+    force = (len(sys.argv) > 2 and sys.argv[2] == '--force')
+    if user:
+        d, ok, msg = sync_live(d, force=force)
+
+    plan = d.get('plan', 'free')
+    quota_b = d.get('monthly_quota_bytes', 2 * 1024**3)
+    cloud_ver = d.get('cloud_verified', False)
+    bear_type = d.get('bear_type', '')
+
+    if 'remaining_bytes' in d:
+        rem_b = d['remaining_bytes']
+        used_b = max(0, quota_b - rem_b)
+    else:
+        used_b = d.get('used_bytes', 0)
+        rem_b = max(0, quota_b - used_b)
+
+    if plan == 'unlimited':
+        rem_str = 'Unlimited'
+        used_str = f'{used_b / (1024**2):.1f} MB' if used_b < 1024**3 else f'{used_b / (1024**3):.2f} GB'
+        pct_left = 100.0
+        bar = '[████████████████████] 100% (Unlimited)'
+    else:
+        rem_gb = rem_b / (1024**3)
+        quota_gb = quota_b / (1024**3)
+        used_gb = used_b / (1024**3)
+        used_mb = used_b / (1024**2)
+        pct_left = (rem_b / quota_b) * 100.0 if quota_b > 0 else 0.0
+
+        filled = int((pct_left / 100.0) * 20)
+        filled = max(0, min(20, filled))
+        empty = 20 - filled
+        bar = f'[{\"█\" * filled}{\"░\" * empty}] {pct_left:.1f}% left'
+        rem_str = f'{rem_gb:.2f} GB left of {quota_gb:.2f} GB'
+        used_str = f'{used_gb:.2f} GB' if used_gb >= 1.0 else f'{used_mb:.1f} MB'
+
+    out = {
+        'email': user,
+        'logged_in': bool(user),
+        'cloud_verified': cloud_ver,
+        'bear_type': bear_type,
+        'plan': plan,
+        'quota_bytes': quota_b,
+        'rem_bytes': rem_b,
+        'used_bytes': used_b,
+        'used_str': used_str,
+        'rem_str': rem_str,
+        'pct_left': pct_left,
+        'bar': bar,
+        'next_reset': d.get('next_reset', ''),
+        'last_sync': d.get('last_sync_str', '')
+    }
+    print(json.dumps(out))
+
+elif action == 'record_connect':
+    country = sys.argv[2]
+    d = load_data()
+    c_info = d['countries'].setdefault(country, {'connections': 0, 'bytes': 0, 'last_used': ''})
+    c_info['connections'] += 1
+    c_info['last_used'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    save_data(d)
+
+elif action == 'record_disconnect':
+    country = sys.argv[2]
+    session_bytes = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+    d = load_data()
+    if session_bytes > 0:
+        d['used_bytes'] = d.get('used_bytes', 0) + session_bytes
+        if 'remaining_bytes' in d:
+            d['remaining_bytes'] = max(0, d['remaining_bytes'] - session_bytes)
+        c_info = d['countries'].setdefault(country, {'connections': 0, 'bytes': 0, 'last_used': ''})
+        c_info['bytes'] = c_info.get('bytes', 0) + session_bytes
+        save_data(d)
+
+elif action == 'get_sorted_locations':
+    # Returns tab-separated list: country \t conns \t bytes_str \t last_used \t ovpn_path
+    d = load_data()
+    usage = d.get('countries', {})
+    files = glob.glob(os.path.join(OVPN_DIR, 'TunnelBear *.ovpn'))
+
+    items = []
+    for f in files:
+        bn = os.path.basename(f)[:-5]
+        country = bn.replace('TunnelBear ', '')
+        u = usage.get(country, {})
+        conns = u.get('connections', 0)
+        bytes_val = u.get('bytes', 0)
+        last_used = u.get('last_used', '')
+        items.append((conns, last_used, bytes_val, country, f))
+
+    # Sort: used first (by conns desc, then last_used desc), then unused alphabetically
+    sort_mode = sys.argv[2] if len(sys.argv) > 2 else 'usage'
+    if sort_mode == 'alpha':
+        items.sort(key=lambda x: x[3].lower())
+    else:
+        items.sort(key=lambda x: (-x[0], -int(bool(x[1])), x[1], x[3].lower() if x[0] == 0 else ''))
+
+    for conns, last_used, bytes_val, country, f in items:
+        r_host = '--'
+        r_port = '--'
+        try:
+            with open(f) as fp:
+                for line in fp:
+                    if line.startswith('remote '):
+                        p = line.split()
+                        r_host = p[1]
+                        r_port = p[2]
+                        break
+        except Exception:
+            pass
+
+        if bytes_val >= 1024**3:
+            b_str = f'{bytes_val / (1024**3):.2f} GB'
+        elif bytes_val >= 1024**2:
+            b_str = f'{bytes_val / (1024**2):.1f} MB'
+        else:
+            b_str = '0 MB'
+        last_str = last_used if last_used else 'never'
+        print(f'{country}\t{conns}\t{b_str}\t{last_str}\t{r_host}\t{r_port}\t{f}')
+
+elif action == 'set_plan':
+    new_plan = sys.argv[2].lower()
+    d = load_data()
+    if new_plan in ('unlimited', 'paid'):
+        d['plan'] = 'unlimited'
+        print('Plan updated to Unlimited')
+    elif new_plan == 'free':
+        d['plan'] = 'free'
+        d['monthly_quota_bytes'] = 2 * 1024**3
+        print('Plan updated to Free Tier (2.00 GB/month)')
+    else:
+        try:
+            gb = float(new_plan.replace('gb', '').strip())
+            d['plan'] = 'custom'
+            d['monthly_quota_bytes'] = int(gb * 1024**3)
+            print(f'Plan updated to Custom ({gb:.2f} GB/month)')
+        except ValueError:
+            print('Error: Invalid plan. Use \"free\", \"unlimited\", or a number of GB (e.g. \"5\")')
+            sys.exit(1)
+    save_data(d)
+" "$@"
+}
+
+# ------------------------------------------------------------------------------
+# Commands
+# ------------------------------------------------------------------------------
+
+cmd_account() {
+    local force_flag=""
+    if [ "${1:-}" = "--sync" ] || [ "${1:-}" = "-s" ] || [ "${1:-}" = "--force" ]; then
+        force_flag="--force"
+        echo -e "${CYAN}Syncing account details with TunnelBear cloud...${RESET}"
+    fi
+
+    local q_json
+    q_json=$(py_tracker get_quota_info $force_flag)
+
+    local email logged_in verified bear_type plan used_str rem_str pct_left bar next_reset last_sync
+    email=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('email', ''))" "$q_json")
+    logged_in=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('logged_in', False))" "$q_json")
+    verified=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('cloud_verified', False))" "$q_json")
+    bear_type=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('bear_type', ''))" "$q_json")
+    plan=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('plan', ''))" "$q_json")
+    used_str=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('used_str', ''))" "$q_json")
+    rem_str=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('rem_str', ''))" "$q_json")
+    pct_left=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('pct_left', 0.0))" "$q_json")
+    bar=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('bar', ''))" "$q_json")
+    next_reset=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('next_reset', ''))" "$q_json")
+    last_sync=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('last_sync', ''))" "$q_json")
+
+    echo -e "${BOLD}${CYAN}=== TunnelBear Account & Quota ===${RESET}"
+    if [ "$logged_in" = "True" ]; then
+        if [ "$verified" = "True" ]; then
+            echo -e "  ${BOLD}Account Status:${RESET} ${GREEN}● Logged In & Cloud-Verified${RESET} (${BOLD}$email${RESET})"
+        else
+            echo -e "  ${BOLD}Account Status:${RESET} ${GREEN}● Logged In${RESET} (${BOLD}$email${RESET})"
+        fi
+        echo -e "  ${BOLD}Credentials:${RESET}    ${GREEN}✓ Saved securely (${AUTH_FILE}, mode 0600)${RESET}"
+    else
+        echo -e "  ${BOLD}Account Status:${RESET} ${RED}○ Not Logged In${RESET}"
+        echo -e "  ${BOLD}Credentials:${RESET}    ${YELLOW}No credentials saved. Run '${CYAN}tunnelbear login${YELLOW}' to log in.${RESET}"
+    fi
+
+    if [ "$plan" = "unlimited" ]; then
+        echo -e "  ${BOLD}Subscription:${RESET}   ${MAGENTA}Unlimited Plan${RESET}"
+        echo -e "  ${BOLD}Data Used:${RESET}      $used_str"
+        echo -e "  ${BOLD}Data Remaining:${RESET} ${GREEN}Unlimited (No cap)${RESET}"
+    else
+        local color="$GREEN"
+        local p_num
+        p_num=${pct_left%.*}
+        [ -z "$p_num" ] && p_num=100
+        if [ "$p_num" -lt 20 ]; then color="$RED"; elif [ "$p_num" -lt 50 ]; then color="$YELLOW"; fi
+
+        local tier_title="${bear_type:-Free Tier}"
+        if [ "$tier_title" = "Little TunnelBear" ]; then
+            tier_title="Little TunnelBear (100 GB Humanitarian Tier)"
+        fi
+        echo -e "  ${BOLD}Subscription:${RESET}   ${CYAN}${tier_title}${RESET}"
+        echo -e "  ${BOLD}Data Used:${RESET}      $used_str (this billing cycle)"
+        echo -e "  ${BOLD}Data Remaining:${RESET} ${color}${BOLD}$rem_str${RESET}"
+        echo -e "  ${BOLD}Quota Meter:${RESET}    ${color}$bar${RESET}"
+        [ -n "$next_reset" ] && echo -e "  ${BOLD}Quota Resets:${RESET}   ${YELLOW}$next_reset${RESET}"
+    fi
+
+    [ -n "$last_sync" ] && echo -e "  ${BOLD}Cloud Sync:${RESET}     ${DIM}$last_sync${RESET}"
+    echo ""
+    echo -e "${DIM}Commands: ${CYAN}tb sync${DIM} (refresh live quota) | ${CYAN}tb login${DIM} (switch account) | ${CYAN}tb plan${DIM} (adjust plan)${RESET}"
+}
+
+cmd_sync() {
+    echo -e "${CYAN}Syncing account details and data balance with TunnelBear cloud...${RESET}"
+    local res
+    res=$(py_tracker sync)
+    local ok msg
+    ok=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('success', False))" "$res")
+    msg=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('message', ''))" "$res")
+    if [ "$ok" = "True" ]; then
+        echo -e "${GREEN}✓ Cloud sync successful!${RESET}"
+        echo ""
+        cmd_account
+    else
+        echo -e "${RED}✗ Cloud sync failed: $msg${RESET}" >&2
+        return 1
+    fi
+}
+
+cmd_status() {
+    local active_con active_country
+    active_con=$(get_active_con)
+    active_country=$(get_active_country)
+    local cur_mode
+    cur_mode=$(get_mode)
+
+    echo -e "${BOLD}${CYAN}=== TunnelBear VPN Status ===${RESET}"
+    if [ -n "$active_con" ]; then
+        local flag
+        flag=$(country_to_flag "$active_country")
+        echo -e "  ${BOLD}Connection:${RESET}     ${GREEN}● Connected${RESET}"
+        echo -e "  ${BOLD}Server:${RESET}         $flag ${BOLD}${GREEN}$active_country${RESET} (${DIM}$active_con${RESET})"
+
+        if [ "$cur_mode" = "split" ]; then
+            echo -e "  ${BOLD}Routing Mode:${RESET}   ${GREEN}● Split Tunneling${RESET} (Per-App VPN; main internet stays direct)"
+        else
+            echo -e "  ${BOLD}Routing Mode:${RESET}   ${MAGENTA}● Full System VPN${RESET} (All system traffic routed through VPN)"
+        fi
+
+        local ip4_line gw_line
+        ip4_line=$(nmcli -t -f IP4.ADDRESS con show "$active_con" 2>/dev/null | head -n 1 | cut -d: -f2)
+        gw_line=$(nmcli -t -f IP4.GATEWAY con show "$active_con" 2>/dev/null | head -n 1 | cut -d: -f2)
+
+        [ -n "$ip4_line" ]  && echo -e "  ${BOLD}VPN IPv4:${RESET}       $ip4_line"
+        [ -n "$gw_line" ]   && echo -e "  ${BOLD}Gateway:${RESET}        $gw_line"
+
+        if is_proxy_running; then
+            local p_pid
+            if systemctl --user is-active --quiet tunnelbear-proxy.service 2>/dev/null; then
+                p_pid=$(systemctl --user show -p MainPID --value tunnelbear-proxy.service 2>/dev/null)
+            else
+                p_pid=$(cat "$PROXY_PID_FILE" 2>/dev/null)
+            fi
+            echo -e "  ${BOLD}Local Proxy:${RESET}    ${GREEN}● Active${RESET} (127.0.0.1:$PROXY_PORT, PID ${p_pid:-systemd})"
+        else
+            echo -e "  ${BOLD}Local Proxy:${RESET}    ${YELLOW}○ Inactive${RESET}"
+        fi
+
+        local app_count=0 app_names=()
+        while IFS=$'\t' read -r a_name rest; do
+            [ -n "$a_name" ] && app_names+=("$a_name") && ((app_count++)) || true
+        done < <(py_apps list 2>/dev/null)
+        if [ "$app_count" -gt 0 ]; then
+            echo -e "  ${BOLD}Managed Apps:${RESET}   ${CYAN}${app_names[*]}${RESET} (${app_count} app$([ "$app_count" -gt 1 ] && echo "s") configured)"
+        else
+            echo -e "  ${BOLD}Managed Apps:${RESET}   ${DIM}None (run 'tb app add <name>' to add)${RESET}"
+        fi
+
+        # Calculate live session traffic if connected
+        if [ -d "/sys/class/net/tun0" ]; then
+            local rx tx cur_sess_mb
+            rx=$(cat "/sys/class/net/tun0/statistics/rx_bytes" 2>/dev/null || echo 0)
+            tx=$(cat "/sys/class/net/tun0/statistics/tx_bytes" 2>/dev/null || echo 0)
+            cur_sess_mb=$(( (rx + tx) / (1024 * 1024) ))
+            echo -e "  ${BOLD}Session Traffic:${RESET} ${CYAN}${cur_sess_mb} MB${RESET} (${DIM}rx: $((rx / (1024*1024)))MB / tx: $((tx / (1024*1024)))MB${RESET})"
+        fi
+
+        local sys_ip
+        sys_ip=$(get_public_ip)
+        if [ "$cur_mode" = "split" ]; then
+            local vpn_ip
+            vpn_ip=$(curl -s --max-time 2.5 -x "http://127.0.0.1:$PROXY_PORT" https://ipinfo.io/ip 2>/dev/null || echo "Unknown")
+            echo -e "  ${BOLD}System IP:${RESET}      ${WHITE}$sys_ip${RESET} (Direct ISP)"
+            echo -e "  ${BOLD}VPN App IP:${RESET}     ${CYAN}$vpn_ip${RESET} ($flag $active_country)"
+        else
+            echo -e "  ${BOLD}Public IP:${RESET}      ${CYAN}$sys_ip${RESET}"
+        fi
+    else
+        echo -e "  ${BOLD}Connection:${RESET}     ${YELLOW}○ Disconnected${RESET}"
+        echo -e "  ${BOLD}Public IP:${RESET}      ${DIM}$(get_public_ip)${RESET}"
+    fi
+
+    echo ""
+    cmd_account
+}
+
+cmd_list() {
+    ensure_configs
+    local sort_mode="usage"
+    if [ "${1:-}" = "--alpha" ] || [ "${1:-}" = "-a" ]; then
+        sort_mode="alpha"
+    fi
+
+    local active_con
+    active_con=$(get_active_con)
+
+    echo -e "${BOLD}${CYAN}=== Available TunnelBear Locations $([ "$sort_mode" = "usage" ] && echo "(Sorted by Usage: Most Used First)" || echo "(Alphabetical)")${RESET} ==="
+    printf "${BOLD}%-3s %-4s %-25s %-22s %-28s %-6s${RESET}\n" "ST" "" "COUNTRY / REGION" "USAGE / CONNECTIONS" "REMOTE HOST" "PORT"
+    echo -e "${DIM}--------------------------------------------------------------------------------------------------${RESET}"
+
+    local count=0
+    while IFS=$'\t' read -r country conns bytes_str last_used r_host r_port f; do
+        [ -z "$country" ] && continue
+        local con_name
+        con_name="TunnelBear $country"
+
+        local st="  "
+        if [ "$con_name" = "$active_con" ]; then
+            st="${GREEN}✓ ${RESET}"
+        elif [ "$conns" -gt 0 ]; then
+            st="${YELLOW}★ ${RESET}"
+        fi
+
+        local flag
+        flag=$(country_to_flag "$country")
+
+        local usage_display
+        if [ "$conns" -gt 0 ]; then
+            usage_display="${YELLOW}${conns} connect$([ "$conns" -gt 1 ] && echo "s") (${bytes_str})${RESET}"
+        else
+            usage_display="${DIM}Never used${RESET}"
+        fi
+
+        printf "%s %-4s %-25s %-32b %-28s %-6s\n" "$st" "$flag" "$country" "$usage_display" "${r_host:---}" "${r_port:---}"
+        ((count++)) || true
+    done < <(py_tracker get_sorted_locations "$sort_mode")
+
+    echo ""
+    echo -e "${DIM}Total: $count locations | Connect with: ${CYAN}tunnelbear connect <country>${RESET}"
+    echo -e "${DIM}Tip: Run '${CYAN}tunnelbear list --alpha${DIM}' to sort alphabetically.${RESET}"
+}
+
+find_ovpn() {
+    local query="$1"
+    ensure_configs
+
+    # Common aliases
+    case "${query,,}" in
+        us|usa|"united states") query="United States East" ;;
+        "us central") query="United States Central" ;;
+        "us west") query="United States West" ;;
+        "us east") query="United States East" ;;
+        uk|"great britain"|britain) query="United Kingdom" ;;
+        korea|kr) query="South Korea" ;;
+    esac
+
+    # 1. Exact country match
+    local exact
+    exact="$OVPN_DIR/TunnelBear $query.ovpn"
+    if [ -f "$exact" ]; then
+        echo "$exact"
+        return 0
+    fi
+
+    # 2. Case-insensitive exact match
+    local ci_exact
+    ci_exact=$(find "$OVPN_DIR" -maxdepth 1 -iname "TunnelBear $query.ovpn" -print -quit)
+    if [ -n "$ci_exact" ] && [ -f "$ci_exact" ]; then
+        echo "$ci_exact"
+        return 0
+    fi
+
+    # 3. Case-insensitive substring match
+    local matches=()
+    while IFS= read -r m; do
+        [ -n "$m" ] && matches+=("$m")
+    done < <(find "$OVPN_DIR" -maxdepth 1 -iname "*$query*.ovpn")
+
+    if [ ${#matches[@]} -eq 1 ]; then
+        echo "${matches[0]}"
+        return 0
+    elif [ ${#matches[@]} -gt 1 ]; then
+        for m in "${matches[@]}"; do
+            local bn
+            bn=$(basename "$m" .ovpn)
+            if [[ "${bn,,}" == "tunnelbear ${query,,}"* ]]; then
+                echo "$m"
+                return 0
+            fi
+        done
+        echo "${matches[0]}"
+        return 0
+    fi
+
+    return 1
+}
+
+cmd_connect() {
+    local target="${1:-}"
+
+    if [ -z "$target" ]; then
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+            return 0
+        else
+            echo -e "${RED}Error: Specify a country/region to connect to.${RESET}" >&2
+            echo -e "${YELLOW}Usage:${RESET} tunnelbear connect <country>"
+            echo -e "       Run '${CYAN}tunnelbear list${RESET}' to view locations sorted by usage."
+            return 1
+        fi
+    fi
+
+    ensure_configs
+
+    local ovpn_file
+    ovpn_file=$(find_ovpn "$target") || {
+        echo -e "${RED}Error: No TunnelBear server location matching '$target' found.${RESET}" >&2
+        echo -e "Run '${CYAN}tunnelbear list${RESET}' to view all 47 locations."
+        return 1
+    }
+
+    local bname country con_name flag
+    bname=$(basename "$ovpn_file" .ovpn)
+    country="${bname#TunnelBear }"
+    con_name="TunnelBear $country"
+    flag=$(country_to_flag "$country")
+
+    local active_con
+    active_con=$(get_active_con)
+    if [ "$active_con" = "$con_name" ]; then
+        echo -e "${GREEN}✓ Already connected to $flag $country ($con_name).${RESET}"
+        return 0
+    fi
+
+    AUTH_USER=""
+    AUTH_PASS=""
+    ensure_auth || return 1
+
+    # Disconnect any currently active TunnelBear connection
+    if [ -n "$active_con" ]; then
+        echo -e "${YELLOW}Disconnecting previous connection: $active_con...${RESET}"
+        cmd_disconnect
+    fi
+
+    echo -e "${CYAN}Preparing connection for $flag ${BOLD}$country${RESET}..."
+
+    # Check if connection profile exists in NetworkManager
+    if ! nmcli connection show "$con_name" >/dev/null 2>&1; then
+        echo -e "${DIM}Importing $con_name profile into NetworkManager...${RESET}"
+        if ! nmcli connection import type openvpn file "$ovpn_file" >/dev/null; then
+            echo -e "${RED}Error: Failed to import OpenVPN profile '$ovpn_file' into NetworkManager.${RESET}" >&2
+            return 1
+        fi
+    fi
+
+    # Set credentials and routing mode
+    local cur_mode
+    cur_mode=$(get_mode)
+    if [ "$cur_mode" = "split" ]; then
+        nmcli connection modify "$con_name" \
+            +vpn.data "username=$AUTH_USER, password-flags=0" \
+            vpn.user-name "$AUTH_USER" \
+            vpn.secrets "password=$AUTH_PASS" \
+            ipv4.route-table 51820 \
+            ipv4.routing-rules "priority 1000 from 10.0.0.0/8 table 51820, priority 1001 from 172.16.0.0/12 table 51820" >/dev/null 2>&1
+    else
+        nmcli connection modify "$con_name" \
+            +vpn.data "username=$AUTH_USER, password-flags=0" \
+            vpn.user-name "$AUTH_USER" \
+            vpn.secrets "password=$AUTH_PASS" \
+            ipv4.route-table 0 \
+            ipv4.routing-rules "" >/dev/null 2>&1
+    fi
+
+    echo -e "${CYAN}Establishing secure tunnel to $flag ${BOLD}$country${RESET}..."
+    if nmcli connection up id "$con_name"; then
+        # Start proxy daemon if in split mode
+        if [ "$cur_mode" = "split" ]; then
+            start_proxy
+        fi
+
+        # Record usage statistics
+        py_tracker record_connect "$country" >/dev/null 2>&1 || true
+
+        # Record session start state for data transfer tracking
+        local dev_line
+        dev_line=$(nmcli -t -f GENERAL.DEVICES con show "$con_name" 2>/dev/null | head -n 1 | cut -d: -f2)
+        local start_rx=0 start_tx=0
+        if [ -n "$dev_line" ] && [ -d "/sys/class/net/$dev_line" ]; then
+            start_rx=$(cat "/sys/class/net/$dev_line/statistics/rx_bytes" 2>/dev/null || echo 0)
+            start_tx=$(cat "/sys/class/net/$dev_line/statistics/tx_bytes" 2>/dev/null || echo 0)
+        fi
+        cat <<EOF > "$SESSION_FILE"
+{"country": "$country", "dev": "${dev_line:-tun0}", "start_rx": $start_rx, "start_tx": $start_tx}
+EOF
+
+        local new_ip
+        new_ip=$(get_public_ip)
+        echo ""
+        echo -e "${GREEN}${BOLD}✓ TunnelBear Connected!${RESET}"
+        echo -e "  ${BOLD}Location:${RESET}       $flag $country"
+        echo -e "  ${BOLD}Public IP:${RESET}      ${CYAN}$new_ip${RESET}"
+
+        # Show remaining data info
+        local q_info
+        q_info=$(py_tracker get_quota_info)
+        local rem_str
+        rem_str=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['rem_str'])" "$q_info")
+        echo -e "  ${BOLD}Data Quota:${RESET}     ${GREEN}$rem_str${RESET}"
+
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send -a "TunnelBear" -i network-vpn "TunnelBear VPN Connected" "$flag $country\nPublic IP: $new_ip\nQuota: $rem_str" 2>/dev/null || true
+        fi
+        return 0
+    else
+        echo -e "${RED}✗ Failed to connect to $con_name.${RESET}" >&2
+        echo -e "${YELLOW}Tip:${RESET} Verify your account credentials with '${CYAN}tunnelbear login${RESET}'."
+        return 1
+    fi
+}
+
+cmd_disconnect() {
+    local active_con
+    active_con=$(get_active_con)
+
+    if [ -z "$active_con" ]; then
+        echo -e "${YELLOW}No active TunnelBear VPN connection found.${RESET}"
+        stop_proxy
+        return 0
+    fi
+
+    local country
+    country=$(get_active_country)
+
+    # Capture transferred bytes before taking interface down
+    local session_bytes=0
+    if [ -f "$SESSION_FILE" ]; then
+        local s_country s_dev s_rx s_tx
+        s_country=$(python3 -c "import json; d=json.load(open('$SESSION_FILE')); print(d.get('country', ''))" 2>/dev/null || echo "$country")
+        s_dev=$(python3 -c "import json; d=json.load(open('$SESSION_FILE')); print(d.get('dev', 'tun0'))" 2>/dev/null || echo "tun0")
+        s_rx=$(python3 -c "import json; d=json.load(open('$SESSION_FILE')); print(d.get('start_rx', 0))" 2>/dev/null || echo 0)
+        s_tx=$(python3 -c "import json; d=json.load(open('$SESSION_FILE')); print(d.get('start_tx', 0))" 2>/dev/null || echo 0)
+
+        if [ -d "/sys/class/net/$s_dev" ]; then
+            local cur_rx cur_tx
+            cur_rx=$(cat "/sys/class/net/$s_dev/statistics/rx_bytes" 2>/dev/null || echo 0)
+            cur_tx=$(cat "/sys/class/net/$s_dev/statistics/tx_bytes" 2>/dev/null || echo 0)
+            local delta_rx=$(( cur_rx - s_rx ))
+            local delta_tx=$(( cur_tx - s_tx ))
+            [ "$delta_rx" -gt 0 ] && session_bytes=$(( session_bytes + delta_rx ))
+            [ "$delta_tx" -gt 0 ] && session_bytes=$(( session_bytes + delta_tx ))
+        fi
+        rm -f "$SESSION_FILE"
+    fi
+
+    # Stop local proxy
+    stop_proxy
+
+    echo -e "${YELLOW}Disconnecting from $active_con...${RESET}"
+    if nmcli connection down id "$active_con" >/dev/null 2>&1; then
+        if [ "$session_bytes" -gt 0 ]; then
+            py_tracker record_disconnect "$country" "$session_bytes" >/dev/null 2>&1 || true
+        fi
+
+        echo -e "${GREEN}✓ Successfully disconnected from TunnelBear ($country).${RESET}"
+        if [ "$session_bytes" -gt 0 ]; then
+            local mb=$(( session_bytes / (1024 * 1024) ))
+            echo -e "  ${BOLD}Session Data:${RESET}   ${CYAN}${mb} MB transferred${RESET}"
+        fi
+
+        local q_info rem_str
+        q_info=$(py_tracker get_quota_info)
+        rem_str=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['rem_str'])" "$q_info")
+        echo -e "  ${BOLD}Data Quota:${RESET}     $rem_str"
+        echo -e "  ${BOLD}Public IP:${RESET}      $(get_public_ip)"
+
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send -a "TunnelBear" -i network-vpn "TunnelBear VPN" "Disconnected ($country)\nQuota: $rem_str" 2>/dev/null || true
+        fi
+    else
+        echo -e "${RED}Failed to disconnect $active_con via NetworkManager.${RESET}" >&2
+        return 1
+    fi
+}
+
+cmd_login() {
+    echo -e "${BOLD}${CYAN}=== TunnelBear Account Login ===${RESET}"
+    echo -e "Enter your TunnelBear account email and password."
+    echo ""
+
+    local user pass
+    read -rp "TunnelBear Account Email: " user
+    if [ -z "$user" ]; then
+        echo -e "${RED}Error: Email cannot be empty.${RESET}" >&2
+        return 1
+    fi
+
+    read -rsp "TunnelBear Account Password: " pass
+    echo ""
+    if [ -z "$pass" ]; then
+        echo -e "${RED}Error: Password cannot be empty.${RESET}" >&2
+        return 1
+    fi
+
+    mkdir -p "$CONFIG_DIR"
+    printf "%s\n%s\n" "$user" "$pass" > "$AUTH_FILE"
+    chmod 600 "$AUTH_FILE"
+
+    echo ""
+    echo -e "${GREEN}${BOLD}✓ Credentials saved successfully!${RESET}"
+    echo -e "  ${BOLD}Account:${RESET}        ${GREEN}● Logged In${RESET} ($user)"
+    echo -e "  ${BOLD}File:${RESET}           $AUTH_FILE (mode 0600)"
+
+    # Update all existing imported TunnelBear profiles in NetworkManager
+    local count=0
+    while IFS= read -r con; do
+        [ -z "$con" ] && continue
+        nmcli connection modify "$con" \
+            +vpn.data "username=$user, password-flags=0" \
+            vpn.user-name "$user" \
+            vpn.secrets "password=$pass" >/dev/null 2>&1 || true
+        ((count++)) || true
+    done < <(nmcli -t -f NAME con show 2>/dev/null | grep '^TunnelBear ')
+
+    if [ "$count" -gt 0 ]; then
+        echo -e "  ${DIM}Synced credentials to $count imported NetworkManager profiles.${RESET}"
+    fi
+
+    echo ""
+    echo -e "${CYAN}Verifying account & syncing live quota from TunnelBear cloud...${RESET}"
+    py_tracker sync >/dev/null 2>&1 || true
+
+    echo ""
+    cmd_account
+}
+
+cmd_logout() {
+    echo -e "${YELLOW}Logging out from TunnelBear...${RESET}"
+    if [ -f "$AUTH_FILE" ]; then
+        rm -f "$AUTH_FILE"
+        echo -e "${GREEN}✓ Removed saved credentials file.${RESET}"
+    fi
+
+    # Clear credentials from NetworkManager profiles
+    while IFS= read -r con; do
+        [ -z "$con" ] && continue
+        nmcli connection modify "$con" vpn.user-name "" vpn.secrets "" >/dev/null 2>&1 || true
+    done < <(nmcli -t -f NAME con show 2>/dev/null | grep '^TunnelBear ')
+
+    echo -e "${GREEN}✓ Successfully logged out.${RESET}"
+}
+
+cmd_plan() {
+    local target_plan="${1:-}"
+    if [ -z "$target_plan" ]; then
+        echo -e "${BOLD}${CYAN}=== Configure TunnelBear Plan / Quota ===${RESET}"
+        echo -e "Select your subscription tier:"
+        echo -e "  ${CYAN}1)${RESET} Free Tier (2.00 GB/month allowance)"
+        echo -e "  ${CYAN}2)${RESET} Unlimited Plan (No bandwidth limits)"
+        echo -e "  ${CYAN}3)${RESET} Custom GB Allowance (e.g. 5 GB with promo data)"
+        echo ""
+        read -rp "Enter selection [1-3]: " opt
+        case "$opt" in
+            1) target_plan="free" ;;
+            2) target_plan="unlimited" ;;
+            3)
+                read -rp "Enter monthly data limit in GB: " custom_gb
+                target_plan="$custom_gb"
+                ;;
+            *)
+                echo "Aborted."
+                return 0
+                ;;
+        esac
+    fi
+
+    local res
+    res=$(py_tracker set_plan "$target_plan")
+    echo -e "${GREEN}✓ $res${RESET}"
+    echo ""
+    cmd_account
+}
+
+cmd_update() {
+    echo -e "${CYAN}Downloading latest OpenVPN configurations from TunnelBear...${RESET}"
+    mkdir -p "$OVPN_DIR"
+
+    local tmp_zip
+    tmp_zip=$(mktemp -t "tunnelbear_zip.XXXXXX")
+    if ! curl -sL "$S3_ZIP_URL" -o "$tmp_zip"; then
+        echo -e "${RED}Error: Failed to download OpenVPN configs from $S3_ZIP_URL.${RESET}" >&2
+        rm -f "$tmp_zip"
+        return 1
+    fi
+
+    echo -e "${DIM}Extracting archive...${RESET}"
+    unzip -q -o "$tmp_zip" -d "$OVPN_DIR/"
+    rm -f "$tmp_zip"
+    rm -rf "$OVPN_DIR/__MACOSX"
+
+    # Rename any accidentally named .ovpn.txt
+    for f in "$OVPN_DIR"/*.ovpn.txt; do
+        [ -f "$f" ] && mv "$f" "${f%.txt}"
+    done
+
+    # Embed CA certificate inline inside every .ovpn file for maximum portability
+    local ca_file="$OVPN_DIR/openvpn-server-ca.crt"
+    if [ -f "$ca_file" ]; then
+        python3 -c "
+import os, glob
+
+ovpn_dir = '$OVPN_DIR'
+ca_path = '$ca_file'
+with open(ca_path, 'r') as f:
+    ca_content = f.read().strip()
+
+for filepath in glob.glob(os.path.join(ovpn_dir, '*.ovpn')):
+    with open(filepath, 'r') as f:
+        content = f.read()
+    if '<ca>' not in content:
+        content = content.replace('ca openvpn-server-ca.crt', f'<ca>\n{ca_content}\n</ca>')
+        with open(filepath, 'w') as f:
+            f.write(content)
+" 2>/dev/null || true
+    fi
+
+    local count
+    count=$(find "$OVPN_DIR" -maxdepth 1 -name "*.ovpn" | wc -l)
+    echo -e "${GREEN}✓ Successfully updated $count TunnelBear server profiles in $OVPN_DIR.${RESET}"
+}
+
+# ------------------------------------------------------------------------------
+# App Split Tunneling & Execution Commands
+# ------------------------------------------------------------------------------
+
+cmd_run() {
+    if [ $# -eq 0 ]; then
+        echo -e "${RED}Error: No command specified to run through VPN.${RESET}" >&2
+        echo -e "${YELLOW}Usage:${RESET} tb run <command> [args...]"
+        echo -e "       tb run curl https://ipinfo.io/ip"
+        echo -e "       tb run claude"
+        return 1
+    fi
+
+    # Check if TunnelBear is active
+    local active_con
+    active_con=$(get_active_con)
+    if [ -z "$active_con" ]; then
+        # Find last used country or default to Poland
+        local last_country
+        last_country=$(python3 -c "
+import json, os
+try:
+    d = json.load(open('$USAGE_FILE'))
+    items = [(v.get('last_used', ''), k) for k, v in d.get('countries', {}).items() if v.get('last_used')]
+    items.sort(reverse=True)
+    print(items[0][1] if items else 'Poland')
+except Exception:
+    print('Poland')
+" 2>/dev/null || echo "Poland")
+
+        echo -e "${YELLOW}🐻 TunnelBear VPN is not connected.${RESET}"
+        echo -e "${CYAN}Establishing secure tunnel to $last_country...${RESET}"
+        if ! cmd_connect "$last_country"; then
+            echo -e "${RED}Error: Failed to connect to VPN. Aborting command to prevent traffic leakage.${RESET}" >&2
+            return 1
+        fi
+        active_con=$(get_active_con)
+    fi
+
+    # Ensure proxy daemon is running
+    start_proxy
+
+    # Ensure LD_PRELOAD socket binder library is built
+    ensure_bind_lib
+
+    local tun_ip
+    tun_ip=$(get_tun_ip)
+    if [ -z "$tun_ip" ]; then
+        echo -e "${RED}Error: Could not determine TunnelBear VPN IP address.${RESET}" >&2
+        return 1
+    fi
+
+    local cmd="$1"
+    shift
+
+    # Resolve real binary path if an app name was given (prevents shim recursion)
+    local real_bin
+    real_bin=$(find_real_bin "$cmd")
+    if [ -n "$real_bin" ]; then
+        cmd="$real_bin"
+    fi
+
+    # Set proxy and socket binding environment variables
+    export HTTP_PROXY="http://127.0.0.1:$PROXY_PORT"
+    export HTTPS_PROXY="http://127.0.0.1:$PROXY_PORT"
+    export ALL_PROXY="socks5h://127.0.0.1:$PROXY_PORT"
+    export http_proxy="http://127.0.0.1:$PROXY_PORT"
+    export https_proxy="http://127.0.0.1:$PROXY_PORT"
+    export all_proxy="socks5h://127.0.0.1:$PROXY_PORT"
+    export TB_BIND_IP="$tun_ip"
+
+    if [ -f "$BIND_LIB" ]; then
+        if [ -n "${LD_PRELOAD:-}" ]; then
+            export LD_PRELOAD="$BIND_LIB:$LD_PRELOAD"
+        else
+            export LD_PRELOAD="$BIND_LIB"
+        fi
+    fi
+
+    exec "$cmd" "$@"
+}
+
+cmd_app() {
+    local sub="${1:-}"
+    shift 2>/dev/null || true
+
+    case "$sub" in
+        list|ls|"")
+            cmd_app_list
+            ;;
+        add)
+            cmd_app_add "$@"
+            ;;
+        remove|rm|del|delete)
+            cmd_app_remove "$@"
+            ;;
+        *)
+            echo -e "${RED}Unknown app command: '$sub'${RESET}" >&2
+            echo -e "${YELLOW}Usage:${RESET} tb app list"
+            echo -e "       tb app add <name_or_binary>"
+            echo -e "       tb app remove <name>"
+            return 1
+            ;;
+    esac
+}
+
+cmd_app_list() {
+    echo -e "${BOLD}${CYAN}=== TunnelBear Managed VPN Applications ===${RESET}"
+    printf "${BOLD}%-15s %-15s %-38s %s${RESET}\n" "APPLICATION" "STATUS" "TARGET BINARY" "SHIM LOCATION"
+    echo -e "${DIM}-----------------------------------------------------------------------------------------${RESET}"
+
+    local count=0
+    while IFS=$'\t' read -r name target shim exists shim_ok added; do
+        [ -z "$name" ] && continue
+        local st
+        if [ "$shim_ok" = "True" ] && [ "$exists" = "True" ]; then
+            st="${GREEN}● Active${RESET}"
+        elif [ "$shim_ok" = "True" ]; then
+            st="${YELLOW}▲ Missing Target${RESET}"
+        else
+            st="${RED}○ Broken Shim${RESET}"
+        fi
+        printf "%-15s %-24b %-38s %s\n" "$name" "$st" "$target" "$shim"
+        ((count++)) || true
+    done < <(py_apps list)
+
+    if [ "$count" -eq 0 ]; then
+        echo -e "  ${DIM}No applications configured yet.${RESET}"
+        echo -e "  Add an app with: ${CYAN}tb app add <name>${RESET} (e.g. ${CYAN}tb app add claude${RESET})"
+    fi
+    echo ""
+    echo -e "${DIM}Commands: ${CYAN}tb app add <name>${DIM} | ${CYAN}tb app remove <name>${DIM} | ${CYAN}tb run <cmd>${RESET}"
+}
+
+cmd_app_add() {
+    local target_input="${1:-}"
+    if [ -z "$target_input" ]; then
+        echo -e "${RED}Error: Specify an application name or path to add.${RESET}" >&2
+        echo -e "${YELLOW}Usage:${RESET} tb app add <name_or_binary>"
+        echo -e "       tb app add claude"
+        return 1
+    fi
+
+    local real_bin
+    real_bin=$(find_real_bin "$target_input")
+    if [ -z "$real_bin" ]; then
+        echo -e "${RED}Error: Could not find binary '$target_input' in PATH or filesystem.${RESET}" >&2
+        return 1
+    fi
+
+    local app_name
+    app_name=$(basename "$target_input")
+    local shim_file="$SHIM_DIR/$app_name"
+
+    mkdir -p "$SHIM_DIR"
+
+    # If an existing file exists at shim_file that was NOT generated by TunnelBear, back it up
+    if [ -f "$shim_file" ]; then
+        if ! grep -q "Auto-generated by TunnelBear VPN Manager" "$shim_file" 2>/dev/null; then
+            mv "$shim_file" "${shim_file}.bak"
+            echo -e "${YELLOW}Notice: Backed up existing non-TunnelBear file to ${shim_file}.bak.${RESET}"
+        fi
+    fi
+
+    local script_path
+    script_path="$(readlink -f "${BASH_SOURCE[0]}")"
+
+    cat << EOF > "$shim_file"
+#!/usr/bin/env bash
+# Auto-generated by TunnelBear VPN Manager (tb app)
+# Target binary: $real_bin
+exec "$script_path" run "$real_bin" "\$@"
+EOF
+    chmod +x "$shim_file"
+
+    py_apps add "$app_name" "$real_bin" "$shim_file" >/dev/null 2>&1
+
+    echo -e "${GREEN}✓ Application '${BOLD}$app_name${RESET}${GREEN}' configured to use TunnelBear VPN!${RESET}"
+    echo -e "  ${BOLD}Target Binary:${RESET} $real_bin"
+    echo -e "  ${BOLD}Shim Script:${RESET}   $shim_file"
+    echo ""
+    echo -e "${CYAN}Running '${BOLD}$app_name${RESET}${CYAN}' will now automatically route all network traffic through TunnelBear VPN.${RESET}"
+    echo -e "${DIM}Test it with: ${CYAN}$app_name --version${RESET}"
+}
+
+cmd_app_remove() {
+    local app_name="${1:-}"
+    if [ -z "$app_name" ]; then
+        echo -e "${RED}Error: Specify an application name to remove.${RESET}" >&2
+        echo -e "${YELLOW}Usage:${RESET} tb app remove <name>"
+        return 1
+    fi
+
+    local shim_file
+    shim_file=$(py_apps remove "$app_name")
+
+    if [ -z "$shim_file" ]; then
+        shim_file="$SHIM_DIR/$app_name"
+    fi
+
+    if [ -f "$shim_file" ] && grep -q "Auto-generated by TunnelBear VPN Manager" "$shim_file" 2>/dev/null; then
+        rm -f "$shim_file"
+        echo -e "${GREEN}✓ Removed shim script: $shim_file${RESET}"
+        if [ -f "${shim_file}.bak" ]; then
+            mv "${shim_file}.bak" "$shim_file"
+            echo -e "${GREEN}✓ Restored original file from ${shim_file}.bak.${RESET}"
+        fi
+    fi
+
+    echo -e "${GREEN}✓ Removed '$app_name' from TunnelBear VPN management.${RESET}"
+}
+
+cmd_mode() {
+    local target_mode="${1:-}"
+    local cur_mode
+    cur_mode=$(get_mode)
+
+    if [ -z "$target_mode" ]; then
+        echo -e "${BOLD}${CYAN}=== TunnelBear Routing Mode ===${RESET}"
+        if [ "$cur_mode" = "split" ]; then
+            echo -e "  ${BOLD}Current Mode:${RESET}   ${GREEN}● Split Tunneling (Per-App Routing)${RESET}"
+            echo -e "  ${BOLD}Behavior:${RESET}       Default internet traffic bypasses VPN (uses your direct local ISP)."
+            echo -e "                  Only apps executed with '${CYAN}tb run <cmd>${RESET}' or managed via '${CYAN}tb app${RESET}' use VPN."
+        else
+            echo -e "  ${BOLD}Current Mode:${RESET}   ${MAGENTA}● Full System VPN (All Traffic)${RESET}"
+            echo -e "  ${BOLD}Behavior:${RESET}       ALL network traffic on this machine routes through the VPN."
+        fi
+        echo ""
+        echo -e "${DIM}Switch mode: ${CYAN}tb mode split${DIM} (apps only) | ${CYAN}tb mode full${DIM} (all system traffic)${RESET}"
+        return 0
+    fi
+
+    case "$target_mode" in
+        split|app|apps)
+            target_mode="split"
+            ;;
+        full|global|all)
+            target_mode="full"
+            ;;
+        *)
+            echo -e "${RED}Error: Invalid mode '$target_mode'. Choose 'split' or 'full'.${RESET}" >&2
+            return 1
+            ;;
+    esac
+
+    mkdir -p "$CONFIG_DIR"
+    echo "$target_mode" > "$MODE_FILE"
+
+    local active_con
+    active_con=$(get_active_con)
+    if [ -n "$active_con" ]; then
+        echo -e "${CYAN}Applying $target_mode mode to active connection '$active_con'...${RESET}"
+        if [ "$target_mode" = "split" ]; then
+            nmcli connection modify "$active_con" \
+                ipv4.route-table 51820 \
+                ipv4.routing-rules "priority 1000 from 10.0.0.0/8 table 51820, priority 1001 from 172.16.0.0/12 table 51820" >/dev/null 2>&1
+            nmcli connection up id "$active_con" >/dev/null 2>&1 || true
+            start_proxy
+        else
+            nmcli connection modify "$active_con" \
+                ipv4.route-table 0 \
+                ipv4.routing-rules "" >/dev/null 2>&1
+            nmcli connection up id "$active_con" >/dev/null 2>&1 || true
+        fi
+    fi
+
+    echo -e "${GREEN}✓ TunnelBear routing mode set to: ${BOLD}$target_mode${RESET}"
+    if [ "$target_mode" = "split" ]; then
+        echo -e "  Split Tunneling enabled: system internet stays direct; use '${CYAN}tb run <cmd>${RESET}' or '${CYAN}tb app add <name>${RESET}' for VPN."
+    else
+        echo -e "  Full System VPN enabled: all system internet traffic now routes through VPN."
+    fi
+}
+
+cmd_proxy() {
+    local sub="${1:-status}"
+    case "$sub" in
+        status)
+            if is_proxy_running; then
+                local pid tun_ip
+                if systemctl --user is-active --quiet tunnelbear-proxy.service 2>/dev/null; then
+                    pid=$(systemctl --user show -p MainPID --value tunnelbear-proxy.service 2>/dev/null)
+                else
+                    pid=$(cat "$PROXY_PID_FILE" 2>/dev/null)
+                fi
+                tun_ip=$(get_tun_ip)
+                echo -e "${GREEN}● Proxy Daemon is running${RESET}"
+                echo -e "  ${BOLD}PID:${RESET}          ${pid:-systemd}"
+                echo -e "  ${BOLD}Service:${RESET}      tunnelbear-proxy.service"
+                echo -e "  ${BOLD}Listen:${RESET}       127.0.0.1:$PROXY_PORT (HTTP CONNECT & SOCKS5)"
+                echo -e "  ${BOLD}Bound Tun IP:${RESET} ${tun_ip:-None (VPN disconnected)}"
+            else
+                echo -e "${YELLOW}○ Proxy Daemon is stopped.${RESET}"
+            fi
+            ;;
+        start)
+            start_proxy
+            if is_proxy_running; then
+                local pid
+                if systemctl --user is-active --quiet tunnelbear-proxy.service 2>/dev/null; then
+                    pid=$(systemctl --user show -p MainPID --value tunnelbear-proxy.service 2>/dev/null)
+                else
+                    pid=$(cat "$PROXY_PID_FILE" 2>/dev/null)
+                fi
+                echo -e "${GREEN}✓ Proxy Daemon started (PID: ${pid:-systemd}, port: $PROXY_PORT).${RESET}"
+            else
+                echo -e "${RED}✗ Failed to start Proxy Daemon.${RESET}" >&2
+                return 1
+            fi
+            ;;
+        stop)
+            stop_proxy
+            echo -e "${GREEN}✓ Proxy Daemon stopped.${RESET}"
+            ;;
+        restart)
+            stop_proxy
+            sleep 0.2
+            start_proxy
+            echo -e "${GREEN}✓ Proxy Daemon restarted.${RESET}"
+            ;;
+        *)
+            echo -e "${YELLOW}Usage:${RESET} tb proxy [status|start|stop|restart]"
+            ;;
+    esac
+}
+
+cmd_preview() {
+    local target="${1:-}"
+
+    if [ -z "$target" ] || [[ "$target" == __action_* ]] || [[ "$target" == __divider__ ]] || [[ "$target" == __none__ ]]; then
+        echo -e "${BOLD}${CYAN}=== TunnelBear Overview ===${RESET}"
+        echo ""
+        cmd_status
+        echo ""
+        echo -e "${BOLD}Keyboard Shortcuts in FZF:${RESET}"
+        echo -e "  ${CYAN}Enter${RESET}   Connect / Select action"
+        echo -e "  ${CYAN}Ctrl-D${RESET}  Disconnect active VPN"
+        echo -e "  ${CYAN}Ctrl-S${RESET}  View status details"
+        echo -e "  ${CYAN}Ctrl-A${RESET}  Account & Data Quota"
+        echo -e "  ${CYAN}Ctrl-L${RESET}  Login / manage credentials"
+        echo -e "  ${CYAN}Ctrl-U${RESET}  Update server configurations"
+        echo -e "  ${CYAN}Esc${RESET}     Exit menu"
+        return 0
+    fi
+
+    local ovpn_file
+    ovpn_file=$(find_ovpn "$target" 2>/dev/null || true)
+    if [ -z "$ovpn_file" ] || [ ! -f "$ovpn_file" ]; then
+        echo -e "${YELLOW}No profile details found for $target.${RESET}"
+        return 0
+    fi
+
+    local bname country con_name flag
+    bname=$(basename "$ovpn_file" .ovpn)
+    country="${bname#TunnelBear }"
+    con_name="TunnelBear $country"
+    flag=$(country_to_flag "$country")
+
+    local active_con
+    active_con=$(get_active_con)
+    local is_active=0
+    [ "$con_name" = "$active_con" ] && is_active=1
+
+    echo -e "${BOLD}${CYAN}=== TunnelBear Location Details ===${RESET}"
+    echo -e "  ${BOLD}Location:${RESET}     $flag ${BOLD}$country${RESET} $([ "$is_active" -eq 1 ] && echo -e "${GREEN}(Active / Connected)${RESET}")"
+    echo -e "  ${BOLD}Profile:${RESET}      $con_name"
+
+    # Fetch usage stats for this country
+    local usage_str
+    usage_str=$(python3 -c "
+import json, os
+try:
+    d = json.load(open('$USAGE_FILE')).get('countries', {}).get('$country', {})
+    conns = d.get('connections', 0)
+    bytes_val = d.get('bytes', 0)
+    last_u = d.get('last_used', 'Never')
+    mb = bytes_val / (1024 * 1024)
+    print(f'{conns}|{mb:.1f} MB|{last_u}')
+except Exception:
+    print('0|0 MB|Never')
+")
+    local u_conns u_mb u_last
+    IFS='|' read -r u_conns u_mb u_last <<< "$usage_str"
+
+    if [ "$u_conns" -gt 0 ]; then
+        echo -e "  ${BOLD}Usage:${RESET}        ${YELLOW}★ Connected $u_conns time$([ "$u_conns" -gt 1 ] && echo "s") ($u_mb transferred)${RESET}"
+        echo -e "  ${BOLD}Last Used:${RESET}    $u_last"
+    else
+        echo -e "  ${BOLD}Usage:${RESET}        ${DIM}Never connected before${RESET}"
+    fi
+
+    local r_host r_port r_proto
+    r_host=$(grep -E '^\s*remote\s+' "$ovpn_file" | head -n 1 | awk '{print $2}')
+    r_port=$(grep -E '^\s*remote\s+' "$ovpn_file" | head -n 1 | awk '{print $3}')
+    r_proto=$(grep -E '^\s*proto\s+' "$ovpn_file" | head -n 1 | awk '{print $2}')
+    local cipher
+    cipher=$(grep -E '^\s*data-ciphers\s+' "$ovpn_file" | head -n 1 | cut -d' ' -f2-)
+    [ -z "$cipher" ] && cipher=$(grep -E '^\s*cipher\s+' "$ovpn_file" | head -n 1 | awk '{print $2}')
+
+    echo -e "  ${BOLD}Remote Host:${RESET}  ${r_host:---}"
+    echo -e "  ${BOLD}Port/Proto:${RESET}   ${r_port:---} / ${r_proto:-udp}"
+    echo -e "  ${BOLD}Cipher:${RESET}       ${cipher:-AES-256-CBC}"
+    echo -e "  ${BOLD}CA Cert:${RESET}      ${GREEN}Embedded (Self-contained)${RESET}"
+
+    echo ""
+    echo -e "${BOLD}${CYAN}=== NetworkManager Status ===${RESET}"
+    if nmcli connection show "$con_name" >/dev/null 2>&1; then
+        echo -e "  ${BOLD}Imported:${RESET}     ${GREEN}Yes${RESET}"
+        local vpn_user
+        vpn_user=$(nmcli -t -f vpn.user-name con show "$con_name" 2>/dev/null | cut -d: -f2)
+        [ -n "$vpn_user" ] && echo -e "  ${BOLD}User:${RESET}         $vpn_user"
+    else
+        echo -e "  ${BOLD}Imported:${RESET}     ${YELLOW}No (will auto-import on connect)${RESET}"
+    fi
+
+    if [ "$is_active" -eq 1 ]; then
+        echo ""
+        echo -e "${BOLD}${CYAN}=== Active Link ===${RESET}"
+        local dev ip4
+        dev=$(nmcli -t -f GENERAL.DEVICES con show "$con_name" 2>/dev/null | head -n 1 | cut -d: -f2)
+        ip4=$(nmcli -t -f IP4.ADDRESS con show "$con_name" 2>/dev/null | head -n 1 | cut -d: -f2)
+        echo -e "  ${BOLD}Device:${RESET}       $dev"
+        echo -e "  ${BOLD}IPv4:${RESET}         $ip4"
+    fi
+
+    echo ""
+    echo -e "${BOLD}Action:${RESET} Press ${CYAN}Enter${RESET} to $([ "$is_active" -eq 1 ] && echo "reconnect" || echo "connect to $country")"
+}
+
+# ------------------------------------------------------------------------------
+# Interactive Menu (fzf TUI - Sorted by Usage!)
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    if ! command -v fzf >/dev/null 2>&1; then
+        cmd_status
+        echo ""
+        cmd_list
+        return 0
+    fi
+
+    ensure_configs
+    local self_bin="${BASH_SOURCE[0]}"
+
+    while true; do
+        clear
+        local active_con active_country header_info
+        active_con=$(get_active_con)
+        active_country=$(get_active_country)
+
+        local q_info email logged_in rem_str
+        q_info=$(py_tracker get_quota_info)
+        email=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['email'])" "$q_info")
+        logged_in=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['logged_in'])" "$q_info")
+        rem_str=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['rem_str'])" "$q_info")
+
+        if [ -n "$active_con" ]; then
+            header_info="Connected: $active_country | Quota: $rem_str"
+        elif [ "$logged_in" = "True" ]; then
+            header_info="Logged In: $email | Quota: $rem_str"
+        else
+            header_info="Not Logged In | Quota: $rem_str"
+        fi
+
+        local cur_mode
+        cur_mode=$(get_mode)
+        local mode_label="Split Tunnel (Apps Only)"
+        [ "$cur_mode" = "full" ] && mode_label="Full System VPN"
+
+        local menu=()
+        if [ -n "$active_con" ]; then
+            menu+=("󰤮  Disconnect from \"$active_country\""$'\t'"__action_disconnect__")
+        fi
+        menu+=("󰢮  Detailed VPN Status"$'\t'"__action_status__")
+        menu+=("󰌾  Account & Data Quota ($rem_str)"$'\t'"__action_account__")
+        menu+=("󰑐  Sync Cloud Quota (TunnelBear API)"$'\t'"__action_sync__")
+        menu+=("󰆼  Change Plan / Quota (Free / Unlimited)"$'\t'"__action_plan__")
+        menu+=("󰘳  Manage VPN Applications (Per-App Split)"$'\t'"__action_apps__")
+        menu+=("󰤨  Switch Routing Mode (Current: $mode_label)"$'\t'"__action_mode__")
+        menu+=("󰉉  Update Server Configurations"$'\t'"__action_update__")
+        menu+=("─────────────────────────────────────────────────────────────"$'\t'"__divider__")
+
+        # Load countries sorted by usage!
+        local loc_lines=()
+        while IFS=$'\t' read -r country conns bytes_str last_used f; do
+            [ -z "$country" ] && continue
+            local con_name
+            con_name="TunnelBear $country"
+
+            local mark="  "
+            if [ "$con_name" = "$active_con" ]; then
+                mark="✓ "
+            elif [ "$conns" -gt 0 ]; then
+                mark="★ "
+            fi
+
+            local flag
+            flag=$(country_to_flag "$country")
+
+            local usage_tag=""
+            if [ "$conns" -gt 0 ]; then
+                usage_tag="[Used: ${conns}x • ${bytes_str}]"
+            else
+                usage_tag="[Never used]"
+            fi
+
+            local disp
+            disp=$(printf "%s%s  %-23s %s" "$mark" "$flag" "$country" "$usage_tag")
+            loc_lines+=("${disp}"$'\t'"${country}")
+        done < <(py_tracker get_sorted_locations "usage")
+
+        if [ ${#loc_lines[@]} -gt 0 ]; then
+            for line in "${loc_lines[@]}"; do
+                menu+=("$line")
+            done
+        else
+            menu+=("--- No configurations found ---"$'\t'"__none__")
+        fi
+
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-d,ctrl-s,ctrl-a,ctrl-r,ctrl-l,ctrl-u \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="🐻 TunnelBear > " \
+            --header="[$header_info] (Enter: Connect | Ctrl-D: Disconnect | Ctrl-R: Sync | Ctrl-A: Account)" \
+            --reverse \
+            --height=75% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local sel_arg
+        sel_arg=$(echo "$choice" | cut -f2)
+
+        case "$key" in
+            ctrl-d)
+                cmd_disconnect
+                sleep 1
+                continue
+                ;;
+            ctrl-s)
+                clear
+                cmd_status
+                echo ""
+                read -rp "Press Enter to return..."
+                continue
+                ;;
+            ctrl-r)
+                clear
+                cmd_sync
+                echo ""
+                read -rp "Press Enter to return..."
+                continue
+                ;;
+            ctrl-a|ctrl-l)
+                clear
+                cmd_account
+                echo ""
+                read -rp "Press Enter to return..."
+                continue
+                ;;
+            ctrl-u)
+                clear
+                cmd_update
+                echo ""
+                read -rp "Press Enter to return..."
+                continue
+                ;;
+        esac
+
+        case "$sel_arg" in
+            __action_disconnect__)
+                cmd_disconnect
+                sleep 1
+                ;;
+            __action_status__)
+                clear
+                cmd_status
+                echo ""
+                read -rp "Press Enter to return..."
+                ;;
+            __action_account__)
+                clear
+                cmd_account
+                echo ""
+                read -rp "Press Enter to return..."
+                ;;
+            __action_sync__)
+                clear
+                cmd_sync
+                echo ""
+                read -rp "Press Enter to return..."
+                ;;
+            __action_plan__)
+                clear
+                cmd_plan
+                echo ""
+                read -rp "Press Enter to return..."
+                ;;
+            __action_apps__)
+                clear
+                echo -e "${BOLD}${CYAN}=== Manage VPN Applications ===${RESET}"
+                echo ""
+                cmd_app_list
+                echo ""
+                echo -e "Choose action:"
+                echo -e "  ${CYAN}1)${RESET} Add application to VPN (e.g. claude)"
+                echo -e "  ${CYAN}2)${RESET} Remove application from VPN"
+                echo -e "  ${CYAN}3)${RESET} Return to main menu"
+                echo ""
+                read -rp "Selection [1-3]: " a_opt
+                case "$a_opt" in
+                    1)
+                        read -rp "Enter program name or path (e.g. claude): " target_app
+                        if [ -n "$target_app" ]; then
+                            cmd_app_add "$target_app"
+                        fi
+                        echo ""
+                        read -rp "Press Enter to return..."
+                        ;;
+                    2)
+                        read -rp "Enter program name to remove: " target_app
+                        if [ -n "$target_app" ]; then
+                            cmd_app_remove "$target_app"
+                        fi
+                        echo ""
+                        read -rp "Press Enter to return..."
+                        ;;
+                    *)
+                        ;;
+                esac
+                ;;
+            __action_mode__)
+                clear
+                echo -e "${BOLD}${CYAN}=== Select TunnelBear Routing Mode ===${RESET}"
+                echo ""
+                echo -e "  ${CYAN}1)${RESET} ${BOLD}Split Tunneling (Default)${RESET}"
+                echo -e "     System internet stays direct (uses local ISP)."
+                echo -e "     Only 'tb run <cmd>' and managed apps (e.g. 'claude') route through VPN."
+                echo ""
+                echo -e "  ${CYAN}2)${RESET} ${BOLD}Full System VPN${RESET}"
+                echo -e "     ALL system internet traffic routes through the VPN tunnel."
+                echo ""
+                read -rp "Selection [1-2]: " m_opt
+                case "$m_opt" in
+                    1) cmd_mode split ;;
+                    2) cmd_mode full ;;
+                    *) ;;
+                esac
+                echo ""
+                read -rp "Press Enter to return..."
+                ;;
+            __action_update__)
+                clear
+                cmd_update
+                echo ""
+                read -rp "Press Enter to return..."
+                ;;
+            __divider__|__none__)
+                continue
+                ;;
+            *)
+                cmd_connect "$sel_arg"
+                echo ""
+                read -rp "Press Enter to continue..."
+                ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------------------------
+# Usage Help
+# ------------------------------------------------------------------------------
+
+cmd_help() {
+    cat <<EOF
+${BOLD}${CYAN}tb${RESET} / ${BOLD}${CYAN}tunnelbear${RESET} — TunnelBear VPN Manager (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    tb [COMMAND] [ARGS...]
+    tunnelbear [COMMAND] [ARGS...]
+
+${BOLD}COMMANDS:${RESET}
+    ${CYAN}(none)${RESET}                       Launch interactive fzf menu (sorted by usage)
+    ${CYAN}run${RESET} <cmd> [args...]          Run any program/script exclusively through VPN
+    ${CYAN}app${RESET} [list|add|remove]        Manage applications configured to use VPN
+    ${CYAN}mode${RESET} [split|full]            Toggle Split Tunneling (per-app) vs Full System VPN
+    ${CYAN}connect${RESET} <country>           Connect to a server (e.g. 'poland', 'us', 'japan')
+    ${CYAN}disconnect${RESET}, ${CYAN}down${RESET}, ${CYAN}off${RESET}        Disconnect active VPN & record transferred data
+    ${CYAN}status${RESET}                       Show connection state, routing mode, IPs, and quota
+    ${CYAN}account${RESET}, ${CYAN}quota${RESET}, ${CYAN}info${RESET}         Display login status and remaining GB allowance
+    ${CYAN}sync${RESET}, ${CYAN}refresh${RESET}                 Sync account quota & details from TunnelBear cloud
+    ${CYAN}plan${RESET} [free|unlimited|<GB>]   Change subscription tier or monthly GB limit
+    ${CYAN}list${RESET}, ${CYAN}ls${RESET} [--alpha]          List servers ranked by usage (or alphabetical)
+    ${CYAN}proxy${RESET} [status|start|stop]    Manage local split-tunnel proxy daemon (127.0.0.1:10808)
+    ${CYAN}login${RESET}, ${CYAN}auth${RESET}                    Save TunnelBear account email & password
+    ${CYAN}logout${RESET}                       Remove saved credentials & clear profiles
+    ${CYAN}update${RESET}                       Re-download latest server profiles from S3
+    ${CYAN}help${RESET}, ${CYAN}-h${RESET}, ${CYAN}--help${RESET}             Show this help screen
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}   Connect / Select highlighted location or action
+    ${CYAN}Ctrl-D${RESET}  Disconnect active VPN immediately
+    ${CYAN}Ctrl-S${RESET}  View detailed VPN and proxy status
+    ${CYAN}Ctrl-A${RESET}  Display account status & remaining data quota
+    ${CYAN}Ctrl-R${RESET}  Refresh / sync live quota from TunnelBear cloud
+    ${CYAN}Ctrl-L${RESET}  Log in / save TunnelBear account credentials
+    ${CYAN}Ctrl-U${RESET}  Update / download latest server profiles from S3
+    ${CYAN}Esc${RESET}     Exit menu
+
+${BOLD}EXAMPLES:${RESET}
+    tb status
+    tb run claude
+    tb run curl https://ipinfo.io/ip
+    tb app add claude
+    tb app list
+    tb mode split
+    tb connect poland
+    tb disconnect
+    tb account
+    tb sync
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Entrypoint
+# ------------------------------------------------------------------------------
+
+ACTION="${1:-}"
+shift 2>/dev/null || true
+
+case "$ACTION" in
+    ""|menu)
+        cmd_interactive
+        ;;
+    run|exec)
+        cmd_run "$@"
+        ;;
+    app|apps)
+        cmd_app "$@"
+        ;;
+    mode)
+        cmd_mode "$@"
+        ;;
+    proxy)
+        cmd_proxy "$@"
+        ;;
+    __proxy_daemon__)
+        run_proxy_daemon "$@"
+        ;;
+    connect|up|on)
+        cmd_connect "$*"
+        ;;
+    disconnect|down|off|stop)
+        cmd_disconnect
+        ;;
+    status)
+        cmd_status
+        ;;
+    account|quota|info)
+        cmd_account "$*"
+        ;;
+    sync|refresh)
+        cmd_sync
+        ;;
+    plan)
+        cmd_plan "$*"
+        ;;
+    list|ls)
+        cmd_list "$*"
+        ;;
+    login|auth)
+        cmd_login
+        ;;
+    logout)
+        cmd_logout
+        ;;
+    update)
+        cmd_update
+        ;;
+    preview)
+        cmd_preview "$*"
+        ;;
+    help|-h|--help)
+        cmd_help
+        ;;
+    *)
+        if [ -n "$ACTION" ]; then
+            cmd_connect "$ACTION $*"
+        else
+            cmd_help
+        fi
+        ;;
+esac

@@ -529,7 +529,7 @@ mod_scripts() {
   done
 
   # TUI scripts (dedicated folder)
-  for name in wifi bluetooth setting theme share audio nixos tm service task conf disk repo ports clip log container pkg s; do
+  for name in wifi bluetooth setting theme share audio nixos tm service task conf disk repo ports clip log container pkg s tb; do
     local f="$SCRIPTS_DIR/tui/$name"
     [[ -f "$f" ]] && check "bash -n: tui/$name" bash -n "$f"
   done
