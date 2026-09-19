@@ -16,13 +16,13 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 | **Notification Center**| [SwayNC](https://github.com/ErikReider/SwayNotificationCenter) | GTK-based control center with quick toggles, sliders, and media widget |
 | **App Launcher & Menus**| [Rofi](https://github.com/davatorium/rofi) (Wayland) | Multi-mode launcher + interactive submenus (Wi-Fi, Bluetooth, Audio, Processes, Disk, Clean, Config) |
 | **Terminal & Multiplexer**| [Kitty](https://sw.kovidgoyal.net/kitty/) + [Tmux](https://github.com/tmux/tmux) | GPU-accelerated terminal (Gruvbox Dark) + Tmux patched for 100MB buffer limit |
-| **TUI Control Center** | [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) + 18 TUI Suite | Master CLI/FZF launcher & 18 unified interactive TUIs for system, network, dev & desktop |
+| **TUI Control Center** | [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) + 19 TUI Suite | Master CLI/FZF launcher & 19 unified interactive TUIs for system, network, dev & desktop |
 | **Code Editor** | [Neovim](https://neovim.io/) | LazyVim IDE with OLED #000000 theme, full VS Code key parity, & Antigravity AI |
 | **File Managers** | [Yazi](https://github.com/sxyazi/yazi) + [Thunar](https://docs.xfce.org/xfce/thunar/start) | Lightning-fast TUI file manager with Ueberzug++ previews & shell cd integration + GUI fallback |
 | **Shell** | [Fish](https://fishshell.com/) + [Starship](https://starship.rs/) | Interactive shell with Zoxide, Direnv, Eza, Yazi `Ctrl+O` hotkey, and smart `agy` token wrapper |
 | **Audio Stack** | [PipeWire](https://pipewire.org/) + WireMix | PipeWire + ALSA + Pulse + JACK + WireMix TUI + Realtek ALC256 ASUS mic pin routing |
 | **Network & Diagnostics**| NetworkManager + Wireshark | System-wide packet capturing (GUI & CLI `wireshark`, `termshark`) with user permissions |
-| **VPN & File Sharing** | Hamachi + Samba | LogMeIn Hamachi (Haguichi GUI) & Samba LAN share (`~/Shared`) managed via `share` CLI |
+| **VPN & File Sharing** | TunnelBear + Hamachi + Samba | TunnelBear VPN (19 TUI tools, per-app split tunneling, cloud quota) + Hamachi & Samba LAN share (`~/Shared`) |
 | **Virtualization** | Docker, KVM / Libvirt | Container and virtual machine virtualization with SPICE USB redirection |
 | **Media & Images** | Viewnior + Swappy + VLC | Lightweight image viewer (`viewnior`), Wayland snapshot annotator (`swappy`), and media player |
 | **Browser Theme** | Custom Firefox `userChrome.css` | Glassmorphic dark translucent panels & AMOLED gold startpage |
@@ -114,7 +114,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   └── utils/
 │   │       └── xserver.nix             # GDM Wayland display manager, Hyprlock PAM auth, XDG desktop portals
 │   ├── scripts/
-│   │   ├── tui/                        # Unified FZF interactive terminal control suite (18 tools + launcher)
+│   │   ├── tui/                        # Unified FZF interactive terminal control suite (19 tools + launcher)
 │   │   │   ├── s                       # Master TUI command center & script launcher
 │   │   │   ├── audio                   # PipeWire & WirePlumber audio mixer & node routing
 │   │   │   ├── bluetooth               # Bluetooth device scanner, pairing, and battery status
@@ -131,6 +131,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   │   ├── setting                 # Desktop settings (brightness, power, idle, DND)
 │   │   │   ├── share                   # Samba LAN share & LogMeIn Hamachi VPN manager
 │   │   │   ├── task                    # Process monitor & MangoWM window controller
+│   │   │   ├── tb                      # TunnelBear VPN & per-app split tunneling manager (`tunnelbear` / `tb`)
 │   │   │   ├── theme                   # Waybar theme switcher (80+ presets), wallpapers, fonts
 │   │   │   ├── tm                      # Tmux session manager & project workspace jumper
 │   │   │   └── wifi                    # Wi-Fi network scanner, connection & signal monitor
@@ -150,8 +151,10 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── setting -> tui/setting      # Desktop settings dispatcher CLI wrapper
 │   │   ├── share -> tui/share          # File sharing & VPN manager CLI wrapper
 │   │   ├── task -> tui/task            # Process & window controller CLI wrapper
+│   │   ├── tb -> tui/tb                # TunnelBear VPN CLI wrapper
 │   │   ├── theme -> tui/theme          # Desktop theme switcher CLI wrapper
 │   │   ├── tm -> tui/tm                # Tmux session manager CLI wrapper
+│   │   ├── tunnelbear -> tui/tb        # TunnelBear VPN full command wrapper
 │   │   ├── wifi -> tui/wifi            # Wi-Fi network scanner CLI wrapper
 │   │   ├── agy-tokens.py               # Antigravity Global Token & Quota Reporter CLI
 │   │   ├── audio_menu.sh               # Rofi-driven PipeWire audio switcher (`audio-menu`)
@@ -236,9 +239,9 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 - **Default Image Applications**: Default image associations (PNG, JPEG, WebP, SVG, BMP, ICO) mapped to lightweight [Viewnior](https://github.com/hellnest/viewnior) with [Swappy](https://github.com/jtheoof/swappy) for annotations.
 
 ### 3. Package Management & System Menu Wrappers (`nixos/modules/pkgs.nix`)
-- Declares development toolchains (`lazygit`, `git`, `neovim`), audio tools (`pkgs_unstable.wiremix`), desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), network tools (`haguichi`, `cifs-utils`), and custom binary wrappers:
-  - **Master TUI Launcher**: `s` (interactive CLI & fzf command center unifying all 18 system tools).
-  - **18 Interactive TUI Tools**: `wifi`, `bluetooth` (`bt`), `ports` (`port`), `share`, `nixos` (`gens`), `service` (`services`), `disk` (`storage`), `task` (`tasks`), `log` (`logs`, `journal`), `repo` (`repos`, `gitui`), `tm` (`project`), `pkg` (`pkgs`), `container` (`containers`, `vm`), `conf` (`config`, `configs`), `audio`, `setting` (`settings`), `theme`, `clip` (`clips`).
+- Declares development toolchains (`lazygit`, `git`, `neovim`), networking & VPN utilities (`openvpn`, `haguichi`, `cifs-utils`), audio tools (`pkgs_unstable.wiremix`), desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), and custom binary wrappers:
+  - **Master TUI Launcher**: `s` (interactive CLI & fzf command center unifying all 19 system tools).
+  - **19 Interactive TUI Tools**: `wifi`, `bluetooth` (`bt`), `tb` (`tunnelbear`), `ports` (`port`), `share`, `nixos` (`gens`), `service` (`services`), `disk` (`storage`), `task` (`tasks`), `log` (`logs`, `journal`), `repo` (`repos`, `gitui`), `tm` (`project`), `pkg` (`pkgs`), `container` (`containers`, `vm`), `conf` (`config`, `configs`), `audio`, `setting` (`settings`), `theme`, `clip` (`clips`).
   - **System Test Suite**: `nixtest` (modular 14-subsystem verification suite).
   - **GUI / Rofi Menus**: `wifi-menu`, `bluetooth-menu`, `audio-menu`, `process-menu`, `disk-menu`, `clean-menu`, `config-menu`, `gtk-theme-menu`, `share-menu`.
   - **Core Helpers**: `share`, `nixreb`, `awake`, `controlbot`, `epic`, `twitch` (`tdrops`), `gfn`, `roblox`.
@@ -316,7 +319,7 @@ All custom system scripts are wrapped directly into NixOS binaries via `nixos/mo
 
 ---
 
-## 🎛️ Unified TUI Command Center & 18 Interactive Terminal Tools (`nixos/scripts/tui/`)
+## 🎛️ Unified TUI Command Center & 19 Interactive Terminal Tools (`nixos/scripts/tui/`)
 
 In addition to graphical Rofi menus, the system features a complete, standalone terminal control suite built on `fzf`, ANSI styling, live previews, and keyboard navigation.
 
@@ -325,17 +328,18 @@ Run `s` anywhere in the terminal to summon the interactive launcher. Filter tool
 
 ```bash
 s               # Open interactive fzf launcher with live category filters and preview
-s <tool>        # Directly invoke any tool or alias (e.g., 's wifi', 's bt', 's port')
-s --list        # Print clean, formatted tabular list of all 18 tools and aliases
+s <tool>        # Directly invoke any tool or alias (e.g., 's wifi', 's bt', 's tb', 's port')
+s --list        # Print clean, formatted tabular list of all 19 tools and aliases
 ```
 
 ### 📋 Complete Tool Suite
 
 | Command | Aliases | Category | Purpose & Interactive Features |
 | :--- | :--- | :--- | :--- |
-| [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) | — | **Launcher** | **Master Command Center**: Unified launcher searching all 18 tools by name, alias, and description. |
+| [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) | — | **Launcher** | **Master Command Center**: Unified launcher searching all 19 tools by name, alias, and description. |
 | [`wifi`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/wifi) | `wifi` | **Network** | **Wi-Fi Manager**: Scan nearby APs, monitor live signal dBm, connect with password prompt, display Wi-Fi QR codes, and WPS. |
 | [`bluetooth`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/bluetooth) | `bt` | **Network** | **Bluetooth Manager**: Controller power, scan, pair, trust, connect/disconnect audio devices & peripherals, battery % gauges. |
+| [`tb`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/tb) | `tunnelbear`, `vpn` | **Network** | **TunnelBear VPN & Split Tunneling**: Connect servers, usage-based ranking, per-app split tunneling (`tb run <cmd>`), live cloud quota sync, auto-connect disabled on boot. |
 | [`ports`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/ports) | `port`, `net` | **Network** | **Listening Ports & Dev Servers**: Real-time listening TCP/UDP sockets, bound processes, PIDs, and instant `kill` for stuck servers. |
 | [`share`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/share) | `share` | **Network** | **Samba & Hamachi File Sharing**: Manage Samba `/home/peng/Shared`, view Hamachi mesh VPN peers, and mount remote CIFS shares. |
 | [`nixos`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/nixos) | `gens` | **System** | **NixOS Generations & Rollback**: Generation history, active boot entry, closure size diffing (`nix profile diff-closures`), rollbacks, and GC. |
@@ -352,6 +356,22 @@ s --list        # Print clean, formatted tabular list of all 18 tools and aliase
 | [`setting`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/setting) | `settings` | **Desktop** | **Quick Settings**: Backlight brightness faders (`brightnessctl`), volume, power governor, screen idle inhibit, SwayNC DND toggle. |
 | [`theme`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/theme) | `theme` | **Desktop** | **Theme & Wallpaper Customizer**: Interactive selector for 80+ Waybar themes, dynamic wallpaper transitions, fonts, and cava styles. |
 | [`clip`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/clip) | `clips`, `clipboard` | **Desktop** | **Clipboard & Snippets**: Wayland clipboard history (`cliphist`), decode text/image entries with syntax preview, pin snippets, delete. |
+
+### 🐻 TunnelBear VPN & Per-App Split Tunneling (`tb`)
+The system integrates official TunnelBear OpenVPN profiles directly with NetworkManager, offering both full-system VPN routing and lightweight, application-specific split tunneling:
+- **Interactive TUI & Usage-Based Sorting**: Running `tb` opens an interactive FZF selector showing server locations ranked dynamically by usage frequency and recency.
+- **Per-App Split Tunneling**: Run specific commands or GUI applications exclusively through VPN without routing normal system traffic:
+  ```bash
+  tb run claude                     # Run Claude Desktop/browser exclusively over TunnelBear VPN
+  tb run curl https://ipinfo.io/ip  # Verify public VPN egress IP
+  tb app add claude                 # Configure application to always route via VPN
+  tb mode split                     # Toggle split-tunneling proxy mode (127.0.0.1:10808)
+  ```
+- **Cloud Quota Tracking & Live Sync**:
+  - `tb account` / `tb quota`: Displays remaining monthly GB allowance and active plan details.
+  - `tb sync`: Queries TunnelBear API to synchronize live quota usage.
+  - Automatic bandwidth tracking updates local usage metrics upon disconnection.
+- **Boot Safety**: All NetworkManager TunnelBear VPN profiles have `autoconnect=false` enforced to prevent unexpected routing or data leakage during system startup.
 
 ---
 
@@ -410,7 +430,7 @@ Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
 
 | Category | Abbreviation / Command | Target Action |
 | :--- | :--- | :--- |
-| **Control Center** | `s` / `s <tool>` | Master TUI launcher & interactive command center for 18 system tools |
+| **Control Center** | `s` / `s <tool>` | Master TUI launcher & interactive command center for 19 system tools |
 | **System** | `nixreb` | Sync dotfiles & rebuild NixOS flake (`nixreb.sh`) |
 | **System** | `gens` / `nixos` | Interactive NixOS generations, closure diffs & rollback manager |
 | **System** | `service` / `services` | Interactive Systemd user & system service manager |
@@ -419,6 +439,7 @@ Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
 | **System** | `nc` | Delete old Nix generations & run garbage collection |
 | **System** | `addchans` | Set up nixos-unstable and home-manager channels |
 | **Network** | `wifi` / `bt` / `bluetooth` | Interactive Wi-Fi & Bluetooth device managers |
+| **Network** | `tb` / `tunnelbear` | TunnelBear VPN with per-app split tunneling & cloud quota tracking |
 | **Network** | `ports` / `port` | Inspect listening TCP/UDP sockets and kill dev servers |
 | **Sharing** | `share` / `share-menu` | Interactive Hamachi VPN & Samba network file sharing manager |
 | **Dev** | `repo` / `repos` / `gitui` | Multi-repository Git radar across `~/Code` |
