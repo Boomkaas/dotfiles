@@ -871,6 +871,8 @@ mod_packages() {
   done
   has "pkgs.nix: libredb-studio declared" \
     "$NIXOS_DIR/modules/pkgs.nix" 'libredb-studio'
+  has "pkgs.nix: bruno declared" \
+    "$NIXOS_DIR/modules/pkgs.nix" '^\s+bruno$'
 
   # Unstable packages count
   local uc; uc=$(grep -c 'pkgs_unstable\.' "$NIXOS_DIR/modules/pkgs.nix" \
