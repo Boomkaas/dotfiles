@@ -213,6 +213,14 @@ let
         --replace-fail 'Exec=libredb-studio-desktop' 'Exec=libredb-studio'
       ln -s $out/share/applications/libredb-studio.desktop $out/share/applications/libredb-studio-desktop.desktop
       cp -r ${appimageContents}/usr/share/icons $out/share/
+
+      mv $out/bin/libredb-studio $out/bin/.libredb-studio-unwrapped
+      cat > $out/bin/libredb-studio <<EOF
+#!${pkgs.bash}/bin/bash
+export LD_PRELOAD="${pkgs.wayland}/lib/libwayland-client.so.0\''${LD_PRELOAD:+:\$LD_PRELOAD}"
+exec $out/bin/.libredb-studio-unwrapped "\$@"
+EOF
+      chmod +x $out/bin/libredb-studio
       ln -s $out/bin/libredb-studio $out/bin/libredb-studio-desktop
     '';
   };
