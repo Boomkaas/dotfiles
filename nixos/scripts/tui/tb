@@ -1239,13 +1239,15 @@ cmd_connect() {
             echo -e "${RED}Error: Failed to import OpenVPN profile '$ovpn_file' into NetworkManager.${RESET}" >&2
             return 1
         fi
+        nmcli connection modify "$con_name" connection.autoconnect no >/dev/null 2>&1 || true
     fi
 
-    # Set credentials and routing mode
+    # Set credentials, autoconnect policy (never autostart on boot), and routing mode
     local cur_mode
     cur_mode=$(get_mode)
     if [ "$cur_mode" = "split" ]; then
         nmcli connection modify "$con_name" \
+            connection.autoconnect no \
             +vpn.data "username=$AUTH_USER, password-flags=0" \
             vpn.user-name "$AUTH_USER" \
             vpn.secrets "password=$AUTH_PASS" \
@@ -1253,6 +1255,7 @@ cmd_connect() {
             ipv4.routing-rules "priority 1000 from 10.0.0.0/8 table 51820, priority 1001 from 172.16.0.0/12 table 51820" >/dev/null 2>&1
     else
         nmcli connection modify "$con_name" \
+            connection.autoconnect no \
             +vpn.data "username=$AUTH_USER, password-flags=0" \
             vpn.user-name "$AUTH_USER" \
             vpn.secrets "password=$AUTH_PASS" \
@@ -1404,6 +1407,7 @@ cmd_login() {
     while IFS= read -r con; do
         [ -z "$con" ] && continue
         nmcli connection modify "$con" \
+            connection.autoconnect no \
             +vpn.data "username=$user, password-flags=0" \
             vpn.user-name "$user" \
             vpn.secrets "password=$pass" >/dev/null 2>&1 || true
@@ -1771,12 +1775,14 @@ cmd_mode() {
         echo -e "${CYAN}Applying $target_mode mode to active connection '$active_con'...${RESET}"
         if [ "$target_mode" = "split" ]; then
             nmcli connection modify "$active_con" \
+                connection.autoconnect no \
                 ipv4.route-table 51820 \
                 ipv4.routing-rules "priority 1000 from 10.0.0.0/8 table 51820, priority 1001 from 172.16.0.0/12 table 51820" >/dev/null 2>&1
             nmcli connection up id "$active_con" >/dev/null 2>&1 || true
             start_proxy
         else
             nmcli connection modify "$active_con" \
+                connection.autoconnect no \
                 ipv4.route-table 0 \
                 ipv4.routing-rules "" >/dev/null 2>&1
             nmcli connection up id "$active_con" >/dev/null 2>&1 || true
