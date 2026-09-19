@@ -194,6 +194,28 @@ let
     name = "tlauncher";
     paths = [ tlauncher-bin tlauncher-desktop ];
   };
+  libredb-studio = let
+    pname = "libredb-studio";
+    version = "0.16.1";
+    src = pkgs.fetchurl {
+      url = "https://github.com/libredb/libredb-studio/releases/download/${version}/libredb-studio-desktop-${version}-linux-x64.AppImage";
+      hash = "sha256-t04PnFPa8thQF/6SplJxosU2qnptiWuPG0v9QgmS2rI=";
+    };
+    appimageContents = pkgs.appimageTools.extractType2 {
+      inherit pname version src;
+    };
+  in pkgs.appimageTools.wrapType2 {
+    inherit pname version src;
+
+    extraInstallCommands = ''
+      install -m 444 -D ${appimageContents}/libredb-studio-desktop.desktop $out/share/applications/libredb-studio.desktop
+      substituteInPlace $out/share/applications/libredb-studio.desktop \
+        --replace-fail 'Exec=libredb-studio-desktop' 'Exec=libredb-studio'
+      ln -s $out/share/applications/libredb-studio.desktop $out/share/applications/libredb-studio-desktop.desktop
+      cp -r ${appimageContents}/usr/share/icons $out/share/
+      ln -s $out/bin/libredb-studio $out/bin/libredb-studio-desktop
+    '';
+  };
   wayland-vpet = pkgs.llvmPackages_19.stdenv.mkDerivation rec {
     pname = "wayland-vpets";
     version = "5.0.2";
@@ -588,7 +610,9 @@ in
     gparted
     cifs-utils
     postman
+    bruno
     pgadmin4-desktopmode
+    libredb-studio
     glib
     procps
     iputils

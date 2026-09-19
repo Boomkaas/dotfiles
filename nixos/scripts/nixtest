@@ -869,6 +869,8 @@ mod_packages() {
       _warn "Package: $pkg not found by simple grep in pkgs.nix"
     fi
   done
+  has "pkgs.nix: libredb-studio declared" \
+    "$NIXOS_DIR/modules/pkgs.nix" 'libredb-studio'
 
   # Unstable packages count
   local uc; uc=$(grep -c 'pkgs_unstable\.' "$NIXOS_DIR/modules/pkgs.nix" \
