@@ -523,7 +523,7 @@ mod_scripts() {
   done < <(find "$SCRIPTS_DIR" -name "*.sh" -print0 2>/dev/null)
 
   # Scripts without extension
-  for name in awake bluetooth wifi setting theme epic twitch share audio nixos gens tm project service services task tasks conf configs disk storage repo repos gitui ports port clip clips log logs journal container containers vm pkg pkgs s; do
+  for name in awake bluetooth wifi setting theme epic twitch share audio nixos gens tm project service services task tasks conf configs disk storage repo repos gitui ports port clip clips log logs journal container containers vm pkg pkgs s tunnelbear tb; do
     local f="$SCRIPTS_DIR/$name"
     [[ -f "$f" ]] && check "bash -n: $name" bash -n "$f"
   done

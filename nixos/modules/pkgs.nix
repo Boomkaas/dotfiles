@@ -157,6 +157,12 @@ let
   nixtest = pkgs.writeShellScriptBin "nixtest" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
   '';
+  tunnelbear-cmd = pkgs.writeShellScriptBin "tunnelbear" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tunnelbear "$@"
+  '';
+  tb-cmd = pkgs.writeShellScriptBin "tb" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tunnelbear "$@"
+  '';
   gfn = pkgs.writeShellScriptBin "gfn" ''
     nohup flatpak run com.nvidia.geforcenow > /dev/null 2>&1 &
   '';
@@ -567,6 +573,8 @@ in
     pkgs-tool
     s-cmd
     nixtest
+    tunnelbear-cmd
+    tb-cmd
 
     # Archive
     zip
@@ -575,6 +583,7 @@ in
     p7zip
 
     # System / Misc
+    openvpn
     jq
     gparted
     cifs-utils

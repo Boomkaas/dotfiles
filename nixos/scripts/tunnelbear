@@ -1,0 +1,794 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# tunnelbear - TunnelBear VPN Manager for Linux / NixOS (CLI & fzf TUI)
+# Uses NetworkManager & official OpenVPN configurations.
+# ==============================================================================
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/tunnelbear"
+OVPN_DIR="$CONFIG_DIR/ovpn"
+AUTH_FILE="$CONFIG_DIR/auth.txt"
+S3_ZIP_URL="https://tunnelbear.s3.amazonaws.com/support/linux/openvpn.zip"
+
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
+# ------------------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------------------
+
+get_active_con() {
+    nmcli -t -f NAME,TYPE,STATE con show --active 2>/dev/null | awk -F: '$2=="vpn" && $1 ~ /^TunnelBear/ { print $1; exit }'
+}
+
+get_active_country() {
+    local con
+    con=$(get_active_con)
+    if [ -n "$con" ]; then
+        echo "${con#TunnelBear }"
+    fi
+}
+
+get_public_ip() {
+    curl -s --max-time 2.5 https://ipinfo.io/ip 2>/dev/null || curl -s --max-time 2.5 https://icanhazip.com 2>/dev/null || echo "Unknown"
+}
+
+country_to_flag() {
+    local c="$1"
+    case "$c" in
+        "Argentina") echo "🇦🇷" ;;
+        "Australia") echo "🇦🇺" ;;
+        "Austria") echo "🇦🇹" ;;
+        "Belgium") echo "🇧🇪" ;;
+        "Brazil") echo "🇧🇷" ;;
+        "Bulgaria") echo "🇧🇬" ;;
+        "Canada") echo "🇨🇦" ;;
+        "Chile") echo "🇨🇱" ;;
+        "Colombia") echo "🇨🇴" ;;
+        "Cyprus") echo "🇨🇾" ;;
+        "Czech Republic") echo "🇨🇿" ;;
+        "Denmark") echo "🇩🇰" ;;
+        "Finland") echo "🇫🇮" ;;
+        "France") echo "🇫🇷" ;;
+        "Germany") echo "🇩🇪" ;;
+        "Greece") echo "🇬🇷" ;;
+        "Hungary") echo "🇭🇺" ;;
+        "Ireland") echo "🇮🇪" ;;
+        "Italy") echo "🇮🇹" ;;
+        "Japan") echo "🇯🇵" ;;
+        "Kenya") echo "🇰🇪" ;;
+        "Latvia") echo "🇱🇻" ;;
+        "Lithuania") echo "🇱🇹" ;;
+        "Malaysia") echo "🇲🇾" ;;
+        "Mexico") echo "🇲🇽" ;;
+        "Moldova") echo "🇲🇩" ;;
+        "Netherlands") echo "🇳🇱" ;;
+        "New Zealand") echo "🇳🇿" ;;
+        "Nigeria") echo "🇳🇬" ;;
+        "Norway") echo "🇳🇴" ;;
+        "Peru") echo "🇵🇪" ;;
+        "Poland") echo "🇵🇱" ;;
+        "Portugal") echo "🇵🇹" ;;
+        "Romania") echo "🇷🇴" ;;
+        "Serbia") echo "🇷🇸" ;;
+        "Singapore") echo "🇸🇬" ;;
+        "Slovenia") echo "🇸🇮" ;;
+        "South Africa") echo "🇿🇦" ;;
+        "South Korea") echo "🇰🇷" ;;
+        "Spain") echo "🇪🇸" ;;
+        "Sweden") echo "🇸🇪" ;;
+        "Switzerland") echo "🇨🇭" ;;
+        "Taiwan") echo "🇹🇼" ;;
+        "United Kingdom") echo "🇬🇧" ;;
+        "United States"*) echo "🇺🇸" ;;
+        *) echo "🐻" ;;
+    esac
+}
+
+ensure_configs() {
+    mkdir -p "$OVPN_DIR"
+    local count
+    count=$(find "$OVPN_DIR" -maxdepth 1 -name "*.ovpn" 2>/dev/null | wc -l)
+    if [ "$count" -lt 5 ]; then
+        echo -e "${CYAN}TunnelBear server configurations not found in $OVPN_DIR.${RESET}"
+        echo -e "${CYAN}Downloading official TunnelBear OpenVPN profiles...${RESET}"
+        cmd_update
+    fi
+}
+
+ensure_auth() {
+    if [ -f "$AUTH_FILE" ]; then
+        local user pass
+        user=$(sed -n '1p' "$AUTH_FILE" | xargs)
+        pass=$(sed -n '2p' "$AUTH_FILE" | xargs)
+        if [ -n "$user" ] && [ -n "$pass" ]; then
+            AUTH_USER="$user"
+            AUTH_PASS="$pass"
+            return 0
+        fi
+    fi
+
+    echo -e "${YELLOW}TunnelBear account credentials required to connect.${RESET}"
+    echo -e "${DIM}These will be used to authenticate with TunnelBear OpenVPN servers.${RESET}"
+    echo ""
+    read -rp "TunnelBear Account Email: " AUTH_USER
+    if [ -z "$AUTH_USER" ]; then
+        echo -e "${RED}Error: Email cannot be empty.${RESET}" >&2
+        return 1
+    fi
+
+    read -rsp "TunnelBear Account Password: " AUTH_PASS
+    echo ""
+    if [ -z "$AUTH_PASS" ]; then
+        echo -e "${RED}Error: Password cannot be empty.${RESET}" >&2
+        return 1
+    fi
+
+    read -rp "Save credentials securely to $AUTH_FILE? [Y/n]: " save_opt
+    if [[ ! "$save_opt" =~ ^[Nn]$ ]]; then
+        mkdir -p "$CONFIG_DIR"
+        printf "%s\n%s\n" "$AUTH_USER" "$AUTH_PASS" > "$AUTH_FILE"
+        chmod 600 "$AUTH_FILE"
+        echo -e "${GREEN}✓ Credentials saved with permissions 600.${RESET}"
+    fi
+    return 0
+}
+
+# ------------------------------------------------------------------------------
+# Commands
+# ------------------------------------------------------------------------------
+
+cmd_status() {
+    local active_con active_country
+    active_con=$(get_active_con)
+    active_country=$(get_active_country)
+
+    echo -e "${BOLD}${CYAN}=== TunnelBear VPN Status ===${RESET}"
+    if [ -n "$active_con" ]; then
+        local flag
+        flag=$(country_to_flag "$active_country")
+        echo -e "  ${BOLD}State:${RESET}          ${GREEN}● Connected${RESET}"
+        echo -e "  ${BOLD}Server:${RESET}         $flag ${BOLD}${GREEN}$active_country${RESET} (${DIM}$active_con${RESET})"
+
+        local dev_line ip4_line gw_line
+        dev_line=$(nmcli -t -f GENERAL.DEVICES con show "$active_con" 2>/dev/null | head -n 1 | cut -d: -f2)
+        ip4_line=$(nmcli -t -f IP4.ADDRESS con show "$active_con" 2>/dev/null | head -n 1 | cut -d: -f2)
+        gw_line=$(nmcli -t -f IP4.GATEWAY con show "$active_con" 2>/dev/null | head -n 1 | cut -d: -f2)
+
+        [ -n "$dev_line" ] && echo -e "  ${BOLD}Interface:${RESET}      $dev_line"
+        [ -n "$ip4_line" ]  && echo -e "  ${BOLD}VPN IPv4:${RESET}       $ip4_line"
+        [ -n "$gw_line" ]   && echo -e "  ${BOLD}Gateway:${RESET}        $gw_line"
+
+        echo -e "  ${BOLD}Public IP:${RESET}      ${CYAN}$(get_public_ip)${RESET}"
+    else
+        echo -e "  ${BOLD}State:${RESET}          ${YELLOW}○ Disconnected${RESET}"
+        echo -e "  ${BOLD}Public IP:${RESET}      ${DIM}$(get_public_ip)${RESET}"
+    fi
+
+    local imported_count
+    imported_count=$(nmcli -t -f NAME con show 2>/dev/null | grep '^TunnelBear ' | wc -l)
+    local available_count
+    available_count=$(find "$OVPN_DIR" -maxdepth 1 -name "*.ovpn" 2>/dev/null | wc -l)
+    echo -e "  ${BOLD}Profiles:${RESET}       $available_count available / $imported_count imported into NetworkManager"
+    [ -f "$AUTH_FILE" ] && echo -e "  ${BOLD}Credentials:${RESET}    ${GREEN}Configured (~/.config/tunnelbear/auth.txt)${RESET}" || echo -e "  ${BOLD}Credentials:${RESET}    ${YELLOW}Not saved (will prompt upon connect)${RESET}"
+}
+
+cmd_list() {
+    ensure_configs
+    local active_con
+    active_con=$(get_active_con)
+
+    echo -e "${BOLD}${CYAN}=== Available TunnelBear Locations ===${RESET}"
+    printf "${BOLD}%-3s %-4s %-26s %-28s %-6s${RESET}\n" "ST" "" "COUNTRY / REGION" "REMOTE HOST" "PORT"
+    echo -e "${DIM}----------------------------------------------------------------------------${RESET}"
+
+    local count=0
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        local bname country con_name
+        bname=$(basename "$f" .ovpn)
+        country="${bname#TunnelBear }"
+        con_name="TunnelBear $country"
+
+        local st="  "
+        if [ "$con_name" = "$active_con" ]; then
+            st="${GREEN}✓ ${RESET}"
+        fi
+
+        local flag
+        flag=$(country_to_flag "$country")
+
+        local remote_line r_host r_port
+        remote_line=$(grep -E '^\s*remote\s+' "$f" | head -n 1)
+        r_host=$(echo "$remote_line" | awk '{print $2}')
+        r_port=$(echo "$remote_line" | awk '{print $3}')
+
+        printf "%s %-4s %-26s %-28s %-6s\n" "$st" "$flag" "$country" "${r_host:---}" "${r_port:---}"
+        ((count++)) || true
+    done < <(find "$OVPN_DIR" -maxdepth 1 -name "TunnelBear *.ovpn" | sort)
+
+    echo ""
+    echo -e "${DIM}Total: $count locations | Connect with: tunnelbear connect <country>${RESET}"
+}
+
+find_ovpn() {
+    local query="$1"
+    ensure_configs
+
+    # Common aliases
+    case "${query,,}" in
+        us|usa|"united states") query="United States East" ;;
+        "us central") query="United States Central" ;;
+        "us west") query="United States West" ;;
+        "us east") query="United States East" ;;
+        uk|"great britain"|britain) query="United Kingdom" ;;
+        korea|kr) query="South Korea" ;;
+    esac
+
+    # 1. Exact country match
+    local exact
+    exact="$OVPN_DIR/TunnelBear $query.ovpn"
+    if [ -f "$exact" ]; then
+        echo "$exact"
+        return 0
+    fi
+
+    # 2. Case-insensitive exact match
+    local ci_exact
+    ci_exact=$(find "$OVPN_DIR" -maxdepth 1 -iname "TunnelBear $query.ovpn" -print -quit)
+    if [ -n "$ci_exact" ] && [ -f "$ci_exact" ]; then
+        echo "$ci_exact"
+        return 0
+    fi
+
+    # 3. Case-insensitive substring match
+    local matches=()
+    while IFS= read -r m; do
+        [ -n "$m" ] && matches+=("$m")
+    done < <(find "$OVPN_DIR" -maxdepth 1 -iname "*$query*.ovpn")
+
+    if [ ${#matches[@]} -eq 1 ]; then
+        echo "${matches[0]}"
+        return 0
+    elif [ ${#matches[@]} -gt 1 ]; then
+        # If multiple, prefer prefix match or return first
+        for m in "${matches[@]}"; do
+            local bn
+            bn=$(basename "$m" .ovpn)
+            if [[ "${bn,,}" == "tunnelbear ${query,,}"* ]]; then
+                echo "$m"
+                return 0
+            fi
+        done
+        echo "${matches[0]}"
+        return 0
+    fi
+
+    return 1
+}
+
+cmd_connect() {
+    local target="${1:-}"
+
+    if [ -z "$target" ]; then
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+            return 0
+        else
+            echo -e "${RED}Error: Specify a country/region to connect to.${RESET}" >&2
+            echo -e "${YELLOW}Usage:${RESET} tunnelbear connect <country>"
+            echo -e "       Run '${CYAN}tunnelbear list${RESET}' to see available locations."
+            return 1
+        fi
+    fi
+
+    ensure_configs
+
+    local ovpn_file
+    ovpn_file=$(find_ovpn "$target") || {
+        echo -e "${RED}Error: No TunnelBear server location matching '$target' found.${RESET}" >&2
+        echo -e "Run '${CYAN}tunnelbear list${RESET}' to view all 45+ locations."
+        return 1
+    }
+
+    local bname country con_name flag
+    bname=$(basename "$ovpn_file" .ovpn)
+    country="${bname#TunnelBear }"
+    con_name="TunnelBear $country"
+    flag=$(country_to_flag "$country")
+
+    local active_con
+    active_con=$(get_active_con)
+    if [ "$active_con" = "$con_name" ]; then
+        echo -e "${GREEN}✓ Already connected to $flag $country ($con_name).${RESET}"
+        return 0
+    fi
+
+    AUTH_USER=""
+    AUTH_PASS=""
+    ensure_auth || return 1
+
+    # Disconnect any currently active TunnelBear connection
+    if [ -n "$active_con" ]; then
+        echo -e "${YELLOW}Disconnecting active connection: $active_con...${RESET}"
+        nmcli connection down id "$active_con" >/dev/null 2>&1 || true
+    fi
+
+    echo -e "${CYAN}Preparing connection for $flag ${BOLD}$country${RESET}..."
+
+    # Check if connection profile exists in NetworkManager
+    if ! nmcli connection show "$con_name" >/dev/null 2>&1; then
+        echo -e "${DIM}Importing $con_name profile into NetworkManager...${RESET}"
+        if ! nmcli connection import type openvpn file "$ovpn_file" >/dev/null; then
+            echo -e "${RED}Error: Failed to import OpenVPN profile '$ovpn_file' into NetworkManager.${RESET}" >&2
+            return 1
+        fi
+    fi
+
+    # Set credentials and auto-connect flags
+    nmcli connection modify "$con_name" \
+        +vpn.data "username=$AUTH_USER, password-flags=0" \
+        vpn.user-name "$AUTH_USER" \
+        vpn.secrets "password=$AUTH_PASS" >/dev/null 2>&1
+
+    echo -e "${CYAN}Establishing secure tunnel to $flag ${BOLD}$country${RESET}..."
+    if nmcli connection up id "$con_name"; then
+        local new_ip
+        new_ip=$(get_public_ip)
+        echo ""
+        echo -e "${GREEN}${BOLD}✓ TunnelBear Connected!${RESET}"
+        echo -e "  ${BOLD}Location:${RESET}  $flag $country"
+        echo -e "  ${BOLD}Public IP:${RESET} ${CYAN}$new_ip${RESET}"
+        
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send -a "TunnelBear" -i network-vpn "TunnelBear VPN" "Connected to $country\nPublic IP: $new_ip" 2>/dev/null || true
+        fi
+        return 0
+    else
+        echo -e "${RED}✗ Failed to connect to $con_name.${RESET}" >&2
+        echo -e "${YELLOW}Tip:${RESET} Verify your account credentials with '${CYAN}tunnelbear login${RESET}'."
+        return 1
+    fi
+}
+
+cmd_disconnect() {
+    local active_con
+    active_con=$(get_active_con)
+
+    if [ -z "$active_con" ]; then
+        echo -e "${YELLOW}No active TunnelBear VPN connection found.${RESET}"
+        return 0
+    fi
+
+    local country
+    country=$(get_active_country)
+    echo -e "${YELLOW}Disconnecting from $active_con...${RESET}"
+    if nmcli connection down id "$active_con" >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Successfully disconnected from TunnelBear ($country).${RESET}"
+        echo -e "  ${BOLD}Public IP:${RESET} $(get_public_ip)"
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send -a "TunnelBear" -i network-vpn "TunnelBear VPN" "Disconnected ($country)" 2>/dev/null || true
+        fi
+    else
+        echo -e "${RED}Failed to disconnect $active_con via NetworkManager.${RESET}" >&2
+        return 1
+    fi
+}
+
+cmd_login() {
+    echo -e "${BOLD}${CYAN}=== TunnelBear Account Login ===${RESET}"
+    echo -e "Set your TunnelBear email and password for automatic authentication."
+    echo ""
+
+    local user pass
+    read -rp "TunnelBear Account Email: " user
+    if [ -z "$user" ]; then
+        echo -e "${RED}Error: Email cannot be empty.${RESET}" >&2
+        return 1
+    fi
+
+    read -rsp "TunnelBear Account Password: " pass
+    echo ""
+    if [ -z "$pass" ]; then
+        echo -e "${RED}Error: Password cannot be empty.${RESET}" >&2
+        return 1
+    fi
+
+    mkdir -p "$CONFIG_DIR"
+    printf "%s\n%s\n" "$user" "$pass" > "$AUTH_FILE"
+    chmod 600 "$AUTH_FILE"
+
+    echo -e "${GREEN}✓ Credentials saved securely to $AUTH_FILE (mode 0600).${RESET}"
+
+    # Update all existing imported TunnelBear profiles in NetworkManager
+    local count=0
+    while IFS= read -r con; do
+        [ -z "$con" ] && continue
+        nmcli connection modify "$con" \
+            +vpn.data "username=$user, password-flags=0" \
+            vpn.user-name "$user" \
+            vpn.secrets "password=$pass" >/dev/null 2>&1 || true
+        ((count++)) || true
+    done < <(nmcli -t -f NAME con show 2>/dev/null | grep '^TunnelBear ')
+
+    if [ "$count" -gt 0 ]; then
+        echo -e "${DIM}Updated credentials across $count imported NetworkManager profiles.${RESET}"
+    fi
+}
+
+cmd_update() {
+    echo -e "${CYAN}Downloading latest OpenVPN configurations from TunnelBear...${RESET}"
+    mkdir -p "$OVPN_DIR"
+
+    local tmp_zip
+    tmp_zip=$(mktemp -t "tunnelbear_zip.XXXXXX")
+    if ! curl -sL "$S3_ZIP_URL" -o "$tmp_zip"; then
+        echo -e "${RED}Error: Failed to download OpenVPN configs from $S3_ZIP_URL.${RESET}" >&2
+        rm -f "$tmp_zip"
+        return 1
+    fi
+
+    echo -e "${DIM}Extracting archive...${RESET}"
+    unzip -q -o "$tmp_zip" -d "$OVPN_DIR/"
+    rm -f "$tmp_zip"
+    rm -rf "$OVPN_DIR/__MACOSX"
+
+    # Rename any accidentally named .ovpn.txt
+    for f in "$OVPN_DIR"/*.ovpn.txt; do
+        [ -f "$f" ] && mv "$f" "${f%.txt}"
+    done
+
+    # Embed CA certificate inline inside every .ovpn file for maximum portability
+    local ca_file="$OVPN_DIR/openvpn-server-ca.crt"
+    if [ -f "$ca_file" ]; then
+        python3 -c "
+import os, glob
+
+ovpn_dir = '$OVPN_DIR'
+ca_path = '$ca_file'
+with open(ca_path, 'r') as f:
+    ca_content = f.read().strip()
+
+for filepath in glob.glob(os.path.join(ovpn_dir, '*.ovpn')):
+    with open(filepath, 'r') as f:
+        content = f.read()
+    if '<ca>' not in content:
+        content = content.replace('ca openvpn-server-ca.crt', f'<ca>\n{ca_content}\n</ca>')
+        with open(filepath, 'w') as f:
+            f.write(content)
+" 2>/dev/null || true
+    fi
+
+    local count
+    count=$(find "$OVPN_DIR" -maxdepth 1 -name "*.ovpn" | wc -l)
+    echo -e "${GREEN}✓ Successfully updated $count TunnelBear server profiles in $OVPN_DIR.${RESET}"
+}
+
+cmd_preview() {
+    local target="${1:-}"
+
+    if [ -z "$target" ] || [[ "$target" == __action_* ]] || [[ "$target" == __divider__ ]] || [[ "$target" == __none__ ]]; then
+        echo -e "${BOLD}${CYAN}=== TunnelBear Overview ===${RESET}"
+        echo ""
+        cmd_status
+        echo ""
+        echo -e "${BOLD}Keyboard Shortcuts:${RESET}"
+        echo -e "  ${CYAN}Enter${RESET}   Connect / Select action"
+        echo -e "  ${CYAN}Ctrl-D${RESET}  Disconnect active VPN"
+        echo -e "  ${CYAN}Ctrl-S${RESET}  View status details"
+        echo -e "  ${CYAN}Ctrl-L${RESET}  Login / manage credentials"
+        echo -e "  ${CYAN}Ctrl-U${RESET}  Update server configurations"
+        echo -e "  ${CYAN}Esc${RESET}     Exit menu"
+        return 0
+    fi
+
+    local ovpn_file
+    ovpn_file=$(find_ovpn "$target" 2>/dev/null || true)
+    if [ -z "$ovpn_file" ] || [ ! -f "$ovpn_file" ]; then
+        echo -e "${YELLOW}No profile details found for $target.${RESET}"
+        return 0
+    fi
+
+    local bname country con_name flag
+    bname=$(basename "$ovpn_file" .ovpn)
+    country="${bname#TunnelBear }"
+    con_name="TunnelBear $country"
+    flag=$(country_to_flag "$country")
+
+    local active_con
+    active_con=$(get_active_con)
+    local is_active=0
+    [ "$con_name" = "$active_con" ] && is_active=1
+
+    echo -e "${BOLD}${CYAN}=== TunnelBear Location Details ===${RESET}"
+    echo -e "  ${BOLD}Location:${RESET}     $flag ${BOLD}$country${RESET} $([ "$is_active" -eq 1 ] && echo -e "${GREEN}(Active / Connected)${RESET}")"
+    echo -e "  ${BOLD}Profile:${RESET}      $con_name"
+
+    local r_host r_port r_proto
+    r_host=$(grep -E '^\s*remote\s+' "$ovpn_file" | head -n 1 | awk '{print $2}')
+    r_port=$(grep -E '^\s*remote\s+' "$ovpn_file" | head -n 1 | awk '{print $3}')
+    r_proto=$(grep -E '^\s*proto\s+' "$ovpn_file" | head -n 1 | awk '{print $2}')
+    local cipher
+    cipher=$(grep -E '^\s*data-ciphers\s+' "$ovpn_file" | head -n 1 | cut -d' ' -f2-)
+    [ -z "$cipher" ] && cipher=$(grep -E '^\s*cipher\s+' "$ovpn_file" | head -n 1 | awk '{print $2}')
+
+    echo -e "  ${BOLD}Remote Host:${RESET}  ${r_host:---}"
+    echo -e "  ${BOLD}Port/Proto:${RESET}   ${r_port:---} / ${r_proto:-udp}"
+    echo -e "  ${BOLD}Cipher:${RESET}       ${cipher:-AES-256-CBC}"
+    echo -e "  ${BOLD}CA Cert:${RESET}      ${GREEN}Embedded (Self-contained)${RESET}"
+
+    echo ""
+    echo -e "${BOLD}${CYAN}=== NetworkManager Status ===${RESET}"
+    if nmcli connection show "$con_name" >/dev/null 2>&1; then
+        echo -e "  ${BOLD}Imported:${RESET}     ${GREEN}Yes${RESET}"
+        local vpn_user
+        vpn_user=$(nmcli -t -f vpn.user-name con show "$con_name" 2>/dev/null | cut -d: -f2)
+        [ -n "$vpn_user" ] && echo -e "  ${BOLD}User:${RESET}         $vpn_user"
+    else
+        echo -e "  ${BOLD}Imported:${RESET}     ${YELLOW}No (will auto-import on connect)${RESET}"
+    fi
+
+    if [ "$is_active" -eq 1 ]; then
+        echo ""
+        echo -e "${BOLD}${CYAN}=== Active Link ===${RESET}"
+        local dev ip4
+        dev=$(nmcli -t -f GENERAL.DEVICES con show "$con_name" 2>/dev/null | head -n 1 | cut -d: -f2)
+        ip4=$(nmcli -t -f IP4.ADDRESS con show "$con_name" 2>/dev/null | head -n 1 | cut -d: -f2)
+        echo -e "  ${BOLD}Device:${RESET}       $dev"
+        echo -e "  ${BOLD}IPv4:${RESET}         $ip4"
+    fi
+
+    echo ""
+    echo -e "${BOLD}Action:${RESET} Press ${CYAN}Enter${RESET} to $([ "$is_active" -eq 1 ] && echo "reconnect" || echo "connect to $country")"
+}
+
+# ------------------------------------------------------------------------------
+# Interactive Menu (fzf TUI)
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    if ! command -v fzf >/dev/null 2>&1; then
+        cmd_status
+        echo ""
+        cmd_list
+        return 0
+    fi
+
+    ensure_configs
+    local self_bin="${BASH_SOURCE[0]}"
+
+    while true; do
+        clear
+        local active_con active_country header_info
+        active_con=$(get_active_con)
+        active_country=$(get_active_country)
+
+        if [ -n "$active_con" ]; then
+            header_info="Connected: $active_country ($(get_public_ip))"
+        else
+            header_info="Disconnected ($(get_public_ip))"
+        fi
+
+        local menu=()
+        if [ -n "$active_con" ]; then
+            menu+=("󰤮  Disconnect from \"$active_country\""$'\t'"__action_disconnect__")
+        fi
+        menu+=("󰢮  View Status Details"$'\t'"__action_status__")
+        menu+=("󰌾  Account Credentials / Login"$'\t'"__action_login__")
+        menu+=("󰑐  Update Server Configurations"$'\t'"__action_update__")
+        menu+=("─────────────────────────────────────────────────────────────"$'\t'"__divider__")
+
+        local loc_lines=()
+        while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            local bname country con_name
+            bname=$(basename "$f" .ovpn)
+            country="${bname#TunnelBear }"
+            con_name="TunnelBear $country"
+
+            local mark="  "
+            if [ "$con_name" = "$active_con" ]; then
+                mark="✓ "
+            fi
+
+            local flag
+            flag=$(country_to_flag "$country")
+
+            local disp
+            disp=$(printf "%s%s  %-24s" "$mark" "$flag" "$country")
+            loc_lines+=("${disp}"$'\t'"${country}")
+        done < <(find "$OVPN_DIR" -maxdepth 1 -name "TunnelBear *.ovpn" | sort)
+
+        if [ ${#loc_lines[@]} -gt 0 ]; then
+            for line in "${loc_lines[@]}"; do
+                menu+=("$line")
+            done
+        else
+            menu+=("--- No configurations found ---"$'\t'"__none__")
+        fi
+
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-d,ctrl-s,ctrl-l,ctrl-u \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:48%:wrap \
+            --prompt="🐻 TunnelBear > " \
+            --header="[$header_info] (Enter: Connect | Ctrl-D: Disconnect | Ctrl-S: Status | Ctrl-L: Login)" \
+            --reverse \
+            --height=70% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local sel_arg
+        sel_arg=$(echo "$choice" | cut -f2)
+
+        case "$key" in
+            ctrl-d)
+                cmd_disconnect
+                sleep 1
+                continue
+                ;;
+            ctrl-s)
+                clear
+                cmd_status
+                echo ""
+                read -rp "Press Enter to return..."
+                continue
+                ;;
+            ctrl-l)
+                clear
+                cmd_login
+                echo ""
+                read -rp "Press Enter to return..."
+                continue
+                ;;
+            ctrl-u)
+                clear
+                cmd_update
+                echo ""
+                read -rp "Press Enter to return..."
+                continue
+                ;;
+        esac
+
+        case "$sel_arg" in
+            __action_disconnect__)
+                cmd_disconnect
+                sleep 1
+                ;;
+            __action_status__)
+                clear
+                cmd_status
+                echo ""
+                read -rp "Press Enter to return..."
+                ;;
+            __action_login__)
+                clear
+                cmd_login
+                echo ""
+                read -rp "Press Enter to return..."
+                ;;
+            __action_update__)
+                clear
+                cmd_update
+                echo ""
+                read -rp "Press Enter to return..."
+                ;;
+            __divider__|__none__)
+                continue
+                ;;
+            *)
+                cmd_connect "$sel_arg"
+                echo ""
+                read -rp "Press Enter to continue..."
+                ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------------------------
+# Usage Help
+# ------------------------------------------------------------------------------
+
+cmd_help() {
+    cat <<EOF
+${BOLD}${CYAN}tunnelbear${RESET} — TunnelBear VPN Manager (CLI & fzf TUI)
+
+${BOLD}USAGE:${RESET}
+    tunnelbear [COMMAND] [ARGS...]
+    tb [COMMAND] [ARGS...]
+
+${BOLD}COMMANDS:${RESET}
+    ${CYAN}(none)${RESET}                       Launch interactive fzf menu
+    ${CYAN}connect${RESET} <country>           Connect to a server (e.g. 'japan', 'us', 'germany')
+    ${CYAN}disconnect${RESET}, ${CYAN}down${RESET}, ${CYAN}off${RESET}        Disconnect active VPN
+    ${CYAN}status${RESET}                       Show current connection state and public IP
+    ${CYAN}list${RESET}, ${CYAN}ls${RESET}                      List all 47 available country locations
+    ${CYAN}login${RESET}, ${CYAN}auth${RESET}                    Save TunnelBear account email & password
+    ${CYAN}update${RESET}                       Re-download latest server profiles from S3
+    ${CYAN}help${RESET}, ${CYAN}-h${RESET}, ${CYAN}--help${RESET}             Show this help screen
+
+${BOLD}EXAMPLES:${RESET}
+    tunnelbear connect japan
+    tunnelbear connect us
+    tunnelbear connect "united kingdom"
+    tunnelbear disconnect
+    tunnelbear status
+    tb
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Entrypoint
+# ------------------------------------------------------------------------------
+
+ACTION="${1:-}"
+shift 2>/dev/null || true
+
+case "$ACTION" in
+    ""|menu)
+        cmd_interactive
+        ;;
+    connect|up|on)
+        cmd_connect "$*"
+        ;;
+    disconnect|down|off|stop)
+        cmd_disconnect
+        ;;
+    status)
+        cmd_status
+        ;;
+    list|ls)
+        cmd_list
+        ;;
+    login|auth)
+        cmd_login
+        ;;
+    update)
+        cmd_update
+        ;;
+    preview)
+        cmd_preview "$*"
+        ;;
+    help|-h|--help)
+        cmd_help
+        ;;
+    *)
+        # If argument matches a country name directly, treat as connect
+        if [ -n "$ACTION" ]; then
+            cmd_connect "$ACTION $*"
+        else
+            cmd_help
+        fi
+        ;;
+esac
