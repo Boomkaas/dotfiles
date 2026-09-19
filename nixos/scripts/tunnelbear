@@ -187,7 +187,7 @@ OVPN_DIR = os.path.join(CONFIG_DIR, 'ovpn')
 def load_data():
     data = {
         'plan': 'free',
-        'monthly_quota_bytes': 2 * 1024 * 1024 * 1024, # 2 GB default
+        'monthly_quota_bytes': 2 * 1024 * 1024 * 1024, # 2 GB fallback default
         'used_bytes': 0,
         'countries': {}
     }
@@ -204,9 +204,135 @@ def save_data(data):
     with open(USAGE_FILE, 'w') as f:
         json.dump(data, f, indent=2)
 
+def sync_live(data, force=False):
+    if not os.path.exists(AUTH_FILE):
+        return data, False, 'No credentials file found'
+    try:
+        with open(AUTH_FILE) as f:
+            user = f.readline().strip()
+            pwd = f.readline().strip()
+    except Exception as e:
+        return data, False, str(e)
+    if not user or not pwd:
+        return data, False, 'Empty credentials'
+
+    now_ts = datetime.now().timestamp()
+    last_sync_ts = data.get('last_sync_ts', 0)
+    if not force and (now_ts - last_sync_ts < 900) and 'remaining_bytes' in data:
+        return data, True, 'Cached'
+
+    try:
+        import urllib.request, http.cookiejar, uuid
+        cj = http.cookiejar.CookieJar()
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+
+        token_url = 'https://prod-api-dashboard.tunnelbear.com/dashboard/web/v2/token'
+        payload = json.dumps({
+            'username': user,
+            'password': pwd,
+            'grant_type': 'password',
+            'device': f'browser-{uuid.uuid4()}'
+        }).encode('utf-8')
+
+        common_headers = {
+            'Content-Type': 'application/json',
+            'Origin': 'https://www.tunnelbear.com',
+            'Referer': 'https://www.tunnelbear.com/',
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0',
+            'tunnelbear-app-id': 'com.tunnelbear.web',
+            'tunnelbear-app-version': '1.0.0',
+            'tunnelbear-platform': 'Firefox',
+            'tunnelbear-platform-version': '130.0'
+        }
+
+        req = urllib.request.Request(token_url, data=payload, headers=common_headers)
+        resp = opener.open(req, timeout=10)
+        token_data = json.loads(resp.read().decode())
+        token = token_data.get('access_token')
+        if not token:
+            return data, False, 'Token missing from response'
+
+        csrf_token = resp.headers.get('tb-csrf-token', '')
+
+        cookie_url = 'https://prod-api-dashboard.tunnelbear.com/dashboard/web/v2/tokenCookie'
+        cookie_req = urllib.request.Request(cookie_url, data=b'{}', headers={
+            'Authorization': f'Bearer {token}',
+            **common_headers
+        })
+        cookie_resp = opener.open(cookie_req, timeout=10)
+        if not csrf_token:
+            csrf_token = cookie_resp.headers.get('tb-csrf-token', '')
+
+        auth_headers = {
+            'Authorization': f'Bearer {token}',
+            'Origin': 'https://www.tunnelbear.com',
+            'Referer': 'https://www.tunnelbear.com/',
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0',
+            'tunnelbear-app-id': 'com.tunnelbear.web',
+            'tunnelbear-app-version': '1.0.0',
+            'tunnelbear-platform': 'Firefox',
+            'tunnelbear-platform-version': '130.0'
+        }
+        if csrf_token:
+            auth_headers['TB-CSRF-Token'] = csrf_token
+
+        next_reset = ''
+        try:
+            acc_url = 'https://prod-api-dashboard.tunnelbear.com/dashboard/web/v2/account'
+            acc_req = urllib.request.Request(acc_url, headers=auth_headers)
+            acc_resp = opener.open(acc_req, timeout=10)
+            acc_data = json.loads(acc_resp.read().decode())
+            next_reset = acc_data.get('nextDataReset', '')
+        except Exception:
+            pass
+
+        user_url = 'https://prod-api-core.tunnelbear.com/core/web/api/getUserDetails'
+        user_req = urllib.request.Request(user_url, headers=auth_headers)
+        user_resp = opener.open(user_req, timeout=10)
+        user_data = json.loads(user_resp.read().decode())
+
+        data_left = int(user_data.get('dataLeft', 0))
+        data_cap = int(user_data.get('dataCap', 0))
+        bear_type = user_data.get('bearType', 'Little TunnelBear')
+        full_ver = str(user_data.get('fullVersion', '0')) == '1'
+
+        data['email'] = user
+        data['cloud_verified'] = True
+        data['last_sync_ts'] = now_ts
+        data['last_sync_str'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        data['bear_type'] = bear_type
+        data['full_version'] = full_ver
+        data['next_reset'] = next_reset
+        if full_ver:
+            data['plan'] = 'unlimited'
+        elif data_cap > 0:
+            data['plan'] = bear_type
+            data['monthly_quota_bytes'] = data_cap
+            data['remaining_bytes'] = data_left
+            data['used_bytes'] = max(0, data_cap - data_left)
+
+        save_data(data)
+        return data, True, 'Success'
+    except Exception as e:
+        return data, False, str(e)
+
 action = sys.argv[1] if len(sys.argv) > 1 else 'status'
 
-if action == 'get_quota_info':
+if action == 'sync':
+    d = load_data()
+    d, ok, msg = sync_live(d, force=True)
+    out = {'success': ok, 'message': msg}
+    if ok:
+        out.update({
+            'email': d.get('email', ''),
+            'bear_type': d.get('bear_type', ''),
+            'remaining_bytes': d.get('remaining_bytes', 0),
+            'quota_bytes': d.get('monthly_quota_bytes', 0),
+            'next_reset': d.get('next_reset', '')
+        })
+    print(json.dumps(out))
+
+elif action == 'get_quota_info':
     d = load_data()
     user = ''
     if os.path.exists(AUTH_FILE):
@@ -216,9 +342,21 @@ if action == 'get_quota_info':
         except Exception:
             pass
 
+    force = (len(sys.argv) > 2 and sys.argv[2] == '--force')
+    if user:
+        d, ok, msg = sync_live(d, force=force)
+
     plan = d.get('plan', 'free')
     quota_b = d.get('monthly_quota_bytes', 2 * 1024**3)
-    used_b = d.get('used_bytes', 0)
+    cloud_ver = d.get('cloud_verified', False)
+    bear_type = d.get('bear_type', '')
+
+    if 'remaining_bytes' in d:
+        rem_b = d['remaining_bytes']
+        used_b = max(0, quota_b - rem_b)
+    else:
+        used_b = d.get('used_bytes', 0)
+        rem_b = max(0, quota_b - used_b)
 
     if plan == 'unlimited':
         rem_str = 'Unlimited'
@@ -226,31 +364,34 @@ if action == 'get_quota_info':
         pct_left = 100.0
         bar = '[████████████████████] 100% (Unlimited)'
     else:
-        rem_b = max(0, quota_b - used_b)
         rem_gb = rem_b / (1024**3)
         quota_gb = quota_b / (1024**3)
         used_gb = used_b / (1024**3)
         used_mb = used_b / (1024**2)
         pct_left = (rem_b / quota_b) * 100.0 if quota_b > 0 else 0.0
-        
-        # Build graphical bar (20 chars)
+
         filled = int((pct_left / 100.0) * 20)
         filled = max(0, min(20, filled))
         empty = 20 - filled
         bar = f'[{\"█\" * filled}{\"░\" * empty}] {pct_left:.1f}% left'
         rem_str = f'{rem_gb:.2f} GB left of {quota_gb:.2f} GB'
-        used_str = f'{used_gb:.2f} GB ({used_mb:.1f} MB)' if used_gb >= 0.1 else f'{used_mb:.1f} MB'
+        used_str = f'{used_gb:.2f} GB' if used_gb >= 1.0 else f'{used_mb:.1f} MB'
 
     out = {
         'email': user,
         'logged_in': bool(user),
+        'cloud_verified': cloud_ver,
+        'bear_type': bear_type,
         'plan': plan,
         'quota_bytes': quota_b,
+        'rem_bytes': rem_b,
         'used_bytes': used_b,
         'used_str': used_str,
         'rem_str': rem_str,
         'pct_left': pct_left,
-        'bar': bar
+        'bar': bar,
+        'next_reset': d.get('next_reset', ''),
+        'last_sync': d.get('last_sync_str', '')
     }
     print(json.dumps(out))
 
@@ -268,6 +409,8 @@ elif action == 'record_disconnect':
     d = load_data()
     if session_bytes > 0:
         d['used_bytes'] = d.get('used_bytes', 0) + session_bytes
+        if 'remaining_bytes' in d:
+            d['remaining_bytes'] = max(0, d['remaining_bytes'] - session_bytes)
         c_info = d['countries'].setdefault(country, {'connections': 0, 'bytes': 0, 'last_used': ''})
         c_info['bytes'] = c_info.get('bytes', 0) + session_bytes
         save_data(d)
@@ -277,7 +420,7 @@ elif action == 'get_sorted_locations':
     d = load_data()
     usage = d.get('countries', {})
     files = glob.glob(os.path.join(OVPN_DIR, 'TunnelBear *.ovpn'))
-    
+
     items = []
     for f in files:
         bn = os.path.basename(f)[:-5]
@@ -287,7 +430,7 @@ elif action == 'get_sorted_locations':
         bytes_val = u.get('bytes', 0)
         last_used = u.get('last_used', '')
         items.append((conns, last_used, bytes_val, country, f))
-    
+
     # Sort: used first (by conns desc, then last_used desc), then unused alphabetically
     sort_mode = sys.argv[2] if len(sys.argv) > 2 else 'usage'
     if sort_mode == 'alpha':
@@ -346,21 +489,35 @@ elif action == 'set_plan':
 # ------------------------------------------------------------------------------
 
 cmd_account() {
-    local q_json
-    q_json=$(py_tracker get_quota_info)
+    local force_flag=""
+    if [ "${1:-}" = "--sync" ] || [ "${1:-}" = "-s" ] || [ "${1:-}" = "--force" ]; then
+        force_flag="--force"
+        echo -e "${CYAN}Syncing account details with TunnelBear cloud...${RESET}"
+    fi
 
-    local email logged_in plan used_str rem_str pct_left bar
-    email=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['email'])" "$q_json")
-    logged_in=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['logged_in'])" "$q_json")
-    plan=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['plan'])" "$q_json")
-    used_str=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['used_str'])" "$q_json")
-    rem_str=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['rem_str'])" "$q_json")
-    pct_left=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['pct_left'])" "$q_json")
-    bar=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d['bar'])" "$q_json")
+    local q_json
+    q_json=$(py_tracker get_quota_info $force_flag)
+
+    local email logged_in verified bear_type plan used_str rem_str pct_left bar next_reset last_sync
+    email=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('email', ''))" "$q_json")
+    logged_in=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('logged_in', False))" "$q_json")
+    verified=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('cloud_verified', False))" "$q_json")
+    bear_type=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('bear_type', ''))" "$q_json")
+    plan=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('plan', ''))" "$q_json")
+    used_str=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('used_str', ''))" "$q_json")
+    rem_str=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('rem_str', ''))" "$q_json")
+    pct_left=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('pct_left', 0.0))" "$q_json")
+    bar=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('bar', ''))" "$q_json")
+    next_reset=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('next_reset', ''))" "$q_json")
+    last_sync=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('last_sync', ''))" "$q_json")
 
     echo -e "${BOLD}${CYAN}=== TunnelBear Account & Quota ===${RESET}"
     if [ "$logged_in" = "True" ]; then
-        echo -e "  ${BOLD}Account Status:${RESET} ${GREEN}● Logged In${RESET} (${BOLD}$email${RESET})"
+        if [ "$verified" = "True" ]; then
+            echo -e "  ${BOLD}Account Status:${RESET} ${GREEN}● Logged In & Cloud-Verified${RESET} (${BOLD}$email${RESET})"
+        else
+            echo -e "  ${BOLD}Account Status:${RESET} ${GREEN}● Logged In${RESET} (${BOLD}$email${RESET})"
+        fi
         echo -e "  ${BOLD}Credentials:${RESET}    ${GREEN}✓ Saved securely (${AUTH_FILE}, mode 0600)${RESET}"
     else
         echo -e "  ${BOLD}Account Status:${RESET} ${RED}○ Not Logged In${RESET}"
@@ -375,16 +532,40 @@ cmd_account() {
         local color="$GREEN"
         local p_num
         p_num=${pct_left%.*}
+        [ -z "$p_num" ] && p_num=100
         if [ "$p_num" -lt 20 ]; then color="$RED"; elif [ "$p_num" -lt 50 ]; then color="$YELLOW"; fi
-        echo -e "  ${BOLD}Subscription:${RESET}   ${CYAN}Free Tier${RESET} (${DIM}TunnelBear standard monthly allowance${RESET})"
-        echo -e "  ${BOLD}Data Used:${RESET}      $used_str"
+
+        local tier_title="${bear_type:-Free Tier}"
+        if [ "$tier_title" = "Little TunnelBear" ]; then
+            tier_title="Little TunnelBear (100 GB Humanitarian Tier)"
+        fi
+        echo -e "  ${BOLD}Subscription:${RESET}   ${CYAN}${tier_title}${RESET}"
+        echo -e "  ${BOLD}Data Used:${RESET}      $used_str (this billing cycle)"
         echo -e "  ${BOLD}Data Remaining:${RESET} ${color}${BOLD}$rem_str${RESET}"
         echo -e "  ${BOLD}Quota Meter:${RESET}    ${color}$bar${RESET}"
+        [ -n "$next_reset" ] && echo -e "  ${BOLD}Quota Resets:${RESET}   ${YELLOW}$next_reset${RESET}"
     fi
 
+    [ -n "$last_sync" ] && echo -e "  ${BOLD}Cloud Sync:${RESET}     ${DIM}$last_sync${RESET}"
     echo ""
-    echo -e "${DIM}Manage subscription & cloud sync: ${CYAN}https://www.tunnelbear.com/account${RESET}"
-    echo -e "${DIM}Commands: ${CYAN}tb login${DIM} (switch account) | ${CYAN}tb plan [free|unlimited|<GB>]${DIM} (adjust plan)${RESET}"
+    echo -e "${DIM}Commands: ${CYAN}tb sync${DIM} (refresh live quota) | ${CYAN}tb login${DIM} (switch account) | ${CYAN}tb plan${DIM} (adjust plan)${RESET}"
+}
+
+cmd_sync() {
+    echo -e "${CYAN}Syncing account details and data balance with TunnelBear cloud...${RESET}"
+    local res
+    res=$(py_tracker sync)
+    local ok msg
+    ok=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('success', False))" "$res")
+    msg=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('message', ''))" "$res")
+    if [ "$ok" = "True" ]; then
+        echo -e "${GREEN}✓ Cloud sync successful!${RESET}"
+        echo ""
+        cmd_account
+    else
+        echo -e "${RED}✗ Cloud sync failed: $msg${RESET}" >&2
+        return 1
+    fi
 }
 
 cmd_status() {
@@ -738,6 +919,10 @@ cmd_login() {
     fi
 
     echo ""
+    echo -e "${CYAN}Verifying account & syncing live quota from TunnelBear cloud...${RESET}"
+    py_tracker sync >/dev/null 2>&1 || true
+
+    echo ""
     cmd_account
 }
 
@@ -980,8 +1165,9 @@ cmd_interactive() {
         fi
         menu+=("󰢮  Detailed VPN Status"$'\t'"__action_status__")
         menu+=("󰌾  Account & Data Quota ($rem_str)"$'\t'"__action_account__")
-        menu+=("󰆼  Change Plan / Quota (Free 2GB / Unlimited)"$'\t'"__action_plan__")
-        menu+=("󰑐  Update Server Configurations"$'\t'"__action_update__")
+        menu+=("󰑐  Sync Cloud Quota (TunnelBear API)"$'\t'"__action_sync__")
+        menu+=("󰆼  Change Plan / Quota (Free / Unlimited)"$'\t'"__action_plan__")
+        menu+=("󰉉  Update Server Configurations"$'\t'"__action_update__")
         menu+=("─────────────────────────────────────────────────────────────"$'\t'"__divider__")
 
         # Load countries sorted by usage!
@@ -1023,13 +1209,13 @@ cmd_interactive() {
 
         local res key choice
         res=$(printf "%s\n" "${menu[@]}" | fzf \
-            --expect=ctrl-d,ctrl-s,ctrl-a,ctrl-l,ctrl-u \
+            --expect=ctrl-d,ctrl-s,ctrl-a,ctrl-r,ctrl-l,ctrl-u \
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:48%:wrap \
             --prompt="🐻 TunnelBear > " \
-            --header="[$header_info] (Enter: Connect | Ctrl-D: Disconnect | Ctrl-A: Account | Ctrl-S: Status)" \
+            --header="[$header_info] (Enter: Connect | Ctrl-D: Disconnect | Ctrl-R: Sync | Ctrl-A: Account)" \
             --reverse \
             --height=75% \
             --border=rounded \
@@ -1052,6 +1238,13 @@ cmd_interactive() {
             ctrl-s)
                 clear
                 cmd_status
+                echo ""
+                read -rp "Press Enter to return..."
+                continue
+                ;;
+            ctrl-r)
+                clear
+                cmd_sync
                 echo ""
                 read -rp "Press Enter to return..."
                 continue
@@ -1086,6 +1279,12 @@ cmd_interactive() {
             __action_account__)
                 clear
                 cmd_account
+                echo ""
+                read -rp "Press Enter to return..."
+                ;;
+            __action_sync__)
+                clear
+                cmd_sync
                 echo ""
                 read -rp "Press Enter to return..."
                 ;;
@@ -1131,6 +1330,7 @@ ${BOLD}COMMANDS:${RESET}
     ${CYAN}disconnect${RESET}, ${CYAN}down${RESET}, ${CYAN}off${RESET}        Disconnect active VPN & record transferred data
     ${CYAN}status${RESET}                       Show connection state, public IP, and account quota
     ${CYAN}account${RESET}, ${CYAN}quota${RESET}, ${CYAN}info${RESET}         Display login status and remaining GB allowance
+    ${CYAN}sync${RESET}, ${CYAN}refresh${RESET}                 Sync account quota & details from TunnelBear cloud
     ${CYAN}plan${RESET} [free|unlimited|<GB>]   Change subscription tier or monthly GB limit
     ${CYAN}list${RESET}, ${CYAN}ls${RESET} [--alpha]          List servers ranked by usage (or alphabetical)
     ${CYAN}login${RESET}, ${CYAN}auth${RESET}                    Save TunnelBear account email & password
@@ -1141,6 +1341,7 @@ ${BOLD}COMMANDS:${RESET}
 ${BOLD}EXAMPLES:${RESET}
     tb status
     tb account
+    tb sync
     tb list
     tb connect poland
     tb connect us
@@ -1170,7 +1371,10 @@ case "$ACTION" in
         cmd_status
         ;;
     account|quota|info)
-        cmd_account
+        cmd_account "$*"
+        ;;
+    sync|refresh)
+        cmd_sync
         ;;
     plan)
         cmd_plan "$*"
