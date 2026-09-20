@@ -52,6 +52,7 @@ main_menu() {
     menu_content+="󰚰  Clean User Caches (~/.cache)\n"
     menu_content+="󰚰  Clean Nix Garbage (nix-collect-garbage -d)\n"
     menu_content+="󰚰  Full System Clean (Caches + Nix Generations)\n"
+    menu_content+="󰜉  Restore Fresh Boot State (Kill All Apps & Free RAM)\n"
     menu_content+="󰌢  Run Full Clean in Terminal (Live Verbose Output)"
 
     if [ "$1" = "--print-list" ]; then
@@ -72,6 +73,9 @@ main_menu() {
             ;;
         *"Full System Clean"*)
             clean_all
+            ;;
+        *"Restore Fresh Boot State"*)
+            /home/peng/Code/Dotfiles/nixos/scripts/restore_boot_state.sh --force
             ;;
         *"Run Full Clean in Terminal"*)
             kitty --class clean -e bash -c 'echo "=== Cleaning System Garbage & Caches ==="; nix-collect-garbage -d; rm -rf ~/.cache/*; echo -e "\n=== Clean complete! ==="; sleep 2' &

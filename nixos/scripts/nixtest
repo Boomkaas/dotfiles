@@ -523,7 +523,7 @@ mod_scripts() {
   done < <(find "$SCRIPTS_DIR" -name "*.sh" -print0 2>/dev/null)
 
   # Scripts without extension
-  for name in awake bluetooth wifi setting theme epic twitch share audio nixos gens tm project service services task tasks conf configs disk storage repo repos gitui ports port clip clips log logs journal container containers vm pkg pkgs s tunnelbear tb; do
+  for name in awake bluetooth wifi setting theme epic twitch share audio nixos gens tm project service services task tasks conf configs disk storage repo repos gitui ports port clip clips log logs journal container containers vm pkg pkgs s tunnelbear tb restore-ram; do
     local f="$SCRIPTS_DIR/$name"
     [[ -f "$f" ]] && check "bash -n: $name" bash -n "$f"
   done
@@ -537,6 +537,11 @@ mod_scripts() {
   # Python script
   check "agy-tokens.py: python3 syntax" \
     python3 -m py_compile "$SCRIPTS_DIR/agy-tokens.py"
+
+  # restore_boot_state.sh: key safety and memory features
+  has "restore_boot_state: --dry-run mode"            "$SCRIPTS_DIR/restore_boot_state.sh" 'DRY_RUN'
+  has "restore_boot_state: whitelist protection"       "$SCRIPTS_DIR/restore_boot_state.sh" 'WHITELIST_COMMS'
+  has "restore_boot_state: memory stats calculation"   "$SCRIPTS_DIR/restore_boot_state.sh" 'get_ram_used_mb'
 
   # nixreb: cores ≤ hw threads
   local cores hw
