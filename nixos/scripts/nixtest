@@ -543,6 +543,7 @@ mod_scripts() {
   has "tui/ram: --dry-run mode"               "$SCRIPTS_DIR/tui/ram" 'DRY_RUN'
   has "tui/ram: whitelist protection"         "$SCRIPTS_DIR/tui/ram" 'WHITELIST_COMMS'
   has "tui/ram: memory stats calculation"     "$SCRIPTS_DIR/tui/ram" 'get_ram_used_mb'
+  has "tui/s: ram tool registered"            "$SCRIPTS_DIR/tui/s" 'ram\|system'
 
   # nixreb: cores ≤ hw threads
   local cores hw

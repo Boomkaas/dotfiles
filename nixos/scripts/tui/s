@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # s - Master TUI Command Center & Script Launcher (CLI & fzf TUI)
-# Unified access to all 19 dotfiles TUI tools across system, network, dev & UI.
+# Unified access to all 20 dotfiles TUI tools across system, network, dev & UI.
 # ==============================================================================
 
 # Colors
@@ -59,6 +59,7 @@ nixos|system| |NixOS Generations & Rollback Manager|gens|List generations, di
 service|system|󰒓 |Systemd Services & Daemons Manager|services|Control user/system units, view logs, restart
 disk|system|󰋊 |Storage, USB Drives & Nix Store Cleaner|storage|Partitions, USB auto-mount/eject, nh clean, gc
 task|system|󰌢 |Process & Mango Wayland Window Controller|tasks|List windows, focus, SIGTERM/SIGKILL, freeze
+ram|system|󰍛 |Memory Recovery & Boot State Restorer|restore, restore-ram|Close apps, drop caches, restore ~1.0 GB boot RAM
 log|system|📜|Systemd Journal & Kernel Log Explorer|logs, journal|Filter system errors, dmesg, boot logs, follow
 repo|dev| |Multi-Repository Git Dashboard|repos, gitui|Radar across all git projects, pull/push, status
 tm|dev| |Tmux Sessions & Git Projects Dashboard|project|Manage tmux sessions, jump to projects, panes
@@ -173,6 +174,13 @@ get_live_telemetry() {
             wcnt=$(pgrep -u "$USER" | wc -l || echo "0")
             echo -e "${CYAN}● User Processes:${RESET} ${wcnt} active processes"
             ;;
+        ram|restore|restore-ram)
+            local used_mb total_mb pct
+            used_mb=$(free -m 2>/dev/null | awk '/^Mem:/ {print $3}')
+            total_mb=$(free -m 2>/dev/null | awk '/^Mem:/ {print $2}')
+            pct=$(( used_mb * 100 / (total_mb > 0 ? total_mb : 1) ))
+            echo -e "${YELLOW}● RAM Footprint:${RESET} ${used_mb} MiB / ${total_mb} MiB (${pct}%) ${GREEN}[Target: ~1.00 GiB]${RESET}"
+            ;;
         log)
             local err_cnt
             err_cnt=$(journalctl -p 3 -xb -n 50 --no-pager 2>/dev/null | grep -c -E '(error|fail|crit)' || echo "0")
@@ -246,9 +254,9 @@ cmd_preview() {
             cat <<EOF
 ${BOLD}${CYAN}Scope Filtering${RESET}
 Cycle through tool categories:
-  • ${BOLD}all${RESET}     - All 19 registered TUI tools
+  • ${BOLD}all${RESET}     - All 20 registered TUI tools
   • ${BOLD}network${RESET} - Wi-Fi, Bluetooth, TunnelBear VPN, Ports & Sockets, Sharing
-  • ${BOLD}system${RESET}  - NixOS Manager, Systemd Services, Disks, Tasks, Logs
+  • ${BOLD}system${RESET}  - NixOS Manager, Systemd Services, Disks, Tasks, RAM & Memory, Logs
   • ${BOLD}dev${RESET}     - Git Repos, Tmux, Nix Packages, Containers, Configs
   • ${BOLD}desktop${RESET} - System Settings, Themes & Wallpapers, Audio Mixer, Clipboard
 
@@ -321,14 +329,14 @@ cmd_interactive() {
 
         local scope_label
         case "$current_scope" in
-            all) scope_label="${CYAN}All Tools (19)${RESET}" ;;
+            all) scope_label="${CYAN}All Tools (20)${RESET}" ;;
             network) scope_label="${YELLOW}Network & Wireless (5)${RESET}" ;;
-            system) scope_label="${MAGENTA}System & Hardware (5)${RESET}" ;;
+            system) scope_label="${MAGENTA}System & Hardware (6)${RESET}" ;;
             dev) scope_label="${GREEN}Developer & Workspace (5)${RESET}" ;;
             desktop) scope_label="${BLUE}Desktop & Media (4)${RESET}" ;;
         esac
 
-        local header_info="Scope: $scope_label | Hub: 19 Tools Available"
+        local header_info="Scope: $scope_label | Hub: 20 Tools Available"
 
         # Next scope for Tab
         local next_scope="all"
@@ -414,7 +422,7 @@ cmd_interactive() {
 }
 
 cmd_list() {
-    echo -e "${BOLD}Unified TUI Scripts Registry (19 Tools):${RESET}\n"
+    echo -e "${BOLD}Unified TUI Scripts Registry (20 Tools):${RESET}\n"
     printf "%-12s %-10s %-40s %s\n" "COMMAND" "CATEGORY" "DESCRIPTION" "ALIASES"
     echo "─────────────────────────────────────────────────────────────────────────────────────────────"
     while IFS='|' read -r cmd cat icon title aliases desc; do
@@ -430,7 +438,7 @@ ${BOLD}s${RESET} - Master TUI Command Center & Script Launcher (CLI & fzf TUI)
 ${BOLD}USAGE:${RESET}
     s                               Launch interactive TUI hub to browse and launch all tools
     s <tool> [args...]              Directly run any TUI script (e.g. 's wifi', 's disk clean')
-    s list                          Print formatted table of all 19 available TUI tools
+    s list                          Print formatted table of all 20 available TUI tools
     s preview <tool>                Internal preview generator for fzf
     s help                          Show this help message
 
@@ -444,6 +452,7 @@ ${BOLD}SUPPORTED TOOLS & ALIASES:${RESET}
     ${CYAN}service${RESET} (services)           Systemd user & system services
     ${CYAN}disk${RESET} (storage)               Partitions, USB auto-mount/eject & Nix GC
     ${CYAN}task${RESET} (tasks)                 Process & Mango Wayland window controller
+    ${CYAN}ram${RESET} (restore, restore-ram)   Memory recovery & post-boot state restorer
     ${CYAN}log${RESET} (logs, journal)          Systemd journal & kernel dmesg explorer
     ${CYAN}repo${RESET} (repos, gitui)          Multi-repository Git workspace radar
     ${CYAN}tm${RESET} (project)                 Tmux session & project manager
@@ -488,7 +497,7 @@ case "${1:-}" in
             exec "$target_script" "$@"
         else
             echo -e "${RED}✘ Unknown tool or command:${RESET} $1"
-            echo -e "${DIM}Run 's list' or 's help' to see all 19 available tools.${RESET}"
+            echo -e "${DIM}Run 's list' or 's help' to see all 20 available tools.${RESET}"
             exit 1
         fi
         ;;
