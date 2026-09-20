@@ -37,11 +37,14 @@ let
   clean-menu = pkgs.writeShellScriptBin "clean-menu" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/clean_menu.sh "$@"
   '';
+  ram = pkgs.writeShellScriptBin "ram" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/ram "$@"
+  '';
   restore-boot-state = pkgs.writeShellScriptBin "restore-boot-state" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/restore_boot_state.sh "$@"
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/ram "$@"
   '';
   restore-ram = pkgs.writeShellScriptBin "restore-ram" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/restore_boot_state.sh "$@"
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/ram "$@"
   '';
   config-menu = pkgs.writeShellScriptBin "config-menu" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/config_menu.sh "$@"
@@ -569,6 +572,7 @@ in
     gtk-theme-menu
     disk-menu
     clean-menu
+    ram
     restore-boot-state
     restore-ram
     config-menu

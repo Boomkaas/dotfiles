@@ -75,7 +75,7 @@ main_menu() {
             clean_all
             ;;
         *"Restore Fresh Boot State"*)
-            /home/peng/Code/Dotfiles/nixos/scripts/restore_boot_state.sh --force
+            /home/peng/Code/Dotfiles/nixos/scripts/tui/ram restore -f
             ;;
         *"Run Full Clean in Terminal"*)
             kitty --class clean -e bash -c 'echo "=== Cleaning System Garbage & Caches ==="; nix-collect-garbage -d; rm -rf ~/.cache/*; echo -e "\n=== Clean complete! ==="; sleep 2' &

@@ -523,13 +523,13 @@ mod_scripts() {
   done < <(find "$SCRIPTS_DIR" -name "*.sh" -print0 2>/dev/null)
 
   # Scripts without extension
-  for name in awake bluetooth wifi setting theme epic twitch share audio nixos gens tm project service services task tasks conf configs disk storage repo repos gitui ports port clip clips log logs journal container containers vm pkg pkgs s tunnelbear tb restore-ram; do
+  for name in awake bluetooth wifi setting theme epic twitch share audio nixos gens tm project service services task tasks conf configs disk storage repo repos gitui ports port clip clips log logs journal container containers vm pkg pkgs s tunnelbear tb restore-ram ram; do
     local f="$SCRIPTS_DIR/$name"
     [[ -f "$f" ]] && check "bash -n: $name" bash -n "$f"
   done
 
   # TUI scripts (dedicated folder)
-  for name in wifi bluetooth setting theme share audio nixos tm service task conf disk repo ports clip log container pkg s tb; do
+  for name in wifi bluetooth setting theme share audio nixos tm service task conf disk repo ports clip log container pkg s tb ram; do
     local f="$SCRIPTS_DIR/tui/$name"
     [[ -f "$f" ]] && check "bash -n: tui/$name" bash -n "$f"
   done
@@ -538,10 +538,11 @@ mod_scripts() {
   check "agy-tokens.py: python3 syntax" \
     python3 -m py_compile "$SCRIPTS_DIR/agy-tokens.py"
 
-  # restore_boot_state.sh: key safety and memory features
-  has "restore_boot_state: --dry-run mode"            "$SCRIPTS_DIR/restore_boot_state.sh" 'DRY_RUN'
-  has "restore_boot_state: whitelist protection"       "$SCRIPTS_DIR/restore_boot_state.sh" 'WHITELIST_COMMS'
-  has "restore_boot_state: memory stats calculation"   "$SCRIPTS_DIR/restore_boot_state.sh" 'get_ram_used_mb'
+  # tui/ram: key safety, TUI and memory features
+  has "tui/ram: fzf TUI menu"                 "$SCRIPTS_DIR/tui/ram" 'fzf'
+  has "tui/ram: --dry-run mode"               "$SCRIPTS_DIR/tui/ram" 'DRY_RUN'
+  has "tui/ram: whitelist protection"         "$SCRIPTS_DIR/tui/ram" 'WHITELIST_COMMS'
+  has "tui/ram: memory stats calculation"     "$SCRIPTS_DIR/tui/ram" 'get_ram_used_mb'
 
   # nixreb: cores ≤ hw threads
   local cores hw

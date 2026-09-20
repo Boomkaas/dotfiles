@@ -1,0 +1,1043 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# ram - Memory Recovery, Process Pruner & Boot State Restorer (CLI & fzf TUI)
+#
+# Closes opened graphical windows, terminates lingering user applications,
+# drops caches, and restores the machine to its fresh post-boot RAM footprint (~1.0 GB)
+# without requiring a full reboot and without crashing the Wayland desktop session.
+# ==============================================================================
+
+set -eo pipefail
+
+SCRIPT_NAME="ram"
+TARGET_USER="${USER:-peng}"
+TARGET_UID=$(id -u "$TARGET_USER" 2>/dev/null || echo 1000)
+
+# ------------------------------------------------------------------------------
+# Colors & fzf Configuration
+# ------------------------------------------------------------------------------
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
+# Ensure Mango IPC socket is discovered if running under Wayland
+if [ -z "${MANGO_INSTANCE_SIGNATURE:-}" ]; then
+    MANGO_INSTANCE_SIGNATURE=$(ls /run/user/"$TARGET_UID"/mango-*.sock 2>/dev/null | head -n1 || true)
+    export MANGO_INSTANCE_SIGNATURE
+fi
+
+# ------------------------------------------------------------------------------
+# Notifications & Helpers
+# ------------------------------------------------------------------------------
+
+notify() {
+    local urgency="${1:-normal}"
+    local icon="${2:-system-reboot}"
+    local title="$3"
+    local msg="$4"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "$icon" "$title" "$msg" -t 4500
+    fi
+}
+
+get_ram_total_mb() {
+    free -m | awk '/^Mem:/ {print $2}'
+}
+
+get_ram_used_mb() {
+    free -m | awk '/^Mem:/ {print $3}'
+}
+
+get_ram_free_mb() {
+    free -m | awk '/^Mem:/ {print $4}'
+}
+
+get_ram_avail_mb() {
+    free -m | awk '/^Mem:/ {print $7}'
+}
+
+format_mb() {
+    local mb="$1"
+    if [ "$mb" -ge 1024 ]; then
+        awk -v m="$mb" 'BEGIN {printf "%.2f GiB", m / 1024}'
+    else
+        echo "${mb} MiB"
+    fi
+}
+
+get_ram_used_human() {
+    format_mb "$(get_ram_used_mb)"
+}
+
+get_ram_total_human() {
+    format_mb "$(get_ram_total_mb)"
+}
+
+# ------------------------------------------------------------------------------
+# Discover Ancestry of This Script
+# ------------------------------------------------------------------------------
+declare -A ANCESTOR_PIDS
+CALLER_TERM_PID=""
+CALLER_TERM_WID=""
+
+cur=$$
+while [ -n "$cur" ] && [ "$cur" -gt 1 ]; do
+    ANCESTOR_PIDS["$cur"]=1
+    cur_comm=$(ps -o comm= -p "$cur" 2>/dev/null || true)
+    if [[ "$cur_comm" =~ (kitty|\.kitty|alacritty|foot|wezterm|ghostty) ]] && [ -z "$CALLER_TERM_PID" ]; then
+        CALLER_TERM_PID="$cur"
+    fi
+    cur=$(ps -o ppid= -p "$cur" 2>/dev/null | tr -d ' ' || true)
+done
+
+# ------------------------------------------------------------------------------
+# Protected Daemons Whitelist (Preserve Boot State)
+# ------------------------------------------------------------------------------
+declare -A WHITELIST_COMMS=(
+    ["systemd"]=1
+    ["(sd-pam)"]=1
+    ["dbus-daemon"]=1
+    ["dbus-broker"]=1
+    ["mango"]=1
+    ["Xwayland"]=1
+    ["gdm-wayland-session"]=1
+    ["gdm-wayland-ses"]=1
+    ["waybar"]=1
+    [".waybar-wrapped"]=1
+    ["swaync"]=1
+    [".swaync-wrapped"]=1
+    ["swaync-client"]=1
+    [".swaync-client-"]=1
+    ["nm-applet"]=1
+    [".nm-applet-wrap"]=1
+    ["blueman-applet"]=1
+    [".blueman-applet"]=1
+    ["blueman-tray"]=1
+    [".blueman-tray-w"]=1
+    ["polkit-mate-authentication-agent-1"]=1
+    ["polkit-mate-aut"]=1
+    ["awww-daemon"]=1
+    [".awww-daemon-wr"]=1
+    ["hypridle"]=1
+    ["wl-paste"]=1
+    ["cliphist"]=1
+    ["pipewire"]=1
+    ["pipewire-pulse"]=1
+    ["wireplumber"]=1
+    ["xdg-desktop-portal"]=1
+    [".xdg-desktop-po"]=1
+    ["xdg-desktop-portal-gtk"]=1
+    ["xdg-desktop-portal-wlr"]=1
+    ["xdg-document-portal"]=1
+    [".xdg-document-p"]=1
+    ["xdg-permission-store"]=1
+    [".xdg-permission"]=1
+    ["gvfsd"]=1
+    [".gvfsd-wrapped"]=1
+    ["gvfsd-fuse"]=1
+    [".gvfsd-fuse-wra"]=1
+    ["obexd"]=1
+    ["fusermount3"]=1
+    ["playerctld"]=1
+)
+
+declare -A WHITELIST_SYSTEMD_SERVICES
+while read -r svc_unit; do
+    [ -n "$svc_unit" ] && WHITELIST_SYSTEMD_SERVICES["$svc_unit"]=1
+done < <(systemctl --user list-units --type=service --state=running --no-legend 2>/dev/null | awk '{print $1}')
+
+WHITELIST_SYSTEMD_SERVICES["antigravity-cli-daemon.service"]=1
+WHITELIST_SYSTEMD_SERVICES["telegram-pc-bot.service"]=1
+WHITELIST_SYSTEMD_SERVICES["awww-daemon.service"]=1
+WHITELIST_SYSTEMD_SERVICES["hypridle.service"]=1
+WHITELIST_SYSTEMD_SERVICES["dbus.service"]=1
+WHITELIST_SYSTEMD_SERVICES["pipewire.service"]=1
+WHITELIST_SYSTEMD_SERVICES["wireplumber.service"]=1
+WHITELIST_SYSTEMD_SERVICES["pipewire-pulse.service"]=1
+WHITELIST_SYSTEMD_SERVICES["xdg-desktop-portal.service"]=1
+WHITELIST_SYSTEMD_SERVICES["gvfs-daemon.service"]=1
+
+is_whitelisted_proc() {
+    local p="$1"
+    local pcomm="$2"
+
+    [ -n "${WHITELIST_COMMS["$pcomm"]:-}" ] && return 0
+
+    if [ -r "/proc/$p/cgroup" ]; then
+        local pcg
+        pcg=$(cat "/proc/$p/cgroup" 2>/dev/null || true)
+        for svc in "${!WHITELIST_SYSTEMD_SERVICES[@]}"; do
+            if [[ "$pcg" == *"$svc"* ]]; then
+                return 0
+            fi
+        done
+    fi
+
+    if [ -r "/proc/$p/cmdline" ]; then
+        local pcmd
+        pcmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)
+        if [[ "$pcmd" =~ (PcControlBot/venv/bin/python|remote-control\ serve|pinchtab\ server|pinchtab\ bridge) ]]; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# ------------------------------------------------------------------------------
+# Window and Process Parsers
+# ------------------------------------------------------------------------------
+
+# Returns lines: WID TAB PID TAB APPID TAB TITLE
+parse_windows() {
+    if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
+        mmsg get all-clients 2>/dev/null | jq -r '.clients[]? | [ .id, .pid, .appid, (.title | gsub("\t|\n"; " ")) ] | @tsv' 2>/dev/null || true
+    fi
+}
+
+# Populates associative arrays of all current windows
+populate_windows() {
+    CLIENT_WINDOW_WIDS=()
+    CLIENT_WINDOW_PIDS=()
+    CLIENT_WINDOW_APPS=()
+    CLIENT_WINDOW_TITLES=()
+
+    while IFS=$'\t' read -r wid wpid wappid wtitle; do
+        [ -z "$wid" ] || [ "$wid" = "null" ] && continue
+        CLIENT_WINDOW_WIDS["$wid"]="$wpid"
+        CLIENT_WINDOW_PIDS["$wpid"]="$wid"
+        CLIENT_WINDOW_APPS["$wid"]="${wappid:-Unknown}"
+        CLIENT_WINDOW_TITLES["$wid"]="${wtitle:-Untitled}"
+
+        if [ -n "$CALLER_TERM_PID" ] && [ "$wpid" -eq "$CALLER_TERM_PID" ]; then
+            CALLER_TERM_WID="$wid"
+        fi
+    done < <(parse_windows)
+}
+
+# Populates associative arrays of non-whitelisted background processes
+populate_targets() {
+    TARGET_PROCS=()
+    TARGET_PROCS_COMM=()
+    TARGET_PROCS_CMD=()
+    TARGET_PROCS_MEM=()
+    TARGET_PROCS_CPU=()
+
+    for pid_dir in /proc/[0-9]*; do
+        local p="${pid_dir#/proc/}"
+        [ "$p" = "$$" ] && continue
+        [ -n "${ANCESTOR_PIDS["$p"]:-}" ] && continue
+
+        if [ -r "/proc/$p/status" ]; then
+            local p_uid
+            p_uid=$(awk '/^Uid:/ {print $2}' "/proc/$p/status" 2>/dev/null || echo -1)
+            [ "$p_uid" -ne "$TARGET_UID" ] && continue
+        else
+            continue
+        fi
+
+        local p_comm
+        p_comm=$(cat "/proc/$p/comm" 2>/dev/null || true)
+        [ -z "$p_comm" ] && continue
+
+        # Skip if whitelisted
+        if is_whitelisted_proc "$p" "$p_comm"; then
+            continue
+        fi
+
+        # Skip utility tools
+        [[ "$p_comm" =~ ^(ps|jq|awk|sed|grep|sleep|mmsg|free|tr|cat|find|cut|head|tail) ]] && continue
+
+        local p_cmd
+        p_cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || echo "$p_comm")
+
+        local p_stats
+        p_stats=$(ps -p "$p" -o %mem,%cpu --no-headers 2>/dev/null || echo "0.0 0.0")
+        local p_mem p_cpu
+        p_mem=$(echo "$p_stats" | awk '{print $1}')
+        p_cpu=$(echo "$p_stats" | awk '{print $2}')
+
+        TARGET_PROCS["$p"]=1
+        TARGET_PROCS_COMM["$p"]="$p_comm"
+        TARGET_PROCS_CMD["$p"]="$p_cmd"
+        TARGET_PROCS_MEM["$p"]="${p_mem:-0.0}"
+        TARGET_PROCS_CPU["$p"]="${p_cpu:-0.0}"
+    done
+}
+
+app_to_icon() {
+    local app="${1,,}"
+    if [[ "$app" =~ (firefox|zen) ]]; then echo ""
+    elif [[ "$app" =~ (chrome|chromium|brave) ]]; then echo ""
+    elif [[ "$app" =~ (telegram) ]]; then echo "󰭹"
+    elif [[ "$app" =~ (discord) ]]; then echo "󰭹"
+    elif [[ "$app" =~ (antigravity|code|codex|vscodium) ]]; then echo ""
+    elif [[ "$app" =~ (kitty|terminal|alacritty|foot) ]]; then echo ""
+    elif [[ "$app" =~ (thunar|files|nautilus) ]]; then echo ""
+    elif [[ "$app" =~ (obsidian) ]]; then echo "󰠮"
+    elif [[ "$app" =~ (spotify|music|cava|mpv|vlc) ]]; then echo ""
+    elif [[ "$app" =~ (steam|lutris|heroic|wine|gamescope) ]]; then echo "󰊴"
+    else echo "󰍛"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Core Execution Actions
+# ------------------------------------------------------------------------------
+
+# Closes all open client windows
+cmd_close_windows() {
+    local dry_run="${1:-0}"
+    local keep_caller="${2:-0}"
+    populate_windows
+
+    if [ "$dry_run" -eq 1 ]; then
+        echo -e "${BOLD}${CYAN}=== Preview: Graphical Windows to Close (${#CLIENT_WINDOW_WIDS[@]} total) ===${RESET}"
+        for wid in "${!CLIENT_WINDOW_WIDS[@]}"; do
+            local wpid="${CLIENT_WINDOW_WIDS["$wid"]}"
+            local app="${CLIENT_WINDOW_APPS["$wid"]}"
+            local title="${CLIENT_WINDOW_TITLES["$wid"]}"
+            echo -e "  • [WID $wid | PID $wpid] ${BOLD}$app${RESET}: \"$title\""
+        done
+        return 0
+    fi
+
+    local closed=0
+    for wid in "${!CLIENT_WINDOW_WIDS[@]}"; do
+        local wpid="${CLIENT_WINDOW_WIDS["$wid"]}"
+        if [ "$keep_caller" -eq 1 ] && [ -n "$CALLER_TERM_WID" ] && [ "$wid" = "$CALLER_TERM_WID" ]; then
+            continue
+        fi
+
+        if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
+            mmsg dispatch killclient "client,$wid" >/dev/null 2>&1 || true
+        fi
+        if kill -0 "$wpid" 2>/dev/null; then
+            kill -15 "$wpid" 2>/dev/null || true
+        fi
+        ((closed++)) || true
+    done
+    sleep 0.8
+    for wid in "${!CLIENT_WINDOW_WIDS[@]}"; do
+        local wpid="${CLIENT_WINDOW_WIDS["$wid"]}"
+        if [ "$keep_caller" -eq 1 ] && [ -n "$CALLER_TERM_WID" ] && [ "$wid" = "$CALLER_TERM_WID" ]; then
+            continue
+        fi
+        kill -9 "$wpid" 2>/dev/null || true
+    done
+    echo "$closed"
+}
+
+# Terminates non-whitelisted user processes
+cmd_kill_processes() {
+    local dry_run="${1:-0}"
+    populate_targets
+
+    if [ "$dry_run" -eq 1 ]; then
+        echo -e "${BOLD}${CYAN}=== Preview: User Processes to Terminate (${#TARGET_PROCS[@]} total) ===${RESET}"
+        for p in "${!TARGET_PROCS[@]}"; do
+            local comm="${TARGET_PROCS_COMM["$p"]}"
+            local cmd="${TARGET_PROCS_CMD["$p"]}"
+            echo -e "  • [PID $p] ${BOLD}$comm${RESET}: ${cmd:0:60}"
+        done
+        return 0
+    fi
+
+    local killed=0
+    for p in "${!TARGET_PROCS[@]}"; do
+        if [ -n "${ANCESTOR_PIDS["$p"]:-}" ]; then continue; fi
+        if kill -0 "$p" 2>/dev/null; then
+            kill -15 "$p" 2>/dev/null || true
+            ((killed++)) || true
+        fi
+    done
+    sleep 0.8
+    for p in "${!TARGET_PROCS[@]}"; do
+        if [ -n "${ANCESTOR_PIDS["$p"]:-}" ]; then continue; fi
+        kill -9 "$p" 2>/dev/null || true
+    done
+    echo "$killed"
+}
+
+# Flushes unwritten disk buffers and drops caches if allowed
+cmd_drop_caches() {
+    sync
+    if sudo -n true 2>/dev/null; then
+        echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null 2>&1 || true
+        local swap_used
+        swap_used=$(free -m | awk '/^Swap:/ {print $3}')
+        if [ "${swap_used:-0}" -gt 0 ]; then
+            sudo -n swapoff -a 2>/dev/null && sudo -n swapon -a 2>/dev/null || true
+        fi
+        echo -e "${GREEN}Flushed disk buffers and dropped kernel page cache.${RESET}"
+    else
+        echo -e "${YELLOW}Flushed disk buffers with sync.${RESET} ${DIM}(Run with sudo to drop kernel page cache)${RESET}"
+    fi
+}
+
+cmd_clean_cache() {
+    local before after
+    before=$(du -sh "$HOME/.cache" 2>/dev/null | awk '{print $1}' || echo "0")
+    rm -rf "$HOME/.cache/"* 2>/dev/null || true
+    after=$(du -sh "$HOME/.cache" 2>/dev/null | awk '{print $1}' || echo "0")
+    echo -e "${GREEN}Cleaned user caches (~/.cache)${RESET}: Before $before → Now $after"
+}
+
+# Full restore: Closes windows, terminates processes, reclaims RAM, notifies
+cmd_full_restore() {
+    local dry_run="${1:-0}"
+    local keep_term="${2:-0}"
+    local force="${3:-0}"
+    local clean_cache="${4:-0}"
+    local drop_caches="${5:-0}"
+    local quiet="${6:-0}"
+
+    populate_windows
+    populate_targets
+
+    local ram_before_mb ram_before_human
+    ram_before_mb=$(get_ram_used_mb)
+    ram_before_human=$(get_ram_used_human)
+
+    if [ "$dry_run" -eq 1 ]; then
+        echo -e "${BOLD}${CYAN}=== DRY RUN: Restore Post-Boot State Simulation ===${RESET}"
+        echo -e "Current RAM Used: ${YELLOW}${ram_before_human}${RESET} (${ram_before_mb} MiB)"
+        echo -e "Target Post-Boot RAM: ${GREEN}~1.00 GiB${RESET}\n"
+
+        cmd_close_windows 1
+        echo ""
+        cmd_kill_processes 1
+        echo ""
+
+        echo -e "${BOLD}Protected Daemons & Desktop Components (Preserved):${RESET}"
+        echo -e "  • Session:    mango (compositor), Xwayland, gdm-wayland-session"
+        echo -e "  • UI Panel:   waybar, swaync, nm-applet, blueman-applet, polkit-mate, awww-daemon, hypridle"
+        echo -e "  • Audio/IPC:  pipewire, wireplumber, xdg-desktop-portal*, dbus-daemon, systemd user daemons"
+        echo -e "  • Services:   telegram-pc-bot, antigravity-cli-daemon"
+        echo ""
+        echo -e "${GREEN}Simulation complete. No processes or windows were modified.${RESET}"
+        return 0
+    fi
+
+    if [ "$quiet" -eq 0 ]; then
+        echo -e "${BOLD}${CYAN}Restoring system to fresh post-boot state...${RESET}"
+        echo -e "Initial RAM Used: ${YELLOW}${ram_before_human}${RESET}"
+    fi
+
+    # 1. Close windows
+    local closed_wins=0
+    for wid in "${!CLIENT_WINDOW_WIDS[@]}"; do
+        local wpid="${CLIENT_WINDOW_WIDS["$wid"]}"
+        if [ -n "$CALLER_TERM_WID" ] && [ "$wid" = "$CALLER_TERM_WID" ]; then
+            continue
+        fi
+        if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
+            mmsg dispatch killclient "client,$wid" >/dev/null 2>&1 || true
+        fi
+        if kill -0 "$wpid" 2>/dev/null; then
+            kill -15 "$wpid" 2>/dev/null || true
+        fi
+        ((closed_wins++)) || true
+    done
+
+    # 2. Terminate background processes
+    local killed_procs=0
+    for p in "${!TARGET_PROCS[@]}"; do
+        if [ -n "${ANCESTOR_PIDS["$p"]:-}" ]; then continue; fi
+        if kill -0 "$p" 2>/dev/null; then
+            kill -15 "$p" 2>/dev/null || true
+            ((killed_procs++)) || true
+        fi
+    done
+
+    # 3. Grace period then SIGKILL
+    sleep 1.0
+    for wid in "${!CLIENT_WINDOW_WIDS[@]}"; do
+        local wpid="${CLIENT_WINDOW_WIDS["$wid"]}"
+        if [ -n "$CALLER_TERM_WID" ] && [ "$wid" = "$CALLER_TERM_WID" ]; then
+            continue
+        fi
+        kill -9 "$wpid" 2>/dev/null || true
+    done
+    for p in "${!TARGET_PROCS[@]}"; do
+        if [ -n "${ANCESTOR_PIDS["$p"]:-}" ]; then continue; fi
+        kill -9 "$p" 2>/dev/null || true
+    done
+
+    # 4. Clean caches
+    sync
+    if [ "$clean_cache" -eq 1 ]; then
+        rm -rf "$HOME/.cache/"* 2>/dev/null || true
+    fi
+    if [ "$drop_caches" -eq 1 ] || sudo -n true 2>/dev/null; then
+        echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null 2>&1 || true
+    fi
+
+    # 5. Calculate reclaimed RAM
+    local ram_after_mb ram_after_human ram_freed_mb ram_freed_human
+    ram_after_mb=$(get_ram_used_mb)
+    ram_after_human=$(get_ram_used_human)
+    ram_freed_mb=$(( ram_before_mb > ram_after_mb ? ram_before_mb - ram_after_mb : 0 ))
+    ram_freed_human=$(format_mb "$ram_freed_mb")
+
+    local summary_msg="RAM: ${ram_before_human} → ${ram_after_human} (Freed: ${ram_freed_human})
+Closed ${closed_wins} windows, terminated ${killed_procs} processes."
+
+    notify normal system-reboot "System Restored to Fresh Boot" "$summary_msg"
+
+    if [ "$quiet" -eq 0 ]; then
+        echo ""
+        echo -e "${BOLD}${GREEN}╔═══════════════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${BOLD}${GREEN}║                System Restored to Fresh Boot State                    ║${RESET}"
+        echo -e "${BOLD}${GREEN}╚═══════════════════════════════════════════════════════════════════════╝${RESET}"
+        echo -e "  RAM Before:     ${YELLOW}${ram_before_human}${RESET} (${ram_before_mb} MiB)"
+        echo -e "  RAM After:      ${GREEN}${ram_after_human}${RESET} (${ram_after_mb} MiB)"
+        echo -e "  Memory Freed:   ${CYAN}${ram_freed_human}${RESET} (${ram_freed_mb} MiB)"
+        echo -e "  Windows Closed: ${BOLD}${closed_wins}${RESET}"
+        echo -e "  Tasks Cleared:  ${BOLD}${killed_procs}${RESET}"
+        echo ""
+    fi
+
+    # 6. Terminal lifecycle
+    if [ "$keep_term" -eq 1 ] || [ ! -t 1 ]; then
+        return 0
+    fi
+
+    if [ "$force" -eq 1 ]; then
+        if [ -n "$CALLER_TERM_PID" ]; then
+            kill -15 "$CALLER_TERM_PID" 2>/dev/null || true
+        fi
+        return 0
+    fi
+
+    echo -e "${DIM}Closing terminal in 3 seconds to complete fresh boot state...${RESET}"
+    echo -e "${DIM}(Press Ctrl+C to keep this terminal open)${RESET}"
+
+    for i in 3 2 1; do
+        echo -ne "\r${CYAN}Exiting in ${i}...${RESET} "
+        sleep 1
+    done
+    echo ""
+
+    if [ -n "$CALLER_TERM_PID" ]; then
+        kill -15 "$CALLER_TERM_PID" 2>/dev/null || true
+    fi
+}
+
+cmd_status() {
+    populate_windows
+    populate_targets
+
+    local total_mb used_mb free_mb avail_mb
+    total_mb=$(get_ram_total_mb)
+    used_mb=$(get_ram_used_mb)
+    free_mb=$(get_ram_free_mb)
+    avail_mb=$(get_ram_avail_mb)
+
+    local pct=$(( used_mb * 100 / total_mb ))
+    local reclaimable_est=$(( used_mb > 1024 ? used_mb - 1024 : 0 ))
+
+    echo -e "${BOLD}${CYAN}=== System Memory & Post-Boot Status ===${RESET}"
+    echo -e "  ${BOLD}Total RAM:${RESET}          $(format_mb "$total_mb")"
+    echo -e "  ${BOLD}Currently Used:${RESET}     ${YELLOW}$(format_mb "$used_mb")${RESET} (${pct}%)"
+    echo -e "  ${BOLD}Available Memory:${RESET}   $(format_mb "$avail_mb")"
+    echo -e "  ${BOLD}Post-Boot Target:${RESET}   ${GREEN}~1.00 GiB${RESET}"
+    echo -e "  ${BOLD}Est. Reclaimable:${RESET}   ${CYAN}$(format_mb "$reclaimable_est")${RESET}"
+    echo ""
+    echo -e "  ${BOLD}Active Windows:${RESET}     ${#CLIENT_WINDOW_WIDS[@]}"
+    echo -e "  ${BOLD}User Processes:${RESET}     ${#TARGET_PROCS[@]}"
+    echo -e "  ${BOLD}Protected Daemons:${RESET}  ${#WHITELIST_COMMS[@]} core components"
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler (fzf Side Panel)
+# ------------------------------------------------------------------------------
+
+cmd_preview() {
+    local target="$1"
+    [ -z "$target" ] && return 0
+
+    local item_type="${target%%:*}"
+    local item_payload="${target#*:}"
+
+    case "$item_type" in
+        action)
+            case "$item_payload" in
+                restore)
+                    populate_windows
+                    populate_targets
+                    local used_mb avail_mb
+                    used_mb=$(get_ram_used_mb)
+                    local rec_est=$(( used_mb > 1024 ? used_mb - 1024 : 0 ))
+
+                    echo -e "${BOLD}${GREEN}=== Full Post-Boot State Restore ===${RESET}\n"
+                    echo -e "Returns the system to its fresh post-boot footprint (~1.0 GB RAM)."
+                    echo -e "Closes all open graphical windows and terminates user tasks.\n"
+                    echo -e "  ${BOLD}Current Used RAM:${RESET}    ${YELLOW}$(format_mb "$used_mb")${RESET}"
+                    echo -e "  ${BOLD}Target Boot RAM:${RESET}     ${GREEN}~1.00 GiB${RESET}"
+                    echo -e "  ${BOLD}Est. RAM Reclaimed:${RESET}  ${CYAN}$(format_mb "$rec_est")${RESET}"
+                    echo -e "  ${BOLD}Windows to Close:${RESET}    ${#CLIENT_WINDOW_WIDS[@]}"
+                    echo -e "  ${BOLD}Processes to Kill:${RESET}   ${#TARGET_PROCS[@]}\n"
+                    echo -e "${BOLD}${CYAN}Preserved Whitelist Guarantee:${RESET}"
+                    echo -e "  ✓ Mango Wayland Compositor & Xwayland"
+                    echo -e "  ✓ Waybar Status Bar & SwayNC Notifications"
+                    echo -e "  ✓ NetworkManager & Bluetooth Applets"
+                    echo -e "  ✓ PipeWire & WirePlumber Audio Stack"
+                    echo -e "  ✓ Telegram Bot & Antigravity Daemons"
+                    echo -e "  ✓ Polkit Agent & Wallpaper Daemon"
+                    ;;
+                windows)
+                    populate_windows
+                    echo -e "${BOLD}${CYAN}=== Open Graphical Windows (${#CLIENT_WINDOW_WIDS[@]} total) ===${RESET}\n"
+                    for wid in "${!CLIENT_WINDOW_WIDS[@]}"; do
+                        local wpid="${CLIENT_WINDOW_WIDS["$wid"]}"
+                        local app="${CLIENT_WINDOW_APPS["$wid"]}"
+                        local title="${CLIENT_WINDOW_TITLES["$wid"]}"
+                        local mem
+                        mem=$(ps -p "$wpid" -o %mem= 2>/dev/null || echo "0.0")
+                        echo -e "  • ${BOLD}$app${RESET} (PID: $wpid, MEM: ${mem}%)"
+                        echo -e "    ${DIM}\"$title\"${RESET}"
+                    done
+                    ;;
+                procs)
+                    populate_targets
+                    echo -e "${BOLD}${CYAN}=== Targeted Background Processes (${#TARGET_PROCS[@]} total) ===${RESET}\n"
+                    for p in "${!TARGET_PROCS[@]}"; do
+                        local comm="${TARGET_PROCS_COMM["$p"]}"
+                        local cmd="${TARGET_PROCS_CMD["$p"]}"
+                        local mem="${TARGET_PROCS_MEM["$p"]}"
+                        echo -e "  • ${BOLD}$comm${RESET} (PID: $p | MEM: ${mem}%)"
+                        echo -e "    ${DIM}${cmd:0:55}${RESET}"
+                    done
+                    ;;
+                drop_caches)
+                    echo -e "${BOLD}${CYAN}=== Kernel Caches & Memory Buffers ===${RESET}\n"
+                    grep -E '^(MemTotal|MemFree|MemAvailable|Buffers|Cached|Dirty|Writeback|SReclaimable):' /proc/meminfo
+                    echo ""
+                    echo -e "Runs ${BOLD}sync${RESET} to commit unwritten buffers to disk."
+                    echo -e "If privileged, triggers ${BOLD}echo 3 > /proc/sys/vm/drop_caches${RESET} to purge clean caches."
+                    ;;
+                clean_cache)
+                    echo -e "${BOLD}${CYAN}=== Temporary User Cache (~/.cache) ===${RESET}\n"
+                    local cache_size
+                    cache_size=$(du -sh "$HOME/.cache" 2>/dev/null | awk '{print $1}' || echo "N/A")
+                    echo -e "  ${BOLD}Total Cache Size:${RESET} $cache_size\n"
+                    echo -e "${BOLD}Top 5 Largest Cache Folders:${RESET}"
+                    du -sh "$HOME/.cache/"* 2>/dev/null | sort -hr | head -n 5 || echo "  (empty)"
+                    ;;
+                protected)
+                    echo -e "${BOLD}${CYAN}=== Protected Boot Whitelist ===${RESET}\n"
+                    echo -e "${BOLD}Session Core:${RESET}"
+                    echo -e "  • mango, Xwayland, gdm-wayland-session"
+                    echo -e "${BOLD}UI & Shell:${RESET}"
+                    echo -e "  • waybar, swaync, nm-applet, blueman-applet, polkit-mate, awww-daemon, hypridle, wl-paste"
+                    echo -e "${BOLD}Audio & IPC:${RESET}"
+                    echo -e "  • pipewire, pipewire-pulse, wireplumber, xdg-desktop-portal*, dbus-daemon, systemd"
+                    echo -e "${BOLD}Persistent Daemons:${RESET}"
+                    echo -e "  • telegram-pc-bot.service, antigravity-cli-daemon.service"
+                    ;;
+            esac
+            ;;
+        win)
+            local wid wpid wname
+            IFS=':' read -r wid wpid wname <<< "$item_payload"
+            echo -e "${BOLD}${CYAN}=== Graphical Window: $wname ===${RESET}\n"
+            echo -e "  ${BOLD}Window ID:${RESET}   $wid"
+            echo -e "  ${BOLD}Process ID:${RESET}  $wpid"
+            if [ -d "/proc/$wpid" ]; then
+                local stats cmd
+                stats=$(ps -p "$wpid" -o %cpu,%mem,stat,etime --no-headers 2>/dev/null || echo "N/A")
+                cmd=$(tr '\0' ' ' < "/proc/$wpid/cmdline" 2>/dev/null || true)
+                echo -e "  ${BOLD}CPU/MEM/STAT:${RESET} $stats"
+                echo -e "  ${BOLD}Command:${RESET}     ${cmd:0:80}"
+                echo -e "  ${BOLD}CGroup:${RESET}      $(cat "/proc/$wpid/cgroup" 2>/dev/null | head -n1)"
+            fi
+            ;;
+        proc)
+            local pid pname
+            IFS=':' read -r pid pname <<< "$item_payload"
+            echo -e "${BOLD}${CYAN}=== User Process: $pname ===${RESET}\n"
+            echo -e "  ${BOLD}Process ID:${RESET}  $pid"
+            if [ -d "/proc/$pid" ]; then
+                local stats cmd
+                stats=$(ps -p "$pid" -o %cpu,%mem,stat,etime --no-headers 2>/dev/null || echo "N/A")
+                cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
+                echo -e "  ${BOLD}CPU/MEM/STAT:${RESET} $stats"
+                echo -e "  ${BOLD}Command:${RESET}     $cmd"
+                echo -e "  ${BOLD}CGroup:${RESET}      $(cat "/proc/$pid/cgroup" 2>/dev/null | head -n1)"
+            else
+                echo -e "  ${DIM}Process is no longer active.${RESET}"
+            fi
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive TUI Mode (fzf)
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    if ! command -v fzf >/dev/null 2>&1; then
+        cmd_status
+        return 0
+    fi
+
+    local self_bin="${BASH_SOURCE[0]}"
+
+    while true; do
+        clear
+        populate_windows
+        populate_targets
+
+        local total_mb used_mb avail_mb
+        total_mb=$(get_ram_total_mb)
+        used_mb=$(get_ram_used_mb)
+        avail_mb=$(get_ram_avail_mb)
+        local pct=$(( used_mb * 100 / total_mb ))
+        local rec_est=$(( used_mb > 1024 ? used_mb - 1024 : 0 ))
+
+        local header="RAM: $(format_mb "$used_mb") / $(format_mb "$total_mb") (${pct}%) | Target: ~1.00 GiB | Freeable: $(format_mb "$rec_est")"
+
+        local menu=()
+
+        # Primary Actions
+        menu+=("󰜉  [FULL RESTORE] Reset System to Fresh Post-Boot State (~1.0 GB RAM)"$'\t'"action:restore")
+        menu+=("󰖲  [CLOSE WINDOWS] Gracefully Close All Open Graphical Applications (${#CLIENT_WINDOW_WIDS[@]})"$'\t'"action:windows")
+        menu+=("󰍛  [KILL PROCESSES] Terminate Stray Background User Processes (${#TARGET_PROCS[@]})"$'\t'"action:procs")
+        menu+=("󰚰  [DROP CACHES] Flush Disk Buffers & Drop Kernel Page Cache"$'\t'"action:drop_caches")
+        menu+=("󰛲  [CLEAN CACHE] Clean Temporary User Cache Files (~/.cache)"$'\t'"action:clean_cache")
+        menu+=("󰒓  [INSPECT PROTECTED] View Whitelisted Boot Daemons & Services"$'\t'"action:protected")
+
+        # Open Windows in List
+        if [ ${#CLIENT_WINDOW_WIDS[@]} -gt 0 ]; then
+            for wid in "${!CLIENT_WINDOW_WIDS[@]}"; do
+                local wpid="${CLIENT_WINDOW_WIDS["$wid"]}"
+                local app="${CLIENT_WINDOW_APPS["$wid"]}"
+                local title="${CLIENT_WINDOW_TITLES["$wid"]}"
+                local icon
+                icon=$(app_to_icon "$app")
+                local is_caller=""
+                if [ -n "$CALLER_TERM_WID" ] && [ "$wid" = "$CALLER_TERM_WID" ]; then
+                    is_caller=" ★ [Current Terminal]"
+                fi
+                menu+=("${icon}  [Win] ${app}: \"${title:0:36}\"${is_caller} (PID: ${wpid})"$'\t'"win:${wid}:${wpid}:${app}")
+            done
+        fi
+
+        # Background Processes in List
+        if [ ${#TARGET_PROCS[@]} -gt 0 ]; then
+            for p in "${!TARGET_PROCS[@]}"; do
+                local comm="${TARGET_PROCS_COMM["$p"]}"
+                local mem="${TARGET_PROCS_MEM["$p"]}"
+                local cpu="${TARGET_PROCS_CPU["$p"]}"
+                local icon
+                icon=$(app_to_icon "$comm")
+                menu+=("${icon}  [Proc] ${comm} (MEM: ${mem}% | CPU: ${cpu}%) (PID: ${p})"$'\t'"proc:${p}:${comm}")
+            done
+        fi
+
+        local res key choice
+        res=$(printf "%s\n" "${menu[@]}" | fzf \
+            --expect=ctrl-r,ctrl-f,ctrl-k,ctrl-x \
+            --delimiter=$'\t' \
+            --with-nth=1 \
+            --preview="$self_bin preview {2}" \
+            --preview-window=right:50%:wrap \
+            --prompt="󰍛  RAM > " \
+            --header="[$header] (Enter: Execute/Submenu | Ctrl-F: Focus | Ctrl-K: Term | Ctrl-X: Kill | Esc: Exit)" \
+            --reverse \
+            --height=75% \
+            --border=rounded \
+            --cycle) || break
+
+        [ -z "$res" ] && break
+        key=$(echo "$res" | sed -n '1p')
+        choice=$(echo "$res" | sed -n '2p')
+        [ -z "$choice" ] && break
+
+        local sel_arg
+        sel_arg=$(echo "$choice" | cut -f2)
+        local item_type="${sel_arg%%:*}"
+        local item_payload="${sel_arg#*:}"
+
+        # Hotkeys
+        case "$key" in
+            ctrl-r) continue ;;
+            ctrl-f)
+                if [ "$item_type" = "win" ]; then
+                    local w_id
+                    w_id=$(echo "$item_payload" | cut -d: -f1)
+                    if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
+                        mmsg dispatch focusid,"$w_id" >/dev/null 2>&1 || true
+                    fi
+                    break
+                fi
+                continue
+                ;;
+            ctrl-k)
+                local p_id
+                if [ "$item_type" = "win" ]; then
+                    p_id=$(echo "$item_payload" | cut -d: -f2)
+                elif [ "$item_type" = "proc" ]; then
+                    p_id=$(echo "$item_payload" | cut -d: -f1)
+                fi
+                [ -n "$p_id" ] && kill -15 "$p_id" 2>/dev/null || true
+                sleep 0.4
+                continue
+                ;;
+            ctrl-x)
+                local p_id
+                if [ "$item_type" = "win" ]; then
+                    p_id=$(echo "$item_payload" | cut -d: -f2)
+                elif [ "$item_type" = "proc" ]; then
+                    p_id=$(echo "$item_payload" | cut -d: -f1)
+                fi
+                [ -n "$p_id" ] && kill -9 "$p_id" 2>/dev/null || true
+                sleep 0.4
+                continue
+                ;;
+        esac
+
+        # Enter pressed
+        case "$item_type" in
+            action)
+                case "$item_payload" in
+                    restore)
+                        clear
+                        echo -e "${BOLD}${RED}Reset System to Fresh Post-Boot State?${RESET}"
+                        echo -e "This will close all open client applications and free RAM down to ~1.0 GB."
+                        echo ""
+                        read -r -p "Keep this terminal open? [Y/n]: " keep_ans
+                        local k_flag=1
+                        if [[ "$keep_ans" =~ ^[nN] ]]; then
+                            k_flag=0
+                        fi
+                        echo ""
+                        cmd_full_restore 0 "$k_flag" 0 0 0 0
+                        read -r -p "Press Enter to return to menu..." _
+                        ;;
+                    windows)
+                        clear
+                        echo -e "${YELLOW}Closing all open client windows...${RESET}"
+                        cmd_close_windows 0 1
+                        echo -e "${GREEN}Done.${RESET}"
+                        sleep 1
+                        ;;
+                    procs)
+                        clear
+                        echo -e "${YELLOW}Terminating stray background user processes...${RESET}"
+                        cmd_kill_processes 0
+                        echo -e "${GREEN}Done.${RESET}"
+                        sleep 1
+                        ;;
+                    drop_caches)
+                        clear
+                        cmd_drop_caches
+                        read -r -p "Press Enter to continue..." _
+                        ;;
+                    clean_cache)
+                        clear
+                        cmd_clean_cache
+                        read -r -p "Press Enter to continue..." _
+                        ;;
+                    protected)
+                        continue
+                        ;;
+                esac
+                ;;
+
+            win)
+                local wid wpid wname
+                IFS=':' read -r wid wpid wname <<< "$item_payload"
+                local act
+                act=$(printf "1. Focus Window\n2. Close Window Gracefully (killclient)\n3. Terminate Process (SIGTERM / 15)\n4. Force Kill (SIGKILL / 9)\n5. Cancel" | fzf \
+                    --prompt="Window [$wname] > " \
+                    --height=35% \
+                    --reverse \
+                    --border=rounded) || continue
+                case "$act" in
+                    1*)
+                        if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
+                            mmsg dispatch focusid,"$wid" >/dev/null 2>&1 || true
+                        fi
+                        break
+                        ;;
+                    2*)
+                        if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
+                            mmsg dispatch killclient "client,$wid" >/dev/null 2>&1 || true
+                        fi
+                        kill -15 "$wpid" 2>/dev/null || true
+                        sleep 0.4
+                        ;;
+                    3*) kill -15 "$wpid" 2>/dev/null || true; sleep 0.4 ;;
+                    4*) kill -9 "$wpid" 2>/dev/null || true; sleep 0.4 ;;
+                esac
+                ;;
+
+            proc)
+                local pid pname
+                IFS=':' read -r pid pname <<< "$item_payload"
+                local act
+                act=$(printf "1. Terminate Process (SIGTERM / 15)\n2. Force Kill (SIGKILL / 9)\n3. Suspend / Pause (SIGSTOP)\n4. Resume (SIGCONT)\n5. Cancel" | fzf \
+                    --prompt="Process [$pname : $pid] > " \
+                    --height=35% \
+                    --reverse \
+                    --border=rounded) || continue
+                case "$act" in
+                    1*) kill -15 "$pid" 2>/dev/null || true; sleep 0.4 ;;
+                    2*) kill -9 "$pid" 2>/dev/null || true; sleep 0.4 ;;
+                    3*) kill -STOP "$pid" 2>/dev/null || true; sleep 0.4 ;;
+                    4*) kill -CONT "$pid" 2>/dev/null || true; sleep 0.4 ;;
+                esac
+                ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------------------------
+# CLI Help
+# ------------------------------------------------------------------------------
+
+cmd_help() {
+    cat <<EOF
+${BOLD}${SCRIPT_NAME}${RESET} - Memory Recovery, Process Pruner & Boot State Restorer (CLI & fzf TUI)
+
+Returns the system to its fresh post-boot memory footprint (~1.0 GB RAM)
+by gracefully closing client windows, killing orphaned tasks, and flushing caches.
+
+${BOLD}USAGE:${RESET}
+    ${SCRIPT_NAME} [COMMAND] [OPTIONS]
+
+${BOLD}COMMANDS:${RESET}
+    ${SCRIPT_NAME}                  Launch interactive fzf TUI menu
+    ${SCRIPT_NAME} restore          Restore fresh boot state (closes apps & frees RAM)
+    ${SCRIPT_NAME} status           Show RAM usage, reclaimable estimate, and target counts
+    ${SCRIPT_NAME} windows          Close all open graphical client windows
+    ${SCRIPT_NAME} procs            Terminate lingering background user processes
+    ${SCRIPT_NAME} drop-caches      Flush disk buffers & drop kernel page cache
+    ${SCRIPT_NAME} clean-cache      Clean temporary cache files in ~/.cache
+    ${SCRIPT_NAME} preview <target> Internal fzf preview handler
+    ${SCRIPT_NAME} help             Show this help message
+
+${BOLD}OPTIONS (for restore command):${RESET}
+    -n, --dry-run          Simulate without terminating any processes or windows
+    -k, --keep-term        Keep the calling terminal window open
+    -f, --force            Execute immediately without prompts or countdowns
+    --clean-cache          Also clear temporary files in ~/.cache
+    --drop-caches          Drop kernel page cache (requires sudo if not passwordless)
+    -q, --quiet            Suppress stdout output (desktop notification still sent)
+
+${BOLD}EXAMPLES:${RESET}
+    ram                             # Open interactive TUI manager
+    ram restore -k                  # Restore boot state but keep current terminal
+    ram restore -f                  # Force full reset immediately
+    ram restore --dry-run           # Preview which windows & tasks will be closed
+    ram status                      # Print quick RAM & process overview
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-}" in
+    restore|clean|reset)
+        shift
+        DRY_RUN=0 KEEP=0 FRC=0 CLN=0 DRP=0 QUT=0
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -n|--dry-run|--test) DRY_RUN=1; shift ;;
+                -k|--keep-term|--keep-terminal) KEEP=1; shift ;;
+                -f|--force) FRC=1; shift ;;
+                --clean-cache) CLN=1; shift ;;
+                --drop-caches) DRP=1; shift ;;
+                -q|--quiet) QUT=1; shift ;;
+                -h|--help) cmd_help; exit 0 ;;
+                *) echo "Unknown option: $1" >&2; exit 1 ;;
+            esac
+        done
+        cmd_full_restore "$DRY_RUN" "$KEEP" "$FRC" "$CLN" "$DRP" "$QUT"
+        ;;
+
+    status|info|stat)
+        cmd_status
+        ;;
+
+    windows|wins)
+        shift
+        DRY=0
+        [[ "${1:-}" =~ ^(-n|--dry-run)$ ]] && DRY=1
+        cmd_close_windows "$DRY" 1
+        ;;
+
+    procs|processes)
+        shift
+        DRY=0
+        [[ "${1:-}" =~ ^(-n|--dry-run)$ ]] && DRY=1
+        cmd_kill_processes "$DRY"
+        ;;
+
+    drop-caches|drop-cache)
+        cmd_drop_caches
+        ;;
+
+    clean-cache|clean-caches)
+        cmd_clean_cache
+        ;;
+
+    preview)
+        cmd_preview "${2:-}"
+        ;;
+
+    help|--help|-h)
+        cmd_help
+        ;;
+
+    -n|--dry-run|--test|-k|--keep-term|-f|--force)
+        # Direct flags passed without subcommand -> interpret as restore with flags
+        DRY_RUN=0 KEEP=0 FRC=0 CLN=0 DRP=0 QUT=0
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -n|--dry-run|--test) DRY_RUN=1; shift ;;
+                -k|--keep-term|--keep-terminal) KEEP=1; shift ;;
+                -f|--force) FRC=1; shift ;;
+                --clean-cache) CLN=1; shift ;;
+                --drop-caches) DRP=1; shift ;;
+                -q|--quiet) QUT=1; shift ;;
+                *) shift ;;
+            esac
+        done
+        cmd_full_restore "$DRY_RUN" "$KEEP" "$FRC" "$CLN" "$DRP" "$QUT"
+        ;;
+
+    *)
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            cmd_status
+        fi
+        ;;
+esac
