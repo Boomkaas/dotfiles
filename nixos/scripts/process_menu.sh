@@ -53,7 +53,8 @@ resolve_app_details() {
             elif [[ "$cmd_lower" =~ (code) ]]; then APP_NAME="VS Code"
             elif [[ "$cmd_lower" =~ (antigravity) ]]; then APP_NAME="Antigravity"
             elif [ -n "$cmdline" ]; then
-                APP_NAME=$(basename "$(echo "$cmdline" | awk '{print $1}')")
+                local first_arg="${cmdline%% *}"
+                APP_NAME="${first_arg##*/}"
             fi
         fi
     fi
@@ -146,9 +147,11 @@ render_main_list() {
 
             resolve_app_details "$wappid" "$wtitle" "$wpid"
 
-            # Clean and truncate window title
-            local clean_title
-            clean_title=$(echo "$wtitle" | tr -d '\r\n\t' | sed 's/^[ \t]*//')
+            # Clean and truncate window title using pure bash string manipulation
+            local clean_title="${wtitle//$'\r'/}"
+            clean_title="${clean_title//$'\n'/}"
+            clean_title="${clean_title//$'\t'/ }"
+            clean_title="${clean_title#"${clean_title%%[! ]*}"}"
             if [ -z "$clean_title" ] || [ "$clean_title" = "$APP_NAME" ]; then
                 clean_title="$APP_NAME"
             fi
@@ -172,15 +175,7 @@ render_main_list() {
 
     # 2. Background Processes from ps
     local count=0
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        local bpid bppid bcpu bmem bcomm
-        bpid=$(echo "$line" | awk '{print $1}')
-        bppid=$(echo "$line" | awk '{print $2}')
-        bcpu=$(echo "$line" | awk '{print $3}')
-        bmem=$(echo "$line" | awk '{print $4}')
-        bcomm=$(echo "$line" | awk '{$1=""; $2=""; $3=""; $4=""; print $0}' | sed 's/^[ \t]*//')
-
+    while read -r bpid bppid bcpu bmem bcomm; do
         [ -z "$bpid" ] || [ "$bpid" = "PID" ] && continue
         [ "$bppid" = "2" ] && continue
         [[ "$bcomm" =~ ^(\[|kworker|rcu|migration|ps|jq|awk|sed|grep|sleep|mmsg|rofi) ]] && continue

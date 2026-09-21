@@ -1,6 +1,7 @@
 configuration {
     modes: "drun,Processes";
     show-icons: true;
+    drun-use-desktop-cache: true;
     terminal: "kitty";
     drun-display-format: "{icon} {name}";
     location: 0;
