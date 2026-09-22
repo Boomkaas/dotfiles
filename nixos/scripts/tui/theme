@@ -81,18 +81,6 @@ get_accent_color() {
     echo "${col:-#cd9c61}"
 }
 
-get_waybar_layout() {
-    local l
-    l=$(cat "$HOME/.local/state/haku_theme/waybar_current_mode" 2>/dev/null || echo "hancore-v1-9b")
-    echo "$l"
-}
-
-get_rofi_theme() {
-    local r
-    r=$(sed -nE 's/^\s*@theme\s+"([^"]+)".*$/\1/p' "$HOME/.config/rofi/config.rasi" 2>/dev/null | head -n1)
-    echo "${r:-horizontal}"
-}
-
 # ------------------------------------------------------------------------------
 # Actions
 # ------------------------------------------------------------------------------
@@ -100,8 +88,6 @@ get_rofi_theme() {
 cmd_status() {
     echo -e "${BOLD}${CYAN}=== Theme & Appearance Status ===${RESET}"
     echo -e "  ${BOLD}Accent Color:${RESET}       $(get_accent_color)"
-    echo -e "  ${BOLD}Waybar Layout:${RESET}      $(get_waybar_layout)"
-    echo -e "  ${BOLD}Rofi Theme:${RESET}         $(get_rofi_theme)"
     echo -e "  ${BOLD}Monochrome Filter:${RESET}  $([ "$(get_mono_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
     echo -e "  ${BOLD}Cava Visualizer:${RESET}    $([ "$(get_cava_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
     echo -e "  ${BOLD}Dockbar:${RESET}            $([ "$(get_dockbar_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
@@ -176,31 +162,6 @@ cmd_preview() {
             echo -e "  ImageMagick cache without modifying source image files."
             echo ""
             echo -e "${BOLD}Action:${RESET} Toggle monochrome wallpaper filter"
-            ;;
-        waybar_rand)
-            echo -e "${BOLD}${CYAN}=== Randomize Waybar Layout ===${RESET}"
-            echo -e "  ${BOLD}Description:${RESET} Shuffles to a random Waybar preset layout"
-            echo -e "  from the 30+ available themes in ~/.config/waybar."
-            echo ""
-            echo -e "${BOLD}Action:${RESET} Apply random Waybar layout immediately"
-            ;;
-        waybar_select)
-            local current count
-            current=$(get_waybar_layout)
-            count=$(find "$HOME/.config/waybar" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l || echo "0")
-            echo -e "${BOLD}${CYAN}=== Switch Waybar Layout ===${RESET}"
-            echo -e "  ${BOLD}Current Preset:${RESET} ${GREEN}${BOLD}$current${RESET}"
-            echo -e "  ${BOLD}Available:${RESET}      $count presets"
-            echo ""
-            echo -e "${BOLD}Action:${RESET} Open interactive Waybar layout selector menu"
-            ;;
-        rofi_theme)
-            local rofi
-            rofi=$(get_rofi_theme)
-            echo -e "${BOLD}${CYAN}=== Switch Rofi Theme ===${RESET}"
-            echo -e "  ${BOLD}Current Style:${RESET} ${GREEN}${BOLD}$rofi${RESET}"
-            echo ""
-            echo -e "${BOLD}Action:${RESET} Open Rofi theme and layout selector"
             ;;
         lively_video)
             local lively
@@ -313,7 +274,7 @@ cmd_interactive() {
 
     while true; do
         clear
-        local mono cava dock icons pet lively accent waybar rofi
+        local mono cava dock icons pet lively accent
         mono=$(get_mono_status)
         cava=$(get_cava_status)
         dock=$(get_dockbar_status)
@@ -321,18 +282,13 @@ cmd_interactive() {
         pet=$(get_pet_status)
         lively=$(get_lively_status)
         accent=$(get_accent_color)
-        waybar=$(get_waybar_layout)
-        rofi=$(get_rofi_theme)
 
-        local header_info="Accent: $accent | Waybar: $waybar"
+        local header_info="Accent: $accent"
 
         local menu=()
         menu+=("󰏜  Change Wallpaper (Visual Gallery)"$'\t'"wallpaper")
         menu+=("🎲 Randomize Wallpaper Now"$'\t'"random_wp")
         menu+=("󰄄  Monochrome Wallpaper Toggle ($mono)"$'\t'"mono_wp")
-        menu+=("🎲 Randomize Waybar Layout Now"$'\t'"waybar_rand")
-        menu+=("  Switch Waybar Layout ($waybar)"$'\t'"waybar_select")
-        menu+=("  Switch Rofi Theme ($rofi)"$'\t'"rofi_theme")
         menu+=("󱜏  Change Lively Video Wallpaper ($lively)"$'\t'"lively_video")
         menu+=("󱛹  Stop Lively Video Wallpaper"$'\t'"lively_stop")
         menu+=("󰈊  Pick Accent Color from Screen (Eyedropper)"$'\t'"accent_picker")
@@ -382,17 +338,7 @@ cmd_interactive() {
                 $HOME/.local/bin/monochrome_wallpaper_toggle.sh
                 sleep 0.5
                 ;;
-            waybar_rand)
-                $HOME/.local/bin/waybar_manager.sh --random
-                sleep 0.5
-                ;;
-            waybar_select)
-                $HOME/.local/bin/waybar_manager.sh --select
-                ;;
-            rofi_theme)
-                $HOME/.local/bin/rofi_theme_switcher.sh
-                ;;
-            lively_video)
+                        lively_video)
                 $HOME/.local/bin/wallpaper_video_select.sh
                 ;;
             lively_stop)
@@ -456,8 +402,6 @@ ${BOLD}USAGE:${RESET}
     theme lively                    Select animated video wallpaper
     theme lively-stop               Stop animated video wallpaper
     theme accent                    Pick accent color from screen
-    theme waybar [layout]           Switch Waybar layout preset
-    theme rofi                      Switch Rofi launcher theme
     theme gtk                       Open GTK look & appearance customizer
     theme font                      Change global font and size
     theme cava                      Toggle Cava underbar visualizer
@@ -503,17 +447,6 @@ case "${1:-}" in
         ;;
     accent|color)
         $HOME/.local/bin/accent_color_picker.sh
-        ;;
-    waybar)
-        shift
-        if [ -n "${1:-}" ]; then
-            $HOME/.local/bin/waybar_manager.sh "$1"
-        else
-            $HOME/.local/bin/waybar_manager.sh --select
-        fi
-        ;;
-    rofi)
-        $HOME/.local/bin/rofi_theme_switcher.sh
         ;;
     gtk|appearance)
         if command -v nwg-look >/dev/null 2>&1; then
