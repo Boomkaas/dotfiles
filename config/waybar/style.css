@@ -1,331 +1,568 @@
+@import url("../../.local/state/haku_theme/colors.css");
+@import url("../../.local/state/haku_theme/fonts.css");
+
+/* ============================================================================== */
+/* PURE MONOCHROME COLOR SYSTEM & NORMALIZATION                                    */
+/* @accent_color is strictly for text, icons, and active indicators.              */
+/* All backgrounds are clean dark/translucent; buttons have transparent bg.      */
+/* ============================================================================== */
+@define-color primary @accent_color;
+@define-color accent @accent_color;
+@define-color active @accent_color;
+@define-color secondary @accent_color;
+@define-color rd1 @accent_color;
+@define-color alert @accent_color;
+@define-color rosewater @accent_color;
+@define-color flamingo @accent_color;
+@define-color pink @accent_color;
+@define-color mauve @accent_color;
+@define-color red @accent_color;
+@define-color maroon @accent_color;
+@define-color peach @accent_color;
+@define-color yellow @accent_color;
+@define-color green @accent_color;
+@define-color teal @accent_color;
+@define-color sky @accent_color;
+@define-color sapphire @accent_color;
+@define-color blue @accent_color;
+@define-color lavender @accent_color;
+
+/* Background Surface Tokens */
+@define-color bg rgba(15, 15, 18, 0.92);
+@define-color background rgba(15, 15, 18, 0.92);
+@define-color base rgba(15, 15, 18, 0.92);
+@define-color mantle rgba(12, 12, 14, 0.95);
+@define-color crust rgba(8, 8, 10, 0.98);
+@define-color surface0 rgba(255, 255, 255, 0.05);
+@define-color overlay0 rgba(255, 255, 255, 0.10);
+@define-color ia1 rgba(0, 0, 0, 0.5);
+@define-color fg #e6e6e6;
+@define-color foreground #e6e6e6;
+@define-color text #e6e6e6;
+@define-color subtext #a6a6a6;
+@define-color inactive #777777;
+
 * {
-    /* `otf-font-awesome` is required to be installed for icons */
-    font-family: FontAwesome, Roboto, Helvetica, Arial, sans-serif;
-    font-size: 13px;
+    min-height: 0;
+    min-width: 0;
 }
 
 window#waybar {
-    background-color: rgba(43, 48, 59, 0.5);
-    border-bottom: 3px solid rgba(100, 114, 125, 0.5);
-    color: #ffffff;
-    transition-property: background-color;
-    transition-duration: .5s;
+    background: transparent;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+/* Ensure all rounded boxes clip their backgrounds inside the border */
+#waybar > box,
+.modules-left,
+.modules-center,
+.modules-right {
+    background-clip: padding-box;
+}
+
+/* Reset default GTK button extra spacing and force transparent bg */
+button,
+button:hover,
+button:active,
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    background: transparent;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* ============================================================================== */
+/* STRICT FONT-COLOR-ONLY ACCENT SYSTEM                                           */
+/* @accent_color is STRICTLY for font/text/icon color (color: @accent_color).     */
+/* Buttons and active indicators NEVER have background colors (transparent).      */
+/* ============================================================================== */
+
+/* Background Surface Tokens (Dark / Neutral / Translucent) */
+
+* {
+    min-height: 0;
+    min-width: 0;
+}
+
+/* All buttons: 100% transparent backgrounds */
+button,
+button:hover,
+button:active,
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    background: transparent;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* ============================================================================== */
+/* PURE MONOCHROME COLOR SYSTEM                                                   */
+/* Strictly neutral grays, dark backgrounds, clean whites, and @accent_color.    */
+/* ============================================================================== */
+
+/* Monochrome Background & Neutral Surface Tokens */
+
+* {
+    min-height: 0;
+    min-width: 0;
+}
+
+/* Reset default GTK button extra spacing */
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* ============================================================================== */
+/* STRICT ACCENT SYSTEM (NO ACCENT IN BACKGROUNDS)                                */
+/* @accent_color is strictly for text, icons, borders, outlines, and badges.     */
+/* Backgrounds are ALWAYS clean dark / neutral translucent (@bg / #000000).      */
+/* ============================================================================== */
+
+/* Background and Neutral Surface Tokens (NEVER ACCENT) */
+
+* {
+    min-height: 0;
+    min-width: 0;
+}
+
+/* Reset default GTK button extra spacing */
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* ============================================================================== */
+/* STRICT ACCENT SYSTEM (NO ACCENT IN BACKGROUNDS)                                */
+/* @accent_color is strictly for text, icons, borders, outlines, and badges.     */
+/* Backgrounds are ALWAYS clean dark / neutral translucent (@bg / #000000).      */
+/* ============================================================================== */
+
+/* Background and Neutral Surface Tokens (NEVER ACCENT) */
+
+* {
+    min-height: 0;
+    min-width: 0;
+}
+
+/* Reset default GTK button extra spacing */
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* ============================================================================== */
+/* STRICT MAIN SYSTEM COLOR BINDINGS                                              */
+/* All accent tokens dynamically inherit @accent_color from colors.css            */
+/* ============================================================================== */
+
+/* Background and Neutral Surface Tokens */
+
+* {
+    min-height: 0;
+    min-width: 0;
+}
+
+/* Reset default GTK button extra spacing */
+#workspaces button,
+#ext-workspaces button,
+#wlr-taskbar button {
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+
+* {
+  border: none;
+  padding: 0px;
+  font-family: 'JetBrainsMono Nerd Font Propo';
+  font-size: 12px;
+  font-weight: bold;
+  min-height: 0;
+  transition: background-color .3s ease-out;
+  }
+
+
+/* --- Waybar ---*/
+window#waybar {
+  background-color: transparent;
+  transition-property: background-color;
+  transition-duration: .5s;
 }
 
 window#waybar.hidden {
-    opacity: 0.2;
+  opacity: 0.2;
 }
 
-/*
-window#waybar.empty {
-    background-color: transparent;
-}
-window#waybar.solo {
-    background-color: #FFFFFF;
-}
-*/
-
-window#waybar.termite {
-    background-color: #3F3F3F;
+window#waybar.empty #window, #wlr-taskbar {
+  background-color: transparent;
+  padding: 0;
 }
 
-window#waybar.chromium {
-    background-color: #000000;
-    border: none;
+/* --- Modules --- */
+
+.modules-center {
+  border-radius: 3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 1px 4px 2px 4px;
+  background-color: @bg;
+  box-shadow: none;
+  min-height: 15px;
+  transition-property: background-color;
+  transition-duration: .5s;
 }
+
+/* --- Workspaces --- */
 
 button {
-    /* Use box-shadow instead of border so the text isn't offset */
-    box-shadow: inset 0 -3px transparent;
-    /* Avoid rounded borders under each button name */
-    border: none;
-    border-radius: 0;
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
+  transition: 0.3s ease-in-out;
 }
 
-/* https://github.com/Alexays/Waybar/wiki/FAQ#the-workspace-buttons-have-a-strange-hover-effect */
 button:hover {
-    background: inherit;
-    box-shadow: inset 0 -3px #ffffff;
+  background: inherit;
 }
 
-/* you can set a style on hover for any module like this */
-#pulseaudio:hover {
-    background-color: #a37800;
+#workspaces, #ext-workspaces {
+  background-color: @bg;
+  margin: 5px;
+  padding: 0px;
+  border-radius: 3px;
 }
 
-#workspaces button {
-    padding: 0 5px;
-    background-color: transparent;
-    color: #ffffff;
+#workspaces, #ext-workspaces button, #ext-workspaces button {
+  color: @fg;
+  background-color: transparent;
+  padding: 0px 4px;
+  margin: 1px 1px;
+  border-radius: 2px;
 }
 
-#workspaces button:hover {
-    background: rgba(0, 0, 0, 0.2);
+#workspaces, #ext-workspaces button, #ext-workspaces button.active, #ext-workspaces button.active, #ext-workspaces button.focused {
+  background-color: transparent;
+  color: @bg;
 }
 
-#workspaces button.focused, #workspaces button.active {
-    background-color: #64727D;
-    box-shadow: inset 0 -3px #ffffff;
+#workspaces, #ext-workspaces button, #ext-workspaces button.empty, #ext-workspaces button.empty {
+  color: @fg;
+  background-color: transparent;
+  opacity: 0.35;
 }
 
-#workspaces button.urgent {
-    background-color: #eb4d4b;
+#workspaces, #ext-workspaces button, #ext-workspaces button.empty, #ext-workspaces button.empty.active {
+  color: @bg;
+  background: @fg;
+  opacity: 1;
 }
 
-#mode {
-    background-color: #64727D;
-    box-shadow: inset 0 -3px #ffffff;
+#workspaces, #ext-workspaces button, #ext-workspaces button:hover {
+  background-color: @fg;
+  color: @bg;
+  opacity: 1;
 }
 
-#clock,
-#battery,
-#cpu,
-#memory,
-#disk,
-#temperature,
-#backlight,
-#network,
-#pulseaudio,
-#wireplumber,
-#custom-media,
+
+/* --- General Modules --- */
+
 #tray,
-#mode,
-#idle_inhibitor,
-#scratchpad,
-#power-profiles-daemon,
-#mpd {
-    padding: 0 10px;
-    color: #ffffff;
-}
-
-#window,
-#workspaces {
-    margin: 0 4px;
-}
-
-/* If workspaces is the leftmost module, omit left margin */
-.modules-left > widget:first-child > #workspaces {
-    margin-left: 0;
-}
-
-/* If workspaces is the rightmost module, omit right margin */
-.modules-right > widget:last-child > #workspaces {
-    margin-right: 0;
-}
-
+#mpris,
+#memory,
+#cpu,
+#battery,
+#network,
+#backlight,
+#bluetooth,
+#pulseaudio,
+#custom-idle-indicator,
+#custom-notification-silencing-indicator, #custom-notification,
+#custom-updatespacman,
+#custom-update,
+#custom-screenrecording-indicator,
 #clock {
-    background-color: #64727D;
+  min-width: 14px;
+  padding-left: 3px;
+  padding-right: 3px;
+  margin: 0 2px 0 2px; 
 }
 
-#battery {
-    background-color: #ffffff;
-    color: #000000;
+#tray {
+  padding-left: 0px;
+  padding-right: 0px;
+  margin-top: 1px;
 }
 
-#battery.charging, #battery.plugged {
-    color: #ffffff;
-    background-color: #26A65B;
+#backlight {
+  padding-right: 0px;
+  padding-left: 6px;
 }
 
-@keyframes blink {
-    to {
-        background-color: #ffffff;
-        color: #000000;
-    }
+#bluetooth {
+  padding-left: 0px;
 }
 
-/* Using steps() instead of linear as a timing function to limit cpu usage */
-#battery.critical:not(.charging) {
-    background-color: #f53c3c;
-    color: #ffffff;
-    animation-name: blink;
-    animation-duration: 0.5s;
-    animation-timing-function: steps(12);
+#bluetooth,
+#mpris,
+#memory,
+#cpu,
+#battery,
+#network,
+#backlight,
+#bluetooth,
+#pulseaudio {
+  border-radius: 3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 1px 2px 2px 2px;
+  padding: 0 6px;
+  background-color: @bg;
+  box-shadow: none;
+  transition-property: background-color;
+  transition-duration: .5s;
+}
+
+#memory,
+#cpu {
+min-width: 45px;
+}
+
+tooltip {
+  padding: 2px;
+}
+
+tooltip {
+ padding: 4px;
+ background: @bg;
+ font-size: 10px;
+ border: 2px solid alpha(@fg, 0.2);
+ border-radius: 5px;
+}
+tooltip label {
+    color: @fg;
+    font-weight: bold;
+}
+
+#custom-expand-icon {
+  opacity: 0.5;
+  font-size: 11px;
+  color: @foreground;
+  padding: 0 5px;
+}
+
+#custom-voxtype {
+  min-width: 12px;
+  margin: 0 0 0 7.5px;
+}
+
+#custom-voxtype.recording {
+  color: @accent_color;
+}
+
+#custom-separator {
+  opacity: 0.2;
+  padding-top: 2px;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#custom-idle-indicator,
+#custom-notification-silencing-indicator, #custom-notification {
+  min-width: 12px;
+  margin-left: 0;
+  margin-right: 0;
+  font-size: 10px;
+  padding-bottom: 0px;
+}
+
+#custom-idle-indicator.active,
+#custom-notification-silencing-indicator, #custom-notification.active {
+  color: @accent_color;
+}
+
+/* Specific Module */
+
+.hidden {
+  opacity: 0;
+}
+
+#mpris {
+color: @fg;
+animation: repeat;
+	animation-name: blink;
+	animation-duration: 3s;
+    animation-timing-function: linear;
     animation-iteration-count: infinite;
     animation-direction: alternate;
 }
 
-#power-profiles-daemon {
-    padding-right: 15px;
+@keyframes blink {
+    to {
+        color: @accent_color;       
+    }
 }
 
-#power-profiles-daemon.performance {
-    background-color: #f53c3c;
-    color: #ffffff;
+#custom-screenrecording-indicator {
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  color: transparent;
 }
 
-#power-profiles-daemon.balanced {
-    background-color: #2980b9;
-    color: #ffffff;
+#custom-screenrecording-indicator.active {
+  color: @accent_color;
+  background-color: @bg;
+  animation-name: blink-recording;
+  animation-duration: 0.5s;
 }
 
-#power-profiles-daemon.power-saver {
-    background-color: #2ecc71;
-    color: #000000;
+@keyframes blink-recording {
+    to {
+        color: @bg;
+    }
 }
 
-label:focus {
-    background-color: #000000;
+#battery.warning {
+  color: @accent_color;
+   background-color: @bg;
 }
 
-#cpu {
-    background-color: #2ecc71;
-    color: #000000;
+@keyframes blink2 {
+  to {
+    background-color: @bg;
+    color: @accent_color;
+  }
 }
 
-#memory {
-    background-color: #9b59b6;
+#battery.critical:not(.charging) {
+  background-color: @bg;
+  color: @accent_color;
+  animation-name: blink2;
+  animation-duration: 0.5s;
+  animation-timing-function: steps(12);
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
 }
 
-#disk {
-    background-color: #964B00;
+/* ============================================================================== */
+
+/* ============================================================================== */
+/* PERFECT ICON SPACING & ROUNDED CORNER OUTLINE REFINEMENT                       */
+/* ============================================================================== */
+
+/* 1. Prevent square background bleeding on rounded containers */
+#waybar > box {
+    background-clip: padding-box;
+    box-shadow: none;
 }
 
-#backlight {
-    background-color: #90b1b1;
+.modules-left,
+.modules-center,
+.modules-right {
+    background-clip: padding-box;
 }
 
-#network {
-    background-color: #2980b9;
-}
-
-#network.disconnected {
-    background-color: #f53c3c;
-}
-
-#pulseaudio {
-    background-color: #f1c40f;
-    color: #000000;
-}
-
-#pulseaudio.muted {
-    background-color: #90b1b1;
-    color: #2a5c45;
-}
-
-#wireplumber {
-    background-color: #fff0f5;
-    color: #000000;
-}
-
-#wireplumber.muted {
-    background-color: #f53c3c;
-}
-
-#custom-media {
-    background-color: #66cc99;
-    color: #2a5c45;
-    min-width: 100px;
-}
-
-#custom-media.custom-spotify {
-    background-color: #66cc99;
-}
-
-#custom-media.custom-vlc {
-    background-color: #ffa000;
-}
-
-#temperature {
-    background-color: #f0932b;
-}
-
-#temperature.critical {
-    background-color: #eb4d4b;
-}
-
-#tray {
-    background-color: #2980b9;
-}
-
-#tray > .passive {
-    -gtk-icon-effect: dim;
-}
-
-#tray > .needs-attention {
-    -gtk-icon-effect: highlight;
-    background-color: #eb4d4b;
-}
-
-#idle_inhibitor {
-    background-color: #2d3436;
-}
-
-#idle_inhibitor.activated {
-    background-color: #ecf0f1;
-    color: #2d3436;
-}
-
-#mpd {
-    background-color: #66cc99;
-    color: #2a5c45;
-}
-
-#mpd.disconnected {
-    background-color: #f53c3c;
-}
-
-#mpd.stopped {
-    background-color: #90b1b1;
-}
-
-#mpd.paused {
-    background-color: #51a37a;
-}
-
-#language {
-    background: #00b093;
-    color: #740864;
-    padding: 0 5px;
-    margin: 0 5px;
-    min-width: 16px;
-}
-
-#keyboard-state {
-    background: #97e1ad;
-    color: #000000;
-    padding: 0 0px;
-    margin: 0 5px;
-    min-width: 16px;
-}
-
-#keyboard-state > label {
-    padding: 0 5px;
-}
-
-#keyboard-state > label.locked {
-    background: rgba(0, 0, 0, 0.2);
-}
-
-#scratchpad {
-    background: rgba(0, 0, 0, 0.2);
-}
-
-#scratchpad.empty {
+/* 2. Workspace buttons: comfortable breathing room + transparent bg */
+#workspaces button,
+#ext-workspaces button {
+    background: transparent;
     background-color: transparent;
+    color: #888888;
+    border: none;
+    box-shadow: none;
+    padding: 0 6px;
+    margin: 0 2px;
+    min-width: 14px;
 }
 
-#privacy {
-    padding: 0;
+#workspaces button:hover,
+#ext-workspaces button:hover {
+    background: transparent;
+    background-color: transparent;
+    color: @accent_color;
 }
 
-#privacy-item {
-    padding: 0 5px;
-    color: white;
+#workspaces button.active,
+#workspaces button.focused,
+#ext-workspaces button.active,
+#ext-workspaces button.focused {
+    background: transparent;
+    background-color: transparent;
+    color: @accent_color;
+    font-weight: bold;
+    border: none;
+    box-shadow: none;
 }
 
-#privacy-item.screenshare {
-    background-color: #cf5700;
+/* 3. Taskbar buttons */
+#wlr-taskbar button {
+    background: transparent;
+    background-color: transparent;
+    color: #e6e6e6;
+    border: none;
+    box-shadow: none;
+    padding: 0 6px;
+    margin: 0 2px;
 }
 
-#privacy-item.audio-in {
-    background-color: #1ca000;
+#wlr-taskbar button.active {
+    background: transparent;
+    background-color: transparent;
+    color: @accent_color;
+    font-weight: bold;
 }
 
-#privacy-item.audio-out {
-    background-color: #0069d4;
+/* 4. Status icons & custom modules: consistent horizontal spacing */
+#custom-menu,
+#custom-power,
+#custom-notification,
+#custom-nightlight,
+#clock,
+#pulseaudio,
+#backlight,
+#battery,
+#network,
+#bluetooth,
+#cpu,
+#memory,
+#temperature,
+#mpris,
+#tray,
+#idle_inhibitor {
+    background-clip: padding-box;
+    padding: 0 6px;
+    margin: 0 3px;
 }
 
-#privacy-item.location {
-    background-color: #00afff;
+#custom-menu,
+#custom-power {
+    color: @accent_color;
 }

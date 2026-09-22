@@ -8,7 +8,7 @@
 WAYBAR_DIR="$HOME/.config/waybar"
 USER_WAYBAR_DIR="$HOME/hakuspace-control/waybar"
 STATE_FILE="$HOME/.local/state/haku_theme/waybar_current_mode"
-CURRENT_STATE="jakoolit-sleek"
+CURRENT_STATE="hancore-v1-9b"
 
 # Use installed user waybar modes
 WAYBAR_MODES=("${WAYBAR_MODE_USER[@]}")

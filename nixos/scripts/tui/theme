@@ -83,7 +83,7 @@ get_accent_color() {
 
 get_waybar_layout() {
     local l
-    l=$(cat "$HOME/.local/state/haku_theme/waybar_current_mode" 2>/dev/null || echo "jakoolit-top-sleek")
+    l=$(cat "$HOME/.local/state/haku_theme/waybar_current_mode" 2>/dev/null || echo "hancore-v1-9b")
     echo "$l"
 }
 
