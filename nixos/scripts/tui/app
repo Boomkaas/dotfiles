@@ -1,0 +1,300 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# app - Application Launcher & .desktop Browser (CLI & fzf TUI)
+# Parse, browse, and launch installed desktop applications with fuzzy search.
+# ==============================================================================
+
+set -euo pipefail
+
+# Colors
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    MAGENTA=$'\033[0;35m'
+    CYAN=$'\033[0;36m'
+    WHITE=$'\033[0;37m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    WHITE=''
+    RESET=''
+fi
+
+export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
+
+# ------------------------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------------------------
+
+APP_DIRS=(
+    "/run/current-system/sw/share/applications"
+    "$HOME/.local/share/applications"
+    "/usr/share/applications"
+)
+
+# ------------------------------------------------------------------------------
+# Data Parsers
+# ------------------------------------------------------------------------------
+
+# Parse a .desktop file and extract key fields
+parse_desktop_file() {
+    local file="$1"
+    local name="" exec="" comment="" icon="" terminal="false" nodisplay="false"
+
+    while IFS='=' read -r key value; do
+        case "$key" in
+            Name) name="$value" ;;
+            Exec) exec="$value" ;;
+            Comment) comment="$value" ;;
+            Icon) icon="$value" ;;
+            Terminal) terminal="$value" ;;
+            NoDisplay) nodisplay="$value" ;;
+        esac
+    done < <(grep -E '^(Name|Exec|Comment|Icon|Terminal|NoDisplay)=' "$file" 2>/dev/null || true)
+
+    # Skip if NoDisplay=true or no name/exec
+    [[ "$nodisplay" == "true" ]] && return
+    [[ -z "$name" ]] || [[ -z "$exec" ]] && return
+
+    # Output in format: name|exec|comment|icon|terminal|filepath
+    echo "$name|$exec|$comment|$icon|$terminal|$file"
+}
+
+# Collect all .desktop entries from configured directories
+collect_apps() {
+    local -A seen_names
+
+    for dir in "${APP_DIRS[@]}"; do
+        [[ ! -d "$dir" ]] && continue
+
+        while IFS= read -r -d '' desktop_file; do
+            local entry
+            entry=$(parse_desktop_file "$desktop_file")
+            [[ -z "$entry" ]] && continue
+
+            local name="${entry%%|*}"
+
+            # Skip duplicates (first found wins)
+            [[ -n "${seen_names[$name]:-}" ]] && continue
+            seen_names["$name"]=1
+
+            echo "$entry"
+        done < <(find "$dir" -maxdepth 1 -name "*.desktop" -print0 2>/dev/null)
+    done | sort -t'|' -k1,1
+}
+
+# ------------------------------------------------------------------------------
+# Formatting & Display
+# ------------------------------------------------------------------------------
+
+# Format app entry for fzf display
+format_app_entry() {
+    local entry="$1"
+    IFS='|' read -r name exec comment icon terminal filepath <<< "$entry"
+
+    local icon_display="󰀻"
+    [[ "$terminal" == "true" ]] && icon_display=""
+
+    local comment_trunc="${comment:0:60}"
+    [[ ${#comment} -gt 60 ]] && comment_trunc="${comment_trunc}..."
+
+    printf "%-3s %-40s %s\n" "$icon_display" "$name" "$comment_trunc"
+}
+
+# ------------------------------------------------------------------------------
+# Actions
+# ------------------------------------------------------------------------------
+
+# Launch application
+launch_app() {
+    local exec_cmd="$1"
+    local terminal="$2"
+
+    # Clean exec command (remove field codes like %u, %f, etc.)
+    exec_cmd=$(echo "$exec_cmd" | sed -E 's/ %[uUfFdDnNickvm]//g')
+
+    if [[ "$terminal" == "true" ]]; then
+        exec kitty -e bash -c "$exec_cmd" &>/dev/null &
+    else
+        nohup bash -c "$exec_cmd" &>/dev/null &
+    fi
+
+    disown
+}
+
+# ------------------------------------------------------------------------------
+# Preview Handler
+# ------------------------------------------------------------------------------
+
+# Preview handler for fzf
+cmd_preview() {
+    local display_line="$1"
+    [[ -z "$display_line" ]] && return
+
+    # Extract app name from formatted line (column 2)
+    local app_name
+    app_name=$(echo "$display_line" | awk '{$1=""; print substr($0,2)}' | sed 's/ *$//')
+
+    # Find the full entry by name
+    local entry
+    entry=$(collect_apps | grep "^${app_name}|" | head -1)
+    [[ -z "$entry" ]] && return
+
+    IFS='|' read -r name exec comment icon terminal filepath <<< "$entry"
+
+    echo -e "${BOLD}${CYAN}Application:${RESET} $name"
+    echo "─────────────────────────────────────────────────────────────────────────────"
+
+    [[ -n "$comment" ]] && echo -e "\n${BOLD}Description:${RESET}\n  $comment"
+
+    echo -e "\n${BOLD}Command:${RESET}\n  ${GREEN}$exec${RESET}"
+
+    [[ "$terminal" == "true" ]] && echo -e "\n${YELLOW}⚠  Terminal Application${RESET}"
+
+    [[ -n "$icon" ]] && echo -e "\n${BOLD}Icon:${RESET} $icon"
+
+    echo -e "\n${BOLD}Source:${RESET}\n  ${DIM}$filepath${RESET}"
+}
+
+# ------------------------------------------------------------------------------
+# Interactive Dashboard
+# ------------------------------------------------------------------------------
+
+cmd_interactive() {
+    local apps_data
+    apps_data=$(collect_apps)
+
+    [[ -z "$apps_data" ]] && {
+        echo -e "${RED}No applications found${RESET}"
+        return 1
+    }
+
+    local formatted_list=""
+    while IFS= read -r entry; do
+        formatted_list+="$(format_app_entry "$entry")"$'\n'
+    done <<< "$apps_data"
+
+    local self_bin
+    self_bin="$(readlink -f "$0")"
+
+    local selection
+    selection=$(echo "$formatted_list" | fzf \
+        --ansi \
+        --prompt="󰀻  App > " \
+        --header="[Application Launcher] (Enter: Launch | Ctrl-R: Reload | Esc: Exit)" \
+        --preview="$self_bin preview {}" \
+        --preview-window="right:48%:wrap" \
+        --height=70% \
+        --border=rounded \
+        --reverse \
+        --cycle \
+        --bind="ctrl-r:reload($self_bin collect)" \
+        --bind="ctrl-q:abort")
+
+    [[ -z "$selection" ]] && return 0
+
+    # Extract app name and find entry
+    local app_name
+    app_name=$(echo "$selection" | awk '{$1=""; print substr($0,2)}' | sed 's/ *$//')
+
+    local entry
+    entry=$(echo "$apps_data" | grep "^${app_name}|" | head -1)
+
+    IFS='|' read -r name exec comment icon terminal filepath <<< "$entry"
+
+    echo -e "${GREEN}✓${RESET} Launching ${BOLD}$name${RESET}..."
+    launch_app "$exec" "$terminal"
+}
+
+# ------------------------------------------------------------------------------
+# CLI List Mode
+# ------------------------------------------------------------------------------
+
+cmd_list() {
+    echo -e "${BOLD}Installed Applications:${RESET}\n"
+
+    local count=0
+    while IFS='|' read -r name exec comment icon terminal filepath; do
+        count=$((count + 1))
+        local icon_display="󰀻"
+        [[ "$terminal" == "true" ]] && icon_display=""
+
+        echo -e "${icon_display} ${BOLD}${name}${RESET}"
+        [[ -n "$comment" ]] && echo -e "  ${DIM}${comment}${RESET}"
+    done < <(collect_apps)
+
+    echo -e "\n${DIM}Total: $count applications${RESET}"
+}
+
+# ------------------------------------------------------------------------------
+# Help & Usage
+# ------------------------------------------------------------------------------
+
+cmd_help() {
+    cat <<EOF
+${BOLD}app${RESET} - Application Launcher & .desktop Browser (CLI & fzf TUI)
+Parses .desktop files and launches installed GUI applications with fuzzy search.
+
+${BOLD}USAGE:${RESET}
+    app                    Launch interactive fzf application browser
+    app list               List all installed applications
+    app preview <line>     Internal preview generator for fzf
+    app collect            Internal data collector for fzf reload
+    app help               Show this help message
+
+${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
+    ${CYAN}Enter${RESET}      Launch selected application
+    ${CYAN}Ctrl-R${RESET}     Reload application list from .desktop files
+    ${CYAN}Esc${RESET}        Cancel and exit
+
+${BOLD}DESKTOP FILE LOCATIONS:${RESET}
+    • /run/current-system/sw/share/applications
+    • ~/.local/share/applications
+    • /usr/share/applications
+
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-interactive}" in
+    preview)
+        cmd_preview "${2:-}"
+        ;;
+    collect)
+        collect_apps | while IFS= read -r entry; do
+            format_app_entry "$entry"
+        done
+        ;;
+    list)
+        cmd_list
+        ;;
+    help|-h|--help)
+        cmd_help
+        ;;
+    interactive|"")
+        if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
+            cmd_interactive
+        else
+            cmd_list
+        fi
+        ;;
+    *)
+        echo -e "${RED}Unknown command: $1${RESET}"
+        echo -e "Run ${CYAN}app help${RESET} for usage"
+        exit 1
+        ;;
+esac

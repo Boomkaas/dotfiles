@@ -517,9 +517,6 @@ in
     hyprlock                # Screen lock
     pkgs_unstable.hyprsunset # Blue light filter
     pkgs_unstable.awww      # Wallpaper daemon (formerly swww)
-    (rofi-wayland.override {
-      plugins = [ rofi-emoji-wayland ];
-    })                      # App launcher with emoji plugin
     fish                    # Shell
     starship                # Shell prompt
     xfce.thunar             # File manager
