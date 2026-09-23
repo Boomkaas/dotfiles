@@ -239,10 +239,12 @@ get_live_telemetry() {
             ;;
         app|apps|launch)
             local app_cnt=0
-            for dir in "/run/current-system/sw/share/applications" "$HOME/.local/share/applications" "/usr/share/applications"; do
-                [ -d "$dir" ] && app_cnt=$((app_cnt + $(find "$dir" -maxdepth 1 -name "*.desktop" 2>/dev/null | wc -l)))
-            done
-            echo -e "${CYAN}● Installed Applications:${RESET} ${app_cnt} .desktop files found"
+            local app_bin
+            app_bin=$(command -v app 2>/dev/null || echo "$SCRIPT_DIR/app")
+            if [ -x "$app_bin" ]; then
+                app_cnt=$("$app_bin" count 2>/dev/null || echo 0)
+            fi
+            echo -e "${CYAN}● Installed Applications:${RESET} ${app_cnt} applications available"
             ;;
     esac
 }

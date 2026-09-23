@@ -529,10 +529,16 @@ mod_scripts() {
   done
 
   # TUI scripts (dedicated folder)
-  for name in wifi bluetooth setting theme share audio nixos tm service task conf disk repo ports clip log container pkg s tb ram; do
+  for name in wifi bluetooth setting theme share audio nixos tm service task conf disk repo ports clip log container pkg s tb ram app; do
     local f="$SCRIPTS_DIR/tui/$name"
     [[ -f "$f" ]] && check "bash -n: tui/$name" bash -n "$f"
   done
+
+  # tui/app: launcher and system sync features
+  has "tui/app: fzf TUI launcher"             "$SCRIPTS_DIR/tui/app" 'fzf'
+  has "tui/app: dynamic app dirs"             "$SCRIPTS_DIR/tui/app" 'get_app_dirs'
+  has "tui/app: system environment sync"       "$SCRIPTS_DIR/tui/app" 'sync_system_environment'
+  has "tui/s: app tool registered"            "$SCRIPTS_DIR/tui/s" 'app\|desktop'
 
   # Python script
   check "agy-tokens.py: python3 syntax" \

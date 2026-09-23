@@ -34,34 +34,126 @@ fi
 export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
 
 # ------------------------------------------------------------------------------
-# Configuration
+# System Environment Synchronization
 # ------------------------------------------------------------------------------
 
-APP_DIRS=(
-    "/run/current-system/sw/share/applications"
-    "$HOME/.local/share/applications"
-    "/usr/share/applications"
-)
+# Sync system session parameters from systemd user environment to ensure
+# GUI applications inherit system theme (e.g. dark theme), Wayland, and portal settings.
+sync_system_environment() {
+    if command -v systemctl >/dev/null 2>&1; then
+        while IFS='=' read -r key val; do
+            [[ -z "$key" || "$key" =~ ^# ]] && continue
+            case "$key" in
+                QT_*|GTK_*|XDG_*|GDK_*|MOZ_*|SDL_*|HYPR*|XCURSOR*|NIXOS_OZONE_WL|WAYLAND_DISPLAY|DISPLAY|DBUS_SESSION_BUS_ADDRESS)
+                    export "$key=$val"
+                    ;;
+            esac
+        done < <(systemctl --user show-environment 2>/dev/null || true)
+    fi
+
+    # Ensure critical variables are defaulted correctly if unset
+    export QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-gtk3}"
+    export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland}"
+    export NIXOS_OZONE_WL="${NIXOS_OZONE_WL:-1}"
+    export MOZ_ENABLE_WAYLAND="${MOZ_ENABLE_WAYLAND:-1}"
+    export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-mango}"
+    export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
+}
+
+# ------------------------------------------------------------------------------
+# Application Directory Resolution
+# ------------------------------------------------------------------------------
+
+# Dynamically resolve all directories containing .desktop files, including:
+# - User desktop entries ($XDG_DATA_HOME/applications)
+# - All XDG_DATA_DIRS paths
+# - NixOS system and user profiles
+# - Flatpak system and user exports
+# - Snap and standard Linux directories
+get_app_dirs() {
+    local -A seen_dirs
+    local dirs=()
+
+    # 1. User applications ($XDG_DATA_HOME/applications)
+    local user_apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    if [[ -d "$user_apps" && -z "${seen_dirs[$user_apps]:-}" ]]; then
+        dirs+=("$user_apps")
+        seen_dirs["$user_apps"]=1
+    fi
+
+    # 2. Paths from XDG_DATA_DIRS
+    local xdg_dirs="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+    IFS=':' read -ra split_xdg <<< "$xdg_dirs"
+    for d in "${split_xdg[@]}"; do
+        [[ -z "$d" ]] && continue
+        local app_dir="$d/applications"
+        if [[ -d "$app_dir" && -z "${seen_dirs[$app_dir]:-}" ]]; then
+            dirs+=("$app_dir")
+            seen_dirs["$app_dir"]=1
+        fi
+    done
+
+    # 3. Explicit known profiles and fallback paths
+    local extra_dirs=(
+        "$HOME/.local/share/flatpak/exports/share/applications"
+        "$HOME/.nix-profile/share/applications"
+        "$HOME/.local/state/nix/profile/share/applications"
+        "/etc/profiles/per-user/${USER:-peng}/share/applications"
+        "/var/lib/flatpak/exports/share/applications"
+        "/run/current-system/sw/share/applications"
+        "/nix/var/nix/profiles/default/share/applications"
+        "/var/lib/snapd/desktop/applications"
+        "/usr/local/share/applications"
+        "/usr/share/applications"
+    )
+
+    for d in "${extra_dirs[@]}"; do
+        if [[ -d "$d" && -z "${seen_dirs[$d]:-}" ]]; then
+            dirs+=("$d")
+            seen_dirs["$d"]=1
+        fi
+    done
+
+    printf "%s\n" "${dirs[@]}"
+}
 
 # ------------------------------------------------------------------------------
 # Data Parsers
 # ------------------------------------------------------------------------------
 
-# Parse a .desktop file and extract key fields
+# Parse a .desktop file and extract key fields from [Desktop Entry]
 parse_desktop_file() {
     local file="$1"
-    local name="" exec="" comment="" icon="" terminal="false" nodisplay="false"
+    [[ ! -f "$file" ]] && return
 
-    while IFS='=' read -r key value; do
-        case "$key" in
-            Name) name="$value" ;;
-            Exec) exec="$value" ;;
-            Comment) comment="$value" ;;
-            Icon) icon="$value" ;;
-            Terminal) terminal="$value" ;;
-            NoDisplay) nodisplay="$value" ;;
+    local name="" exec="" comment="" icon="" terminal="false" nodisplay="false"
+    local in_desktop_entry=false
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Trim leading and trailing whitespace
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+
+        # Section header check
+        if [[ "$line" =~ ^\[Desktop\ Entry\] ]]; then
+            in_desktop_entry=true
+            continue
+        elif [[ "$line" =~ ^\[ ]]; then
+            # Reached a subsequent section (e.g. [Desktop Action ...]); stop reading
+            break
+        fi
+
+        [[ "$in_desktop_entry" != "true" ]] && continue
+
+        case "$line" in
+            Name=*)       [[ -z "$name" ]] && name="${line#Name=}" ;;
+            Exec=*)       [[ -z "$exec" ]] && exec="${line#Exec=}" ;;
+            Comment=*)    [[ -z "$comment" ]] && comment="${line#Comment=}" ;;
+            Icon=*)       [[ -z "$icon" ]] && icon="${line#Icon=}" ;;
+            Terminal=*)   terminal="${line#Terminal=}" ;;
+            NoDisplay=*)  nodisplay="${line#NoDisplay=}" ;;
         esac
-    done < <(grep -E '^(Name|Exec|Comment|Icon|Terminal|NoDisplay)=' "$file" 2>/dev/null || true)
+    done < "$file"
 
     # Skip if NoDisplay=true or no name/exec
     [[ "$nodisplay" == "true" ]] && return
@@ -71,34 +163,38 @@ parse_desktop_file() {
     echo "$name|$exec|$comment|$icon|$terminal|$file"
 }
 
-# Collect all .desktop entries from configured directories
+# Collect all .desktop entries dynamically across all application directories
 collect_apps() {
     local -A seen_names
+    local -A seen_files
 
-    for dir in "${APP_DIRS[@]}"; do
+    while IFS= read -r dir; do
         [[ ! -d "$dir" ]] && continue
 
         while IFS= read -r -d '' desktop_file; do
+            [[ -n "${seen_files[$desktop_file]:-}" ]] && continue
+            seen_files["$desktop_file"]=1
+
             local entry
             entry=$(parse_desktop_file "$desktop_file")
             [[ -z "$entry" ]] && continue
 
             local name="${entry%%|*}"
 
-            # Skip duplicates (first found wins)
+            # Skip duplicates (first found wins according to XDG priority)
             [[ -n "${seen_names[$name]:-}" ]] && continue
             seen_names["$name"]=1
 
             echo "$entry"
-        done < <(find "$dir" -maxdepth 1 -name "*.desktop" -print0 2>/dev/null)
-    done | sort -t'|' -k1,1
+        done < <(find "$dir" -name "*.desktop" -print0 2>/dev/null)
+    done < <(get_app_dirs) | sort -t'|' -k1,1 -f
 }
 
 # ------------------------------------------------------------------------------
 # Formatting & Display
 # ------------------------------------------------------------------------------
 
-# Format app entry for fzf display
+# Format app entry for fzf display (tab-delimited for instant file resolution)
 format_app_entry() {
     local entry="$1"
     IFS='|' read -r name exec comment icon terminal filepath <<< "$entry"
@@ -106,31 +202,66 @@ format_app_entry() {
     local icon_display="󰀻"
     [[ "$terminal" == "true" ]] && icon_display=""
 
-    local comment_trunc="${comment:0:60}"
-    [[ ${#comment} -gt 60 ]] && comment_trunc="${comment_trunc}..."
+    local comment_trunc="${comment:0:55}"
+    [[ ${#comment} -gt 55 ]] && comment_trunc="${comment_trunc}..."
 
-    printf "%-3s %-40s %s\n" "$icon_display" "$name" "$comment_trunc"
+    printf "%-3s %-38s %-58s\t%s\n" "$icon_display" "$name" "$comment_trunc" "$filepath"
+}
+
+# Clean exec command (remove flatpak markers and field codes like %u, %f, etc.)
+clean_exec_command() {
+    local cmd="$1"
+    cmd=$(echo "$cmd" | sed -E 's/@@[uU]? %([uUfFdDnNickvm]) @@//g')
+    cmd=$(echo "$cmd" | sed -E 's/ %[uUfFdDnNickvm]//g')
+    cmd=$(echo "$cmd" | sed -E 's/@@//g')
+    echo "$cmd"
 }
 
 # ------------------------------------------------------------------------------
 # Actions
 # ------------------------------------------------------------------------------
 
-# Launch application
+# Launch application ensuring full system session environment is passed
 launch_app() {
     local exec_cmd="$1"
     local terminal="$2"
+    local filepath="${3:-}"
 
-    # Clean exec command (remove field codes like %u, %f, etc.)
-    exec_cmd=$(echo "$exec_cmd" | sed -E 's/ %[uUfFdDnNickvm]//g')
+    # Synchronize system parameters so GUI apps inherit theme, wayland, and portal settings
+    sync_system_environment
 
     if [[ "$terminal" == "true" ]]; then
+        exec_cmd=$(clean_exec_command "$exec_cmd")
         exec kitty -e bash -c "$exec_cmd" &>/dev/null &
-    else
-        nohup bash -c "$exec_cmd" &>/dev/null &
+        disown
+        return 0
     fi
 
-    disown
+    # For GUI desktop apps, prefer standard desktop launcher if desktop file exists
+    local launched=false
+    if [[ -n "$filepath" && -f "$filepath" ]]; then
+        local desktop_id
+        desktop_id=$(basename "$filepath")
+
+        if command -v gtk-launch >/dev/null 2>&1; then
+            if gtk-launch "$desktop_id" >/dev/null 2>&1; then
+                launched=true
+            fi
+        fi
+
+        if [[ "$launched" != "true" ]] && command -v gio >/dev/null 2>&1; then
+            if gio launch "$filepath" >/dev/null 2>&1; then
+                launched=true
+            fi
+        fi
+    fi
+
+    # Direct fallback execution with full system environment
+    if [[ "$launched" != "true" ]]; then
+        exec_cmd=$(clean_exec_command "$exec_cmd")
+        nohup bash -c "$exec_cmd" &>/dev/null &
+        disown
+    fi
 }
 
 # ------------------------------------------------------------------------------
@@ -139,19 +270,26 @@ launch_app() {
 
 # Preview handler for fzf
 cmd_preview() {
-    local display_line="$1"
-    [[ -z "$display_line" ]] && return
+    local raw_line="$1"
+    [[ -z "$raw_line" ]] && return
 
-    # Extract app name from formatted line (column 2)
-    local app_name
-    app_name=$(echo "$display_line" | awk '{$1=""; print substr($0,2)}' | sed 's/ *$//')
+    local filepath
+    filepath=$(echo "$raw_line" | cut -f2)
 
-    # Find the full entry by name
-    local entry
-    entry=$(collect_apps | grep "^${app_name}|" | head -1)
+    local entry=""
+    if [[ -n "$filepath" && -f "$filepath" ]]; then
+        entry=$(parse_desktop_file "$filepath")
+    fi
+
+    if [[ -z "$entry" ]]; then
+        local app_name
+        app_name=$(echo "$raw_line" | cut -f1 | awk '{$1=""; print substr($0,2)}' | sed 's/ *$//')
+        entry=$(collect_apps | grep "^${app_name}|" | head -1)
+    fi
+
     [[ -z "$entry" ]] && return
 
-    IFS='|' read -r name exec comment icon terminal filepath <<< "$entry"
+    IFS='|' read -r name exec comment icon terminal resolved_path <<< "$entry"
 
     echo -e "${BOLD}${CYAN}Application:${RESET} $name"
     echo "─────────────────────────────────────────────────────────────────────────────"
@@ -164,7 +302,7 @@ cmd_preview() {
 
     [[ -n "$icon" ]] && echo -e "\n${BOLD}Icon:${RESET} $icon"
 
-    echo -e "\n${BOLD}Source:${RESET}\n  ${DIM}$filepath${RESET}"
+    echo -e "\n${BOLD}Source:${RESET}\n  ${DIM}$resolved_path${RESET}"
 }
 
 # ------------------------------------------------------------------------------
@@ -172,25 +310,27 @@ cmd_preview() {
 # ------------------------------------------------------------------------------
 
 cmd_interactive() {
-    local apps_data
-    apps_data=$(collect_apps)
-
-    [[ -z "$apps_data" ]] && {
-        echo -e "${RED}No applications found${RESET}"
-        return 1
-    }
+    sync_system_environment
 
     local formatted_list=""
     while IFS= read -r entry; do
+        [[ -z "$entry" ]] && continue
         formatted_list+="$(format_app_entry "$entry")"$'\n'
-    done <<< "$apps_data"
+    done < <(collect_apps)
+
+    [[ -z "$formatted_list" ]] && {
+        echo -e "${RED}No applications found${RESET}"
+        return 1
+    }
 
     local self_bin
     self_bin="$(readlink -f "$0")"
 
     local selection
-    selection=$(echo "$formatted_list" | fzf \
+    selection=$(printf "%s" "$formatted_list" | fzf \
         --ansi \
+        --delimiter=$'\t' \
+        --with-nth=1 \
         --prompt="󰀻  App > " \
         --header="[Application Launcher] (Enter: Launch | Ctrl-R: Reload | Esc: Exit)" \
         --preview="$self_bin preview {}" \
@@ -204,21 +344,30 @@ cmd_interactive() {
 
     [[ -z "$selection" ]] && return 0
 
-    # Extract app name and find entry
-    local app_name
-    app_name=$(echo "$selection" | awk '{$1=""; print substr($0,2)}' | sed 's/ *$//')
+    local filepath
+    filepath=$(echo "$selection" | cut -f2)
 
-    local entry
-    entry=$(echo "$apps_data" | grep "^${app_name}|" | head -1)
+    local entry=""
+    if [[ -n "$filepath" && -f "$filepath" ]]; then
+        entry=$(parse_desktop_file "$filepath")
+    fi
 
-    IFS='|' read -r name exec comment icon terminal filepath <<< "$entry"
+    if [[ -z "$entry" ]]; then
+        local app_name
+        app_name=$(echo "$selection" | cut -f1 | awk '{$1=""; print substr($0,2)}' | sed 's/ *$//')
+        entry=$(collect_apps | grep "^${app_name}|" | head -1)
+    fi
+
+    [[ -z "$entry" ]] && return 1
+
+    IFS='|' read -r name exec comment icon terminal resolved_path <<< "$entry"
 
     echo -e "${GREEN}✓${RESET} Launching ${BOLD}$name${RESET}..."
-    launch_app "$exec" "$terminal"
+    launch_app "$exec" "$terminal" "$resolved_path"
 }
 
 # ------------------------------------------------------------------------------
-# CLI List Mode
+# CLI List & Count Modes
 # ------------------------------------------------------------------------------
 
 cmd_list() {
@@ -237,6 +386,10 @@ cmd_list() {
     echo -e "\n${DIM}Total: $count applications${RESET}"
 }
 
+cmd_count() {
+    collect_apps | wc -l
+}
+
 # ------------------------------------------------------------------------------
 # Help & Usage
 # ------------------------------------------------------------------------------
@@ -245,10 +398,12 @@ cmd_help() {
     cat <<EOF
 ${BOLD}app${RESET} - Application Launcher & .desktop Browser (CLI & fzf TUI)
 Parses .desktop files and launches installed GUI applications with fuzzy search.
+Automatically detects newly installed apps across all system and user profiles.
 
 ${BOLD}USAGE:${RESET}
     app                    Launch interactive fzf application browser
     app list               List all installed applications
+    app count              Print count of discovered applications
     app preview <line>     Internal preview generator for fzf
     app collect            Internal data collector for fzf reload
     app help               Show this help message
@@ -258,10 +413,14 @@ ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
     ${CYAN}Ctrl-R${RESET}     Reload application list from .desktop files
     ${CYAN}Esc${RESET}        Cancel and exit
 
-${BOLD}DESKTOP FILE LOCATIONS:${RESET}
-    • /run/current-system/sw/share/applications
-    • ~/.local/share/applications
-    • /usr/share/applications
+${BOLD}DESKTOP FILE LOCATIONS (Auto-detected):${RESET}
+    • \$XDG_DATA_HOME/applications (~/.local/share/applications)
+    • All directories configured in \$XDG_DATA_DIRS
+    • NixOS system profile (/run/current-system/sw/share/applications)
+    • Home-Manager user profile (/etc/profiles/per-user/\$USER/share/applications)
+    • Nix user profiles (~/.nix-profile, ~/.local/state/nix/profile)
+    • Flatpak system & user exports (/var/lib/flatpak, ~/.local/share/flatpak)
+    • Snap & standard Linux directories (/usr/share/applications)
 
 EOF
 }
@@ -281,6 +440,9 @@ case "${1:-interactive}" in
         ;;
     list)
         cmd_list
+        ;;
+    count)
+        cmd_count
         ;;
     help|-h|--help)
         cmd_help

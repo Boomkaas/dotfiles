@@ -19,7 +19,7 @@ if status is-interactive
     set -gx VISUAL nvim
     set -gx GTK_USE_PORTAL 1
     set -gx MOZ_ENABLE_WAYLAND 1
-    set -gx QT_QPA_PLATFORMTHEME qt6ct
+    set -gx QT_QPA_PLATFORMTHEME gtk3
     set -gx DOTNET_ROOT $HOME/.dotnet
 
     # Abbrs
