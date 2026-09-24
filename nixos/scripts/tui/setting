@@ -224,7 +224,7 @@ cmd_brightness_menu() {
         --with-nth=1 \
         --prompt="󰃠 Brightness ($cur%) > " \
         --header="Select brightness preset (Enter: Apply | Esc: Cancel)" \
-        --reverse --height=40% --border=rounded) || return 0
+        --reverse --height=50% --border=rounded) || return 0
 
     [ -z "$res" ] && return 0
     local target
@@ -251,7 +251,7 @@ cmd_nightlight_menu() {
         --with-nth=1 \
         --prompt="󰃝 Night Light > " \
         --header="Select temperature preset (Enter: Apply | Esc: Cancel)" \
-        --reverse --height=35% --border=rounded) || return 0
+        --reverse --height=50% --border=rounded) || return 0
 
     [ -z "$res" ] && return 0
     local val
@@ -294,7 +294,7 @@ cmd_power_session_menu() {
         --with-nth=1 \
         --prompt=" Power & Session > " \
         --header="Select session action (Enter: Execute | Esc: Cancel)" \
-        --reverse --height=38% --border=rounded) || return 0
+        --reverse --height=50% --border=rounded) || return 0
 
     [ -z "$res" ] && return 0
     local act
@@ -345,7 +345,6 @@ cmd_preview() {
         echo -e "  ${CYAN}Enter${RESET}   Select item / Toggle setting / Open tool"
         echo -e "  ${CYAN}Ctrl-R${RESET}  Refresh settings status"
         echo -e "  ${CYAN}Ctrl-C${RESET}  Clear all SwayNC notifications"
-        echo -e "  ${CYAN}Ctrl-M${RESET}  Toggle Audio Mute"
         echo -e "  ${CYAN}Esc${RESET}     Exit menu"
         return 0
     fi
@@ -391,9 +390,7 @@ cmd_preview() {
             echo -e "${BOLD}${CYAN}=== Audio & Volume Mixer ===${RESET}"
             echo -e "  ${BOLD}Master Sink:${RESET}  ${GREEN}$vol_info${RESET}"
             echo ""
-            echo -e "${BOLD}Available Actions:${RESET}"
-            echo -e "  ${CYAN}Enter${RESET}   Open interactive PipeWire mixer (audio)"
-            echo -e "  ${CYAN}Ctrl-M${RESET}  Toggle Master Mute"
+            echo -e "${BOLD}Action:${RESET} Open interactive PipeWire mixer (audio)"
             ;;
         brightness)
             local b_pct
@@ -589,15 +586,15 @@ cmd_interactive() {
 
         local res key choice
         res=$(printf "%s\n" "${menu[@]}" | fzf \
-            --expect=ctrl-r,ctrl-c,ctrl-m \
+            --expect=ctrl-r,ctrl-c \
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="󰒓 Settings > " \
-            --header="[$header_info] (Enter: Open | Ctrl-R: Refresh | Ctrl-C: Clear Notif | Ctrl-M: Mute)" \
+            --header="[$header_info] (Enter: Open | Ctrl-R: Refresh | Ctrl-C: Clear Notif | Esc: Exit)" \
             --reverse \
-            --height=75% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 
@@ -614,9 +611,6 @@ cmd_interactive() {
                 swaync-client -C >/dev/null 2>&1 || true
                 notify low notifications "SwayNC" "Cleared all notifications"
             fi
-            continue
-        elif [ "$key" = "ctrl-m" ]; then
-            wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle >/dev/null 2>&1 || true
             continue
         fi
 

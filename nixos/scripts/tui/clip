@@ -162,7 +162,7 @@ show_action_menu() {
     acts+=("6. ✘  Cancel")
 
     local choice
-    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Clip Action > " --height=35% --reverse --border=rounded) || return 0
+    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Clip Action > " --height=45% --reverse --border=rounded) || return 0
 
     case "$choice" in
         1*) copy_clip "$raw_entry" ;;
@@ -237,11 +237,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="📋 Clip > " \
-            --header="[$header_info] (Enter: Copy | Ctrl-D: Delete Item | Ctrl-P: Pin Snippet | Ctrl-E: Edit | Ctrl-X: Wipe All | Esc: Exit)" \
+            --header="[$header_info] (Enter: Copy | Ctrl-D: Delete | Ctrl-P: Pin | Ctrl-E: Edit | Ctrl-X: Wipe | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 

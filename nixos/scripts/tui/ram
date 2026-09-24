@@ -764,11 +764,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:50%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="󰍛  RAM > " \
             --header="[$header] (Enter: Execute/Submenu | Ctrl-F: Focus | Ctrl-K: Term | Ctrl-X: Kill | Esc: Exit)" \
             --reverse \
-            --height=75% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 
@@ -874,7 +874,7 @@ cmd_interactive() {
                 local act
                 act=$(printf "1. Focus Window\n2. Close Window Gracefully (killclient)\n3. Terminate Process (SIGTERM / 15)\n4. Force Kill (SIGKILL / 9)\n5. Cancel" | fzf \
                     --prompt="Window [$wname] > " \
-                    --height=35% \
+                    --height=45% \
                     --reverse \
                     --border=rounded) || continue
                 case "$act" in
@@ -902,7 +902,7 @@ cmd_interactive() {
                 local act
                 act=$(printf "1. Terminate Process (SIGTERM / 15)\n2. Force Kill (SIGKILL / 9)\n3. Suspend / Pause (SIGSTOP)\n4. Resume (SIGCONT)\n5. Cancel" | fzf \
                     --prompt="Process [$pname : $pid] > " \
-                    --height=35% \
+                    --height=45% \
                     --reverse \
                     --border=rounded) || continue
                 case "$act" in

@@ -222,7 +222,7 @@ show_action_menu() {
     acts+=("5. ✘  Cancel")
 
     local choice
-    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Package [$pkg] > " --height=30% --reverse --border=rounded) || return 0
+    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Package [$pkg] > " --height=45% --reverse --border=rounded) || return 0
 
     case "$choice" in
         1*) cmd_spawn_shell "$pkg" ;;
@@ -299,11 +299,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="📦 Pkg ($current_scope) > " \
             --header="[$header_info] (Enter: Ephemeral Shell | Ctrl-Y: Copy | Ctrl-O: Edit in pkgs.nix | Ctrl-W: Web | Tab: Filter | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 

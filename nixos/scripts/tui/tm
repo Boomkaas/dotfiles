@@ -305,7 +305,7 @@ cmd_preview() {
             echo -e "${BOLD}${CYAN}Live Terminal Screen Preview:${RESET}"
             echo -e "${DIM}───────────────────────────────────────────${RESET}"
             local screen_cap
-            screen_cap=$(tmux capture-pane -pt "${s_name}:" -e 2>/dev/null | tail -n 20)
+            screen_cap=$(tmux capture-pane -pt "${s_name}:" -e 2>/dev/null | tail -n 8)
             if [ -n "$screen_cap" ] && [[ "$screen_cap" =~ [^[:space:]] ]]; then
                 echo "$screen_cap"
             else
@@ -472,11 +472,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="  Tmux > " \
             --header="[$header_info] (Enter: Open/Attach | Ctrl-K: Kill | Ctrl-N: New | Ctrl-L: Lazygit | Ctrl-R: Refresh | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 

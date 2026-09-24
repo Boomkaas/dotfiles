@@ -397,11 +397,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="󰌢  Task > " \
             --header="[$header_info] (Enter: Select | Ctrl-F: Focus | Ctrl-K: Term | Ctrl-X: Kill | Ctrl-Z: Pause | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 
@@ -483,7 +483,7 @@ cmd_interactive() {
                 local act
                 act=$(printf "1. Focus / Bring to Front\n2. Close Window (Graceful)\n3. Toggle Fullscreen (Mango)\n4. Toggle Floating (Mango)\n5. Terminate Process (SIGTERM / 15)\n6. Force Kill (SIGKILL / 9)\n7. Cancel" | fzf \
                     --prompt="Window [$wname] > " \
-                    --height=35% \
+                    --height=48% \
                     --reverse \
                     --border=rounded) || continue
                 case "$act" in
@@ -502,7 +502,7 @@ cmd_interactive() {
                 local act
                 act=$(printf "1. Terminate Process (SIGTERM / 15)\n2. Force Kill (SIGKILL / 9)\n3. Pause / Freeze (SIGSTOP)\n4. Resume Execution (SIGCONT)\n5. Cancel" | fzf \
                     --prompt="Process [$pname : $pid] > " \
-                    --height=30% \
+                    --height=45% \
                     --reverse \
                     --border=rounded) || continue
                 case "$act" in

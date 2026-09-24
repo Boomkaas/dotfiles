@@ -816,11 +816,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="󰕾  Audio > " \
             --header="[$header_info] (Enter: Select | +/-: Vol | Ctrl-M: Mute | Ctrl-T: Test | Ctrl-R: Refresh | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 
@@ -893,7 +893,7 @@ cmd_interactive() {
                 local act
                 act=$(printf "1. Set as Default Output\n2. Increase Volume (+5%%)\n3. Decrease Volume (-5%%)\n4. Toggle Mute\n5. Set Custom Volume (%%)\n6. Play Audio Test Sound\n7. Cancel" | fzf \
                     --prompt="Sink [$item_id] > " \
-                    --height=35% \
+                    --height=48% \
                     --reverse \
                     --border=rounded) || continue
                 case "$act" in
@@ -916,7 +916,7 @@ cmd_interactive() {
                 local act
                 act=$(printf "1. Set as Default Microphone\n2. Increase Input (+5%%)\n3. Decrease Input (-5%%)\n4. Toggle Microphone Mute\n5. Set Custom Gain (%%)\n6. Cancel" | fzf \
                     --prompt="Source [$item_id] > " \
-                    --height=32% \
+                    --height=48% \
                     --reverse \
                     --border=rounded) || continue
                 case "$act" in
@@ -938,7 +938,7 @@ cmd_interactive() {
                 local act
                 act=$(printf "1. Increase Volume (+5%%)\n2. Decrease Volume (-5%%)\n3. Toggle Stream Mute\n4. Set Custom Volume (%%)\n5. Move to Default Sink\n6. Cancel" | fzf \
                     --prompt="Stream [$item_id] > " \
-                    --height=32% \
+                    --height=48% \
                     --reverse \
                     --border=rounded) || continue
                 case "$act" in

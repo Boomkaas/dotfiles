@@ -278,7 +278,7 @@ cmd_edit() {
     elif [ ${#matched[@]} -gt 1 ]; then
         echo -e "${CYAN}Multiple configs matched '$query'. Select one to edit:${RESET}"
         local selected
-        selected=$(printf "%s\n" "${matched[@]}" | fzf --height=40% --reverse --border=rounded --prompt="Edit > ") || return 0
+        selected=$(printf "%s\n" "${matched[@]}" | fzf --height=48% --reverse --border=rounded --prompt="Edit > ") || return 0
         [ -n "$selected" ] && open_in_editor "$selected"
     else
         # Direct file check
@@ -494,7 +494,7 @@ show_action_menu() {
     local choice
     choice=$(printf "%s\n" "${acts[@]}" | fzf \
         --prompt="Action [$(basename "$target")] > " \
-        --height=40% \
+        --height=48% \
         --reverse \
         --border=rounded) || return 0
 
@@ -635,11 +635,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="󰒓  Config ($current_scope) > " \
             --header="[$header_info] (Enter: Edit in \$EDITOR | Ctrl-E: IDE | Ctrl-D: Diff | Ctrl-F: Yazi | Ctrl-O: Actions | Tab: Filter | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 

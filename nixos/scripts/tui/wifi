@@ -378,7 +378,7 @@ cmd_forget() {
             return 0
         fi
         if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
-            target=$(echo "$saved" | fzf --prompt="Select profile to forget: " --height=40% --reverse --border=rounded)
+            target=$(echo "$saved" | fzf --prompt="Select profile to forget: " --height=48% --reverse --border=rounded)
         else
             echo "$saved"
             read -rp "Enter profile name to forget: " target
@@ -584,45 +584,31 @@ cmd_preview() {
     echo -e "${BOLD}${CYAN}=== Wi-Fi Network Details ===${RESET}"
     echo -e "  ${BOLD}SSID:${RESET}         $(sig_to_icon "$sig_num") ${BOLD}$target${RESET} $([ "$is_act" -eq 1 ] && echo -e "${GREEN}(Active / Connected)${RESET}" || ([ "$is_saved" -eq 1 ] && echo -e "${YELLOW}(Saved Profile)${RESET}"))"
     echo -e "  ${BOLD}Signal:${RESET}       $(sig_to_bar "$sig_num") $sig_num% ($(sig_to_dbm "$sig_num")) [$(sig_quality_label "$sig_num")]"
-    echo -e "  ${BOLD}Band / Freq:${RESET}  $(freq_to_band "${p_freq:---}") (${p_freq:---}, Channel ${p_chan:---})"
-    echo -e "  ${BOLD}Security:${RESET}     $(sec_to_icon "${p_sec:---}") ${p_sec:---}"
-    echo -e "  ${BOLD}Max Bitrate:${RESET}  ${p_rate:---}"
-    echo -e "  ${BOLD}BSSID (AP):${RESET}   ${p_bssid:---}"
+    echo -e "  ${BOLD}Band / Rate:${RESET}  $(freq_to_band "${p_freq:---}") (${p_freq:---}, Ch ${p_chan:---}) • Rate: ${p_rate:---}"
+    echo -e "  ${BOLD}Security:${RESET}     $(sec_to_icon "${p_sec:---}") ${p_sec:---} • BSSID: ${p_bssid:---}"
 
-    echo ""
-    echo -e "${BOLD}${CYAN}=== Connection Profile ===${RESET}"
     if [ "$is_saved" -eq 1 ]; then
         local autoconn uuid
         autoconn=$(nmcli -t -f connection.autoconnect con show "$target" 2>/dev/null | cut -d: -f2 || echo "unknown")
         uuid=$(nmcli -t -f connection.uuid con show "$target" 2>/dev/null | cut -d: -f2 || echo "--")
-        echo -e "  ${BOLD}Profile Saved:${RESET} ${GREEN}Yes${RESET} (AutoConnect: $autoconn)"
-        echo -e "  ${BOLD}Profile UUID:${RESET}  ${DIM}$uuid${RESET}"
+        echo -e "  ${BOLD}Profile:${RESET}      ${GREEN}Saved${RESET} (AutoConnect: $autoconn)"
     else
-        echo -e "  ${BOLD}Profile Saved:${RESET} ${YELLOW}No${RESET} (New network)"
+        echo -e "  ${BOLD}Profile:${RESET}      ${YELLOW}Not saved${RESET} (New network)"
     fi
 
     if [ "$is_act" -eq 1 ]; then
-        echo ""
-        echo -e "${BOLD}${CYAN}=== Active Link Information ===${RESET}"
         local ip4 gw4 dns4 driver
         ip4=$(nmcli -t -f IP4.ADDRESS dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
         gw4=$(nmcli -t -f IP4.GATEWAY dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
         dns4=$(nmcli -t -f IP4.DNS dev show "$iface" 2>/dev/null | tr '\n' ' ' | sed 's/IP4.DNS\[[0-9]*\]://g' | xargs)
         driver=$(nmcli -t -f GENERAL.DRIVER dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2-)
 
-        echo -e "  ${BOLD}Interface:${RESET}    ${iface} (${driver:-generic})"
-        echo -e "  ${BOLD}IPv4 Address:${RESET} ${GREEN}${ip4:---}${RESET}"
-        echo -e "  ${BOLD}Gateway:${RESET}      ${gw4:---}"
-        echo -e "  ${BOLD}DNS Server:${RESET}   ${dns4:---}"
+        echo -e "  ${BOLD}Link:${RESET}         ${iface} (${driver:-generic}) • ${GREEN}${ip4:---}${RESET}"
+        echo -e "  ${BOLD}Route:${RESET}        GW: ${gw4:---} • DNS: ${dns4:---}"
     fi
 
     echo ""
-    echo -e "${BOLD}Actions & Controls:${RESET}"
-    echo -e "  ${CYAN}Enter${RESET}   $([ "$is_act" -eq 1 ] && echo "Manage connection" || echo "Connect to $target")"
-    echo -e "  ${CYAN}Ctrl-C${RESET}  Quick Connect"
-    echo -e "  ${CYAN}Ctrl-D${RESET}  Disconnect active network"
-    echo -e "  ${CYAN}Ctrl-R${RESET}  Rescan available networks"
-    echo -e "  ${CYAN}Ctrl-M${RESET}  Open Live Monitor"
+    echo -e "${BOLD}Actions:${RESET} Enter: Connect/Manage | Ctrl-C: Connect | Ctrl-D: Disconn | Ctrl-R: Rescan"
 }
 
 # ------------------------------------------------------------------------------
@@ -750,11 +736,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="󰖩  Wi-Fi > " \
             --header="[$header_info] (Enter: Select | Ctrl-R: Rescan | Ctrl-C: Connect | Ctrl-D: Discon | Ctrl-W: Radio | Ctrl-M: Monitor)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 
@@ -825,12 +811,12 @@ cmd_interactive() {
                 saved_sel=$(nmcli -t -f NAME,TYPE con show 2>/dev/null | awk -F: '$2=="802-11-wireless"{print $1}' | fzf \
                     --prompt="Saved Network > " \
                     --header="Select saved network to manage" \
-                    --reverse --height=40% --border=rounded) || true
+                    --reverse --height=48% --border=rounded) || true
                 if [ -n "$saved_sel" ]; then
                     local act
                     act=$(printf "1. Connect\n2. Forget / Delete\n3. Cancel" | fzf \
                         --prompt="$saved_sel > " \
-                        --reverse --height=25% --border=rounded) || true
+                        --reverse --height=40% --border=rounded) || true
                     case "$act" in
                         *"Connect"*) cmd_connect "$saved_sel" ;;
                         *"Forget"*) cmd_forget "$saved_sel" ;;
@@ -857,7 +843,7 @@ cmd_interactive() {
                     local act
                     act=$(printf "1. Disconnect\n2. Reconnect\n3. Forget Profile\n4. Show Info\n5. Monitor Dashboard\n6. Cancel" | fzf \
                         --prompt="$sel_ssid (Active) > " \
-                        --reverse --height=35% --border=rounded) || true
+                        --reverse --height=48% --border=rounded) || true
                     case "$act" in
                         *"Disconnect"*) cmd_disconnect ;;
                         *"Reconnect"*) cmd_connect "$sel_ssid" ;;

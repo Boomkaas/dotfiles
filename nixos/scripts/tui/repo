@@ -267,8 +267,8 @@ EOF
         echo ""
     fi
 
-    echo -e "${CYAN}${BOLD}── Recent Commit History (Last 10) ──────────────────────────${RESET}"
-    git -C "$target" log -n 10 --graph --pretty=format:'%C(yellow)%h%Creset %C(green)%ar%Creset %C(blue)%an%Creset %s%C(auto)%d%Creset' --color=always 2>/dev/null
+    echo -e "${CYAN}${BOLD}── Recent Commit History (Last 5) ───────────────────────────${RESET}"
+    git -C "$target" log -n 5 --graph --pretty=format:'%C(yellow)%h%Creset %C(green)%ar%Creset %C(blue)%an%Creset %s%C(auto)%d%Creset' --color=always 2>/dev/null
     echo ""
 
     if [ "$stash_cnt" -gt 0 ]; then
@@ -428,11 +428,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="  Repo ($current_scope) > " \
             --header="[$header_info] (Enter: Open $EDITOR | Ctrl-E: IDE | Ctrl-P: Pull | Ctrl-U: Push | Ctrl-D: Diff | Ctrl-F: Yazi | Tab: Filter | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 

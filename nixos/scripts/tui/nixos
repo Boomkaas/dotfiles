@@ -364,7 +364,7 @@ cmd_preview() {
                 if [ -e "$PROFILES_DIR/system-${prev_num}-link" ]; then
                     echo -e "${BOLD}${CYAN}Package Changes (Gen $prev_num → Gen $id):${RESET}"
                     local diff_output
-                    diff_output=$(nix store diff-closures "$PROFILES_DIR/system-${prev_num}-link" "$link" 2>/dev/null | head -n 14)
+                    diff_output=$(nix store diff-closures "$PROFILES_DIR/system-${prev_num}-link" "$link" 2>/dev/null | head -n 6)
                     if [ -n "$diff_output" ]; then
                         echo -e "${DIM}$diff_output${RESET}"
                     else
@@ -376,7 +376,7 @@ cmd_preview() {
             else
                 echo -e "${BOLD}${CYAN}Package Diff (Gen $id → Current Gen $curr_gen):${RESET}"
                 local diff_output
-                diff_output=$(nix store diff-closures "$link" "$PROFILES_DIR/system" 2>/dev/null | head -n 14)
+                diff_output=$(nix store diff-closures "$link" "$PROFILES_DIR/system" 2>/dev/null | head -n 6)
                 if [ -n "$diff_output" ]; then
                     echo -e "${DIM}$diff_output${RESET}"
                 else
@@ -385,11 +385,7 @@ cmd_preview() {
             fi
 
             echo ""
-            echo -e "${BOLD}${WHITE}Hotkeys & Actions:${RESET}"
-            echo -e "  ${CYAN}Enter${RESET}   Open generation actions (Switch, Test, Boot, Delete)"
-            echo -e "  ${CYAN}Ctrl-S${RESET}  Switch & activate this generation now"
-            echo -e "  ${CYAN}Ctrl-B${RESET}  Set as next boot default"
-            echo -e "  ${CYAN}Ctrl-D${RESET}  View full closure diff in pager"
+            echo -e "${BOLD}Actions:${RESET} Enter: Actions | Ctrl-S: Switch | Ctrl-B: Boot Default | Ctrl-D: Diff"
             ;;
 
         action)
@@ -504,11 +500,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="  NixOS > " \
             --header="[$header_info] (Enter: Select | Ctrl-S: Switch | Ctrl-B: Boot | Ctrl-D: Diff | Ctrl-R: Refresh | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 
@@ -581,7 +577,7 @@ cmd_interactive() {
                 local act
                 act=$(printf "1. Activate & Switch to this Generation (sudo)\n2. Set as Default for Next Boot (sudo)\n3. Test Generation without changing bootloader (sudo)\n4. View Full Package Diff in Pager\n5. List Installed Commands / Binaries\n6. Delete this Generation (sudo)\n7. Cancel" | fzf \
                     --prompt="Generation [$item_id] > " \
-                    --height=35% \
+                    --height=48% \
                     --reverse \
                     --border=rounded) || continue
                 case "$act" in

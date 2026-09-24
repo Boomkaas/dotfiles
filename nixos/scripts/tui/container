@@ -175,7 +175,7 @@ Mounts: {{range .Mounts}}{{.Source}} -> {{.Destination}} {{end}}
 Created: {{.Created}}' 2>/dev/null
             echo ""
             echo -e "${CYAN}${BOLD}── Recent Container Logs ────────────────────────────────────${RESET}"
-            docker logs --tail 20 "$cid" 2>&1 || echo "No logs"
+            docker logs --tail 8 "$cid" 2>&1 || echo "No logs"
             ;;
 
         image)
@@ -226,7 +226,7 @@ show_action_menu() {
             acts+=("6. ✘  Cancel")
 
             local choice
-            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Container [$payload] > " --height=35% --reverse --border=rounded) || return 0
+            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Container [$payload] > " --height=48% --reverse --border=rounded) || return 0
             case "$choice" in
                 1*) [ "$is_running" = "true" ] && cmd_stop "docker" "$payload" || cmd_start "docker" "$payload" ;;
                 2*) [ "$is_running" = "true" ] && cmd_restart "docker" "$payload" || docker rm "$payload" ;;
@@ -244,7 +244,7 @@ show_action_menu() {
             acts+=("5. ✘  Cancel")
 
             local choice
-            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="VM [$payload] > " --height=30% --reverse --border=rounded) || return 0
+            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="VM [$payload] > " --height=45% --reverse --border=rounded) || return 0
             case "$choice" in
                 1*) virsh start "$payload" ;;
                 2*) virsh shutdown "$payload" ;;
@@ -361,11 +361,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="🐳 Container ($current_scope) > " \
             --header="[$header_info] (Enter: Actions | Ctrl-S: Start | Ctrl-K: Stop | Ctrl-L: Logs | Ctrl-A: Shell | Tab: Filter | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 

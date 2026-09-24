@@ -150,12 +150,12 @@ EOF
         echo -e "${BOLD}⚙️  Process:${RESET}  $proc (PID: $pid)"
         echo ""
         echo -e "${CYAN}${BOLD}── Recent logs from $proc ─────────────────────────────────${RESET}"
-        journalctl _COMM="$proc" -n 25 --no-pager 2>/dev/null
+        journalctl _COMM="$proc" -n 12 --no-pager 2>/dev/null
     elif [[ "$target" =~ kernel: ]]; then
         echo -e "${BOLD}⚙️  Subsystem:${RESET} Linux Kernel"
         echo ""
         echo -e "${CYAN}${BOLD}── Surrounding Kernel Messages ────────────────────────────${RESET}"
-        journalctl -k -b -n 25 --no-pager 2>/dev/null
+        journalctl -k -b -n 12 --no-pager 2>/dev/null
     fi
 }
 
@@ -173,7 +173,7 @@ show_action_menu() {
     acts+=("4. ✘  Cancel")
 
     local choice
-    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Log Action > " --height=30% --reverse --border=rounded) || return 0
+    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Log Action > " --height=45% --reverse --border=rounded) || return 0
 
     case "$choice" in
         1*)
@@ -268,11 +268,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="📜 Log ($current_scope) > " \
             --header="[$header_info] (Enter: Actions | Ctrl-F: Live Follow | Ctrl-K: Dmesg | Ctrl-C: Copy | Tab: Filter | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 

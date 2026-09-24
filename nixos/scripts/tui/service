@@ -269,10 +269,10 @@ cmd_preview() {
             echo -e "${BOLD}${CYAN}=== Systemd Service: $unit ($scope) ===${RESET}"
 
             local stat_cmd=(systemctl status "$unit" --no-pager)
-            local log_cmd=(journalctl -u "$unit" -n 14 --no-pager)
+            local log_cmd=(journalctl -u "$unit" -n 7 --no-pager)
             if [ "$scope" = "user" ]; then
                 stat_cmd=(systemctl --user status "$unit" --no-pager)
-                log_cmd=(journalctl --user -u "$unit" -n 14 --no-pager)
+                log_cmd=(journalctl --user -u "$unit" -n 7 --no-pager)
             fi
 
             local raw_status
@@ -301,7 +301,7 @@ cmd_preview() {
             [ -n "$cpu" ]     && echo -e "  ${BOLD}CPU Time:${RESET}     $cpu"
             echo ""
 
-            echo -e "${BOLD}${CYAN}Recent Journal Logs (last 14 lines):${RESET}"
+            echo -e "${BOLD}${CYAN}Recent Journal Logs (last 7 lines):${RESET}"
             echo -e "${DIM}───────────────────────────────────────────${RESET}"
             local logs
             logs=$("${log_cmd[@]}" 2>/dev/null)
@@ -312,12 +312,7 @@ cmd_preview() {
             fi
             echo -e "${DIM}───────────────────────────────────────────${RESET}"
             echo ""
-            echo -e "${BOLD}${WHITE}Actions & Hotkeys:${RESET}"
-            echo -e "  ${CYAN}Enter${RESET}   Open actions submenu (Restart, Stop, Logs, Enable)"
-            echo -e "  ${CYAN}Ctrl-R${RESET}  Instant restart this service"
-            echo -e "  ${CYAN}Ctrl-S${RESET}  Toggle Start / Stop"
-            echo -e "  ${CYAN}Ctrl-L${RESET}  Follow live logs in fullscreen (journalctl -f)"
-            echo -e "  ${CYAN}Tab${RESET}     Switch between User & System services"
+            echo -e "${BOLD}Actions:${RESET} Enter: Actions | Ctrl-R: Restart | Ctrl-S: Start/Stop | Ctrl-L: Follow Logs"
             ;;
 
         action)
@@ -408,11 +403,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="󰒓  Service ($current_scope) > " \
             --header="[$header_info] (Enter: Select | Ctrl-R: Restart | Ctrl-S: Start/Stop | Ctrl-L: Logs | Tab: Switch Scope | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 
@@ -471,7 +466,7 @@ cmd_interactive() {
                 local act
                 act=$(printf "1. Restart Service\n2. Toggle Start / Stop\n3. Follow Live Logs (journalctl -f)\n4. View Full Status Details\n5. Toggle Enable / Disable at Boot\n6. Reload Daemon (daemon-reload)\n7. Cancel" | fzf \
                     --prompt="Service [$item_unit] > " \
-                    --height=35% \
+                    --height=48% \
                     --reverse \
                     --border=rounded) || continue
                 case "$act" in

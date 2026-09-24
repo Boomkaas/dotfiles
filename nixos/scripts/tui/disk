@@ -183,7 +183,7 @@ cmd_preview() {
         action:analyze_home)
             echo -e "${BOLD}${CYAN}Home Directory Storage Breakdown (~)${RESET}\n"
             echo -e "${BOLD}Top Directories in $HOME:${RESET}"
-            du -sh "$HOME"/* 2>/dev/null | sort -hr | head -n 25
+            du -sh "$HOME"/* 2>/dev/null | sort -hr | head -n 14
             return 0
             ;;
 
@@ -198,9 +198,6 @@ cmd_preview() {
             echo ""
             echo -e "${BOLD}Mount Properties:${RESET}"
             findmnt "$mountp" 2>/dev/null || cat /proc/mounts | grep " $mountp "
-            echo ""
-            echo -e "${BOLD}Top-Level Contents:${RESET}"
-            ls -lh --color=always "$mountp" 2>/dev/null | head -n 15
             return 0
             ;;
 
@@ -246,7 +243,7 @@ show_action_menu() {
             acts+=("5. ✘  Cancel")
 
             local choice
-            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Partition [$p] > " --height=30% --reverse --border=rounded) || return 0
+            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Partition [$p] > " --height=45% --reverse --border=rounded) || return 0
             case "$choice" in
                 1*) open_in_fm "$p" ;;
                 2*) thunar "$p" >/dev/null 2>&1 & ;;
@@ -278,7 +275,7 @@ show_action_menu() {
             acts+=("4. ✘  Cancel")
 
             local choice
-            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Device [$d] > " --height=30% --reverse --border=rounded) || return 0
+            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Device [$d] > " --height=45% --reverse --border=rounded) || return 0
             case "$choice" in
                 1*)
                     if [ -n "$is_mounted" ]; then
@@ -377,11 +374,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="󰋊  Disk ($current_scope) > " \
-            --header="[$header_info] (Enter: Actions | Ctrl-C: Clean Nix | Ctrl-O: Optimise | Ctrl-M: Mount/Unmount | Ctrl-F: Yazi | Tab: Filter | Esc: Exit)" \
+            --header="[$header_info] (Enter: Actions | Ctrl-C: Clean Nix | Ctrl-O: Optimise | Ctrl-M: Mount | Ctrl-F: Yazi | Tab: Filter | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 

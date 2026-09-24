@@ -538,11 +538,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="󰝰  Share > " \
             --header="[$header_info] (Enter: Select | Ctrl-R: Refresh | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 
@@ -660,7 +660,7 @@ cmd_interactive() {
                 local act
                 act=$(printf "1. Copy Windows Path (%s)\n2. Copy Mac/Linux URL (%s)\n3. Open Local Folder in Thunar\n4. Restart Samba Service\n5. Cancel" "$win_path" "$mac_path" | fzf \
                     --prompt="Share [${share_target}] > " \
-                    --reverse --height=35% --border=rounded) || true
+                    --reverse --height=45% --border=rounded) || true
 
                 case "$act" in
                     *"Copy Windows Path"*)

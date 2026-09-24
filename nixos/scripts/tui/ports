@@ -241,7 +241,7 @@ show_action_menu() {
     acts+=("7. ✘  Cancel")
 
     local choice
-    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Port [$port : $pname] > " --height=35% --reverse --border=rounded) || return 0
+    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Port [$port : $pname] > " --height=48% --reverse --border=rounded) || return 0
 
     case "$choice" in
         1*) cmd_curl_test "$port" "$ip" ;;
@@ -320,11 +320,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="🌐 Port ($current_scope) > " \
-            --header="[$header_info] (Enter: Actions | Ctrl-K: Terminate | Ctrl-X: Force Kill | Ctrl-O: Open Browser | Ctrl-T: Curl | Tab: Filter | Esc: Exit)" \
+            --header="[$header_info] (Enter: Actions | Ctrl-K: Terminate | Ctrl-X: Kill | Ctrl-O: Browser | Ctrl-T: Curl | Tab: Filter | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 

@@ -334,8 +334,8 @@ cmd_interactive() {
         --prompt="󰀻  App > " \
         --header="[Application Launcher] (Enter: Launch | Ctrl-R: Reload | Esc: Exit)" \
         --preview="$self_bin preview {}" \
-        --preview-window="right:48%:wrap" \
-        --height=70% \
+        --preview-window="right:52%:wrap" \
+        --height=100% \
         --border=rounded \
         --reverse \
         --cycle \

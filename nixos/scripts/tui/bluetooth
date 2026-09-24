@@ -343,7 +343,7 @@ cmd_disconnect() {
             mac="${connected_macs[0]}"
         else
             if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
-                mac=$(bluetoothctl devices Connected 2>/dev/null | fzf --prompt="Disconnect > " --reverse --height=30% --border=rounded | awk '{print $2}')
+                mac=$(bluetoothctl devices Connected 2>/dev/null | fzf --prompt="Disconnect > " --reverse --height=45% --border=rounded | awk '{print $2}')
             else
                 mac="${connected_macs[0]}"
             fi
@@ -418,7 +418,7 @@ cmd_remove() {
     local target="$1"
     if [ -z "$target" ]; then
         if [ -t 0 ] && command -v fzf >/dev/null 2>&1; then
-            target=$(bluetoothctl devices Paired 2>/dev/null | fzf --prompt="Remove/Forget > " --reverse --height=40% --border=rounded | awk '{print $2}')
+            target=$(bluetoothctl devices Paired 2>/dev/null | fzf --prompt="Remove/Forget > " --reverse --height=45% --border=rounded | awk '{print $2}')
         else
             echo -e "${RED}Error: Specify device to remove. Usage: bluetooth remove <device|MAC>${RESET}" >&2
             return 1
@@ -523,9 +523,7 @@ cmd_preview() {
         dev_class=$(echo "$info" | grep -E "^\s*Class:" | head -n 1 | awk '{print $2}')
 
         echo -e "  ${BOLD}Category:${RESET}  $(get_device_class_desc "$icon_raw" "$dev_class" "$dname")"
-        echo -e "  ${BOLD}Status:${RESET}    $([ "$connected" = "yes" ] && echo -e "${GREEN}${BOLD}Connected${RESET}" || echo -e "${DIM}Disconnected${RESET}")"
-        echo -e "  ${BOLD}Paired:${RESET}    $([ "$paired" = "yes" ] && echo -e "${GREEN}yes${RESET}" || echo -e "${YELLOW}no${RESET}")"
-        echo -e "  ${BOLD}Trusted:${RESET}   $([ "$trusted" = "yes" ] && echo -e "${GREEN}yes${RESET}" || echo -e "${DIM}no${RESET}")"
+        echo -e "  ${BOLD}Status:${RESET}    $([ "$connected" = "yes" ] && echo -e "${GREEN}${BOLD}Connected${RESET}" || echo -e "${DIM}Disconnected${RESET}") • Paired: $([ "$paired" = "yes" ] && echo -e "${GREEN}yes${RESET}" || echo -e "${YELLOW}no${RESET}") • Trusted: $([ "$trusted" = "yes" ] && echo -e "${GREEN}yes${RESET}" || echo -e "${DIM}no${RESET}")"
         [ "$blocked" = "yes" ] && echo -e "  ${BOLD}Blocked:${RESET}   ${RED}yes${RESET}"
 
         if [ -n "$battery" ]; then
@@ -538,24 +536,14 @@ cmd_preview() {
         [ -n "$txpower" ] && echo -e "  ${BOLD}Tx Power:${RESET}  $txpower dBm"
 
         local uuids
-        uuids=$(echo "$info" | grep -E "^\s*UUID:" | awk '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | sed 's/(.*)//g' | tr -s ' ' | head -n 6)
+        uuids=$(echo "$info" | grep -E "^\s*UUID:" | awk '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | sed 's/(.*)//g' | tr -s ' ' | head -n 3)
         if [ -n "$uuids" ]; then
-            echo ""
-            echo -e "  ${BOLD}Supported Services:${RESET}"
-            while IFS= read -r uline; do
-                [ -n "$uline" ] && echo -e "   ${DIM}• $uline${RESET}"
-            done <<< "$uuids"
+            echo -e "  ${BOLD}Services:${RESET}  $(echo "$uuids" | tr '\n' ',' | sed 's/,$//; s/,/, /g')"
         fi
     fi
 
     echo ""
-    echo -e "${BOLD}Available Actions:${RESET}"
-    echo -e "  ${CYAN}Enter${RESET}   Open device action menu"
-    echo -e "  ${CYAN}Ctrl-C${RESET}  Quick Connect"
-    echo -e "  ${CYAN}Ctrl-D${RESET}  Quick Disconnect"
-    echo -e "  ${CYAN}Ctrl-P${RESET}  Pair & Trust"
-    echo -e "  ${CYAN}Ctrl-T${RESET}  Toggle Trust"
-    echo -e "  ${CYAN}Ctrl-X${RESET}  Remove / Forget device"
+    echo -e "${BOLD}Actions:${RESET} Enter: Menu | Ctrl-C: Connect | Ctrl-D: Discon | Ctrl-T: Trust | Ctrl-X: Forget"
 }
 
 # ------------------------------------------------------------------------------
@@ -652,11 +640,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="󰂯  Bluetooth > " \
             --header="[$header_info] (Enter: Select | Ctrl-R: Scan | Ctrl-C: Conn | Ctrl-D: Discon | Ctrl-P: Pair | Ctrl-T: Trust | Ctrl-X: Forget | Ctrl-B: Power)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 
@@ -749,7 +737,7 @@ cmd_interactive() {
                     local act
                     act=$(printf "1. Disconnect\n2. Toggle Trust\n3. Forget / Remove\n4. Show Info\n5. Cancel" | fzf \
                         --prompt="$sel_name (Connected) > " \
-                        --reverse --height=30% --border=rounded) || true
+                        --reverse --height=45% --border=rounded) || true
                     [ -z "$act" ] || [[ "$act" =~ Cancel ]] && continue
                     case "$act" in
                         *"Disconnect"*) cmd_disconnect "$sel_mac" ;;
@@ -763,7 +751,7 @@ cmd_interactive() {
                     local act
                     act=$(printf "1. Connect\n2. Toggle Trust\n3. Forget / Remove\n4. Show Info\n5. Cancel" | fzf \
                         --prompt="$sel_name (Paired) > " \
-                        --reverse --height=30% --border=rounded) || true
+                        --reverse --height=45% --border=rounded) || true
                     [ -z "$act" ] || [[ "$act" =~ Cancel ]] && continue
                     case "$act" in
                         *"Connect"*) cmd_connect "$sel_mac" ;;
@@ -777,7 +765,7 @@ cmd_interactive() {
                     local act
                     act=$(printf "1. Pair & Connect\n2. Toggle Trust\n3. Ignore / Remove\n4. Show Info\n5. Cancel" | fzf \
                         --prompt="$sel_name (New Device) > " \
-                        --reverse --height=30% --border=rounded) || true
+                        --reverse --height=45% --border=rounded) || true
                     [ -z "$act" ] || [[ "$act" =~ Cancel ]] && continue
                     case "$act" in
                         *"Pair & Connect"*) cmd_pair "$sel_mac" ;;

@@ -450,11 +450,11 @@ cmd_interactive() {
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
-            --preview-window=right:48%:wrap \
+            --preview-window=right:52%:wrap \
             --prompt="⚡ Scripts > " \
-            --header="[$header_info] (Enter: Launch Tool | Ctrl-O: Edit Script | Ctrl-H: Manual | Tab: Filter | Esc: Exit)" \
+            --header="[$header_info] (Enter: Launch Tool | Ctrl-O: Edit | Ctrl-H: Help | Tab: Filter | Esc: Exit)" \
             --reverse \
-            --height=70% \
+            --height=100% \
             --border=rounded \
             --cycle) || break
 

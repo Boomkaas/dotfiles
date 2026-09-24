@@ -7,6 +7,10 @@
 
 set -eo pipefail
 
+export PATH="$HOME/.local/bin:/run/current-system/sw/bin:$PATH"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$UID}"
+
 TOOL="${1:-setting}"
 shift || true
 
@@ -28,50 +32,49 @@ else
     CMD_PATH="$TUI_DIR/s"
 fi
 
-STATE_FILE="/tmp/.tui_overlay_state"
-CURRENT_PID=""
+STATE_FILE="/tmp/.tui_overlay_tool"
 CURRENT_TOOL=""
+[ -f "$STATE_FILE" ] && CURRENT_TOOL=$(cat "$STATE_FILE" 2>/dev/null || true)
 
-if [ -f "$STATE_FILE" ]; then
-    CURRENT_PID=$(sed -n '1p' "$STATE_FILE" 2>/dev/null || true)
-    CURRENT_TOOL=$(sed -n '2p' "$STATE_FILE" 2>/dev/null || true)
-fi
+# Find any active tui-overlay processes
+get_overlay_pids() {
+    local pids=()
+    local raw_pids
+    raw_pids=$(pgrep -x .kitty-wrapped 2>/dev/null || pgrep -x kitty 2>/dev/null || true)
+    for p in $raw_pids; do
+        if grep -q "tui-overlay" "/proc/$p/cmdline" 2>/dev/null; then
+            pids+=("$p")
+        fi
+    done
+    echo "${pids[@]}"
+}
 
-# Check if an existing overlay instance is alive
-if [ -n "$CURRENT_PID" ] && kill -0 "$CURRENT_PID" 2>/dev/null; then
-    # If the user pressed the hotkey for the SAME tool, toggle it closed
+RUNNING_PIDS=$(get_overlay_pids)
+
+if [ -n "$RUNNING_PIDS" ]; then
+    # If the user requested the SAME tool, toggle it off
     if [ "$CURRENT_TOOL" = "$TOOL" ]; then
-        kill "$CURRENT_PID" 2>/dev/null || true
+        for p in $RUNNING_PIDS; do
+            kill "$p" 2>/dev/null || true
+        done
         rm -f "$STATE_FILE"
         exit 0
     else
         # Different tool requested: terminate previous modal to switch
-        kill "$CURRENT_PID" 2>/dev/null || true
+        for p in $RUNNING_PIDS; do
+            kill "$p" 2>/dev/null || true
+        done
         rm -f "$STATE_FILE"
     fi
 fi
 
-# Window dimensions optimized for TUI control panels
-WIN_WIDTH=980
-WIN_HEIGHT=650
+# Window dimensions: strictly 150x25 cells for optimal TUI layout
+WIN_WIDTH="150c"
+WIN_HEIGHT="25c"
 
-# In case tool needs specific dimensions
-case "$TOOL" in
-    clip|clipboard)
-        WIN_WIDTH=920
-        WIN_HEIGHT=580
-        ;;
-    task|tasks|process)
-        WIN_WIDTH=1040
-        WIN_HEIGHT=680
-        ;;
-    ports|port)
-        WIN_WIDTH=940
-        WIN_HEIGHT=600
-        ;;
-esac
+echo "$TOOL" > "$STATE_FILE"
 
-# Launch floating Kitty modal in background
+# Launch floating Kitty modal
 nohup kitty \
     --class tui-overlay \
     --app-id tui-overlay \
@@ -84,6 +87,4 @@ nohup kitty \
     -o hide_window_decorations=yes \
     "$CMD_PATH" "$@" >/dev/null 2>&1 &
 
-NEW_PID=$!
-printf "%s\n%s\n" "$NEW_PID" "$TOOL" > "$STATE_FILE"
-disown "$NEW_PID" 2>/dev/null || true
+disown $! 2>/dev/null || true
