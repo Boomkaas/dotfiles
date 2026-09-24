@@ -657,11 +657,16 @@ cmd_interactive() {
                 cmd_nightlight_menu
                 ;;
             clipboard)
+                local clip_rc=1
                 if [ -x "$TUI_DIR/clip" ]; then
                     "$TUI_DIR/clip"
+                    clip_rc=$?
                 elif [ -x "$HOME/.local/bin/clip" ]; then
                     "$HOME/.local/bin/clip"
+                    clip_rc=$?
                 fi
+                # Automatically close modal window after copying an item
+                [ "$clip_rc" -eq 0 ] && exit 0
                 ;;
             dnd)
                 cmd_dnd_toggle

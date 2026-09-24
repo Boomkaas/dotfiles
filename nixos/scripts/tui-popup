@@ -87,4 +87,6 @@ nohup kitty \
     -o hide_window_decorations=yes \
     "$CMD_PATH" "$@" >/dev/null 2>&1 &
 
-disown $! 2>/dev/null || true
+KITTY_PID=$!
+(wait "$KITTY_PID" 2>/dev/null; rm -f "$STATE_FILE" 2>/dev/null) &
+disown -a 2>/dev/null || true

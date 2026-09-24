@@ -43,24 +43,44 @@ notify() {
     fi
 }
 
+trap 'rm -f /tmp/.tui_overlay_tool 2>/dev/null || true' EXIT
+
+decode_clip() {
+    local entry="$1"
+    [ -z "$entry" ] && return 1
+    if [[ "$entry" =~ ^[0-9]+$ ]]; then
+        printf "%s\t\n" "$entry" | cliphist decode
+    else
+        printf "%s\n" "$entry" | cliphist decode
+    fi
+}
+
 copy_clip() {
     local raw_entry="$1"
     [ -z "$raw_entry" ] && return 1
-    if echo "$raw_entry" | cliphist decode | wl-copy; then
+    # Copy to Wayland clipboard (Ctrl+V) and primary selection (middle-click)
+    # Redirect stdout and stderr to /dev/null so daemonized wl-copy doesn't hold open terminal PTY
+    if decode_clip "$raw_entry" | wl-copy >/dev/null 2>&1; then
+        decode_clip "$raw_entry" | wl-copy --primary >/dev/null 2>&1 || true
         notify "normal" "edit-copy" "Clipboard" "Restored item to active clipboard"
         echo -e "${GREEN}✔ Copied item back to active clipboard.${RESET}"
+        return 0
     else
         notify "critical" "dialog-error" "Clipboard" "Failed to copy item"
+        return 1
     fi
 }
 
 delete_clip() {
     local raw_entry="$1"
     [ -z "$raw_entry" ] && return 1
-    if echo "$raw_entry" | cliphist delete; then
-        notify "normal" "edit-delete" "Clipboard" "Deleted item from clipboard history"
-        echo -e "${YELLOW}✔ Deleted item from clipboard history.${RESET}"
+    if [[ "$raw_entry" =~ ^[0-9]+$ ]]; then
+        printf "%s\t\n" "$raw_entry" | cliphist delete
+    else
+        printf "%s\n" "$raw_entry" | cliphist delete
     fi
+    notify "normal" "edit-delete" "Clipboard" "Deleted item from clipboard history"
+    echo -e "${YELLOW}✔ Deleted item from clipboard history.${RESET}"
 }
 
 wipe_all() {
@@ -73,7 +93,7 @@ pin_snippet() {
     local raw_entry="$1"
     [ -z "$raw_entry" ] && return 1
     local content
-    content=$(echo "$raw_entry" | cliphist decode 2>/dev/null)
+    content=$(decode_clip "$raw_entry" 2>/dev/null)
     [ -z "$content" ] && return 1
 
     mkdir -p "$(dirname "$SNIPPETS_FILE")"
@@ -114,8 +134,20 @@ EOF
             ;;
     esac
 
+    local mime info
+    mime=$(decode_clip "$raw_entry" 2>/dev/null | file -b --mime-type - 2>/dev/null || echo "unknown")
+
+    if [[ "$mime" =~ ^image/ ]]; then
+        info=$(decode_clip "$raw_entry" 2>/dev/null | file -b - 2>/dev/null || echo "Image data")
+        echo -e "${BOLD}📋 Clipboard Entry:${RESET} [🖼️  Image / Media (${mime})]"
+        echo -e "${BOLD}📊 Media Info:${RESET}       ${info}"
+        echo "─────────────────────────────────────────────────────────────────────────────"
+        echo -e "${GREEN}✔ Image payload ready to restore to active clipboard on Enter.${RESET}"
+        return 0
+    fi
+
     local decoded
-    decoded=$(echo "$raw_entry" | cliphist decode 2>/dev/null)
+    decoded=$(decode_clip "$raw_entry" 2>/dev/null)
 
     if [ -z "$decoded" ]; then
         echo -e "${DIM}Binary / Empty payload${RESET}"
@@ -169,9 +201,10 @@ show_action_menu() {
         2*)
             local tmpf
             tmpf=$(mktemp --suffix=.txt)
-            echo "$raw_entry" | cliphist decode > "$tmpf"
+            decode_clip "$raw_entry" > "$tmpf"
             "${EDITOR:-nvim}" "$tmpf"
-            wl-copy < "$tmpf"
+            wl-copy < "$tmpf" >/dev/null 2>&1
+            wl-copy --primary < "$tmpf" >/dev/null 2>&1 || true
             rm -f "$tmpf"
             notify "normal" "edit-copy" "Clipboard" "Edited snippet copied to clipboard"
             ;;
@@ -217,12 +250,14 @@ cmd_interactive() {
             local display_snippet="${snippet:0:55}"
 
             local icon="📄"
-            if [[ "$snippet" =~ ^https?:// ]]; then
+            if [[ "$snippet" =~ ^\[\[\ binary\ data ]]; then
+                icon="🖼️ "
+            elif [[ "$snippet" =~ ^https?:// ]]; then
                 icon="🔗"
             elif [[ "$snippet" =~ ^(nix|git|curl|docker|systemctl|ssh|cargo|python)\  ]]; then
                 icon="💻"
             elif [[ "$snippet" =~ [\{\}\[\]\;] ]]; then
-                icon=""
+                icon=" "
             fi
 
             local label
@@ -239,19 +274,19 @@ cmd_interactive() {
             --preview="$self_bin preview {2}" \
             --preview-window=right:52%:wrap \
             --prompt="📋 Clip > " \
-            --header="[$header_info] (Enter: Copy | Ctrl-D: Delete | Ctrl-P: Pin | Ctrl-E: Edit | Ctrl-X: Wipe | Esc: Exit)" \
+            --header="[$header_info] (Enter: Copy & Close | Ctrl-D: Delete | Ctrl-P: Pin | Ctrl-E: Edit | Ctrl-X: Wipe | Esc: Exit)" \
             --reverse \
             --height=100% \
             --border=rounded \
-            --cycle) || break
+            --cycle) || exit 1
 
-        [ -z "$res" ] && break
+        [ -z "$res" ] && exit 1
         key=$(echo "$res" | sed -n '1p')
         choice=$(echo "$res" | sed -n '2p')
-        [ -z "$choice" ] && break
+        [ -z "$choice" ] && exit 1
 
         local target_payload
-        target_payload=$(echo "$choice" | cut -f2)
+        target_payload=$(echo "$choice" | cut -f2-)
 
         case "$target_payload" in
             action:wipe_history) wipe_all; continue ;;
@@ -273,9 +308,10 @@ cmd_interactive() {
             ctrl-e)
                 local tmpf
                 tmpf=$(mktemp --suffix=.txt)
-                echo "$target_payload" | cliphist decode > "$tmpf"
+                decode_clip "$target_payload" > "$tmpf"
                 "${EDITOR:-nvim}" "$tmpf"
-                wl-copy < "$tmpf"
+                wl-copy < "$tmpf" >/dev/null 2>&1
+                wl-copy --primary < "$tmpf" >/dev/null 2>&1 || true
                 rm -f "$tmpf"
                 notify "normal" "edit-copy" "Clipboard" "Edited snippet copied to clipboard"
                 continue
@@ -283,9 +319,9 @@ cmd_interactive() {
             ctrl-r) continue ;;
         esac
 
-        # Enter pressed -> restore to active clipboard
+        # Enter pressed -> restore to active clipboard and automatically close window
         copy_clip "$target_payload"
-        break
+        exit 0
     done
 }
 
@@ -304,7 +340,7 @@ ${BOLD}USAGE:${RESET}
     clip help                       Show this help message
 
 ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
-    ${CYAN}Enter${RESET}       Copy selected item to active clipboard (wl-copy)
+    ${CYAN}Enter${RESET}       Copy selected item to active clipboard (wl-copy) and close window
     ${CYAN}Ctrl-D${RESET}      Delete item from clipboard history
     ${CYAN}Ctrl-P${RESET}      Pin item to saved snippets file (~/.config/snippets.txt)
     ${CYAN}Ctrl-E${RESET}      Edit snippet in Neovim before copying
@@ -321,9 +357,9 @@ EOF
 
 case "${1:-}" in
     list|ls) cliphist list | head -n "${2:-50}" ;;
-    decode) cliphist decode <<< "$2" ;;
-    copy) echo "$2" | cliphist decode | wl-copy ;;
-    delete) cliphist delete <<< "$2" ;;
+    decode) decode_clip "$2" ;;
+    copy) copy_clip "$2" ;;
+    delete) delete_clip "$2" ;;
     wipe) wipe_all ;;
     preview) cmd_preview "$2" ;;
     help|--help|-h) cmd_help ;;
