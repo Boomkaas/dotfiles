@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# tui-popup - High-Performance Modal Floating Launcher for Dotfiles TUI Tools
+# Launches any TUI tool (s, setting, wifi, bluetooth, audio, clip, task, etc.)
+# in a centered, floating Wayland modal window with instant toggle behavior.
+# ==============================================================================
+
+set -eo pipefail
+
+TOOL="${1:-setting}"
+shift || true
+
+# Resolve canonical script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TUI_DIR="$SCRIPT_DIR/tui"
+[ -d "$TUI_DIR" ] || TUI_DIR="/home/peng/Code/Dotfiles/nixos/scripts/tui"
+
+# Find tool executable
+CMD_PATH=""
+if [ -x "$TUI_DIR/$TOOL" ]; then
+    CMD_PATH="$TUI_DIR/$TOOL"
+elif [ -x "$HOME/.local/bin/$TOOL" ]; then
+    CMD_PATH="$HOME/.local/bin/$TOOL"
+elif command -v "$TOOL" >/dev/null 2>&1; then
+    CMD_PATH="$(command -v "$TOOL")"
+else
+    # Fallback to master hub
+    CMD_PATH="$TUI_DIR/s"
+fi
+
+STATE_FILE="/tmp/.tui_overlay_state"
+CURRENT_PID=""
+CURRENT_TOOL=""
+
+if [ -f "$STATE_FILE" ]; then
+    CURRENT_PID=$(sed -n '1p' "$STATE_FILE" 2>/dev/null || true)
+    CURRENT_TOOL=$(sed -n '2p' "$STATE_FILE" 2>/dev/null || true)
+fi
+
+# Check if an existing overlay instance is alive
+if [ -n "$CURRENT_PID" ] && kill -0 "$CURRENT_PID" 2>/dev/null; then
+    # If the user pressed the hotkey for the SAME tool, toggle it closed
+    if [ "$CURRENT_TOOL" = "$TOOL" ]; then
+        kill "$CURRENT_PID" 2>/dev/null || true
+        rm -f "$STATE_FILE"
+        exit 0
+    else
+        # Different tool requested: terminate previous modal to switch
+        kill "$CURRENT_PID" 2>/dev/null || true
+        rm -f "$STATE_FILE"
+    fi
+fi
+
+# Window dimensions optimized for TUI control panels
+WIN_WIDTH=980
+WIN_HEIGHT=650
+
+# In case tool needs specific dimensions
+case "$TOOL" in
+    clip|clipboard)
+        WIN_WIDTH=920
+        WIN_HEIGHT=580
+        ;;
+    task|tasks|process)
+        WIN_WIDTH=1040
+        WIN_HEIGHT=680
+        ;;
+    ports|port)
+        WIN_WIDTH=940
+        WIN_HEIGHT=600
+        ;;
+esac
+
+# Launch floating Kitty modal in background
+nohup kitty \
+    --class tui-overlay \
+    --app-id tui-overlay \
+    --title "Control Center - $TOOL" \
+    -o initial_window_width="$WIN_WIDTH" \
+    -o initial_window_height="$WIN_HEIGHT" \
+    -o remember_window_size=no \
+    -o confirm_os_window_close=0 \
+    -o placement_strategy=center \
+    -o hide_window_decorations=yes \
+    "$CMD_PATH" "$@" >/dev/null 2>&1 &
+
+NEW_PID=$!
+printf "%s\n%s\n" "$NEW_PID" "$TOOL" > "$STATE_FILE"
+disown "$NEW_PID" 2>/dev/null || true

@@ -523,7 +523,7 @@ mod_scripts() {
   done < <(find "$SCRIPTS_DIR" -name "*.sh" -print0 2>/dev/null)
 
   # Scripts without extension
-  for name in awake bluetooth wifi setting theme epic twitch share audio nixos gens tm project service services task tasks conf configs disk storage repo repos gitui ports port clip clips log logs journal container containers vm pkg pkgs s tunnelbear tb restore-ram ram; do
+  for name in awake bluetooth wifi setting theme epic twitch share audio nixos gens tm project service services task tasks conf configs disk storage repo repos gitui ports port clip clips log logs journal container containers vm pkg pkgs s tunnelbear tb restore-ram ram tui-popup; do
     local f="$SCRIPTS_DIR/$name"
     [[ -f "$f" ]] && check "bash -n: $name" bash -n "$f"
   done
@@ -533,6 +533,19 @@ mod_scripts() {
     local f="$SCRIPTS_DIR/tui/$name"
     [[ -f "$f" ]] && check "bash -n: tui/$name" bash -n "$f"
   done
+
+  # tui-popup: floating modal and toggle features
+  has "tui-popup: floating kitty overlay"     "$SCRIPTS_DIR/tui-popup" 'tui-overlay'
+  has "tui-popup: toggle state behavior"      "$SCRIPTS_DIR/tui-popup" 'STATE_FILE'
+
+  # tui/setting: controls and latency optimizations
+  has "tui/setting: brightness control"       "$SCRIPTS_DIR/tui/setting" 'cmd_brightness_menu'
+  has "tui/setting: fast active wifi"         "$SCRIPTS_DIR/tui/setting" 'get_active_wifi_ssid'
+  has "tui/setting: power session menu"       "$SCRIPTS_DIR/tui/setting" 'cmd_power_session_menu'
+
+  # tui/s: fast telemetry and in-memory hotkeys
+  has "tui/s: fast nixos generation symlink"  "$SCRIPTS_DIR/tui/s" '/nix/var/nix/profiles/system'
+  has "tui/s: in-memory hotkeys map"          "$SCRIPTS_DIR/tui/s" 'get_tool_hotkeys'
 
   # tui/app: launcher and system sync features
   has "tui/app: fzf TUI launcher"             "$SCRIPTS_DIR/tui/app" 'fzf'

@@ -103,6 +103,84 @@ resolve_tool_script() {
     return 1
 }
 
+get_tool_hotkeys() {
+    local cmd="$1"
+    case "$cmd" in
+        wifi)
+            cat <<'EOF'
+  Enter   Select / Connect / Manage network
+  Ctrl-R  Rescan available networks
+  Ctrl-C  Quick Connect to highlighted SSID
+  Ctrl-D  Disconnect from active Wi-Fi
+  Ctrl-W  Toggle Wi-Fi Radio ON / OFF
+EOF
+            ;;
+        bluetooth|bt)
+            cat <<'EOF'
+  Enter   Open device action menu
+  Ctrl-R  Scan for nearby devices (5s)
+  Ctrl-C  Quick Connect to highlighted device
+  Ctrl-D  Quick Disconnect highlighted device
+  Ctrl-P  Quick Pair & Trust highlighted device
+EOF
+            ;;
+        audio)
+            cat <<'EOF'
+  Enter   Select sink / source / stream action
+  Ctrl-M  Toggle mute on default sink
+  Ctrl-U  Raise volume +5%
+  Ctrl-D  Lower volume -5%
+EOF
+            ;;
+        setting)
+            cat <<'EOF'
+  Enter   Select item / Toggle setting / Open tool
+  Ctrl-R  Refresh settings status
+  Ctrl-C  Clear all SwayNC notifications
+  Ctrl-M  Toggle Master Audio Mute
+EOF
+            ;;
+        clip)
+            cat <<'EOF'
+  Enter   Paste highlighted clip to active window
+  Ctrl-Y  Copy clip to Wayland clipboard
+  Ctrl-D  Delete clip from history
+  Ctrl-W  Wipe entire clipboard history
+EOF
+            ;;
+        task)
+            cat <<'EOF'
+  Enter   Focus window or inspect process
+  Ctrl-K  Terminate process (SIGTERM)
+  Ctrl-F  Force kill process (SIGKILL)
+  Ctrl-R  Refresh process list
+EOF
+            ;;
+        ports)
+            cat <<'EOF'
+  Enter   Inspect process on socket / Kill server
+  Ctrl-K  Kill process owning port (SIGTERM)
+  Ctrl-F  Force kill server (SIGKILL)
+  Ctrl-R  Refresh sockets list
+EOF
+            ;;
+        tb|tunnelbear)
+            cat <<'EOF'
+  Enter   Connect / Disconnect VPN country
+  Ctrl-D  Disconnect VPN tunnel
+  Ctrl-R  Refresh connection status
+EOF
+            ;;
+        *)
+            cat <<'EOF'
+  Enter   Launch tool interactive session
+  Ctrl-O  Open script source in Neovim
+  Ctrl-H  View CLI help manual
+EOF
+            ;;
+    esac
+}
+
 # ------------------------------------------------------------------------------
 # Live Telemetry Snippets for Previews
 # ------------------------------------------------------------------------------
@@ -111,12 +189,9 @@ get_live_telemetry() {
     case "$cmd" in
         wifi)
             local net
-            net=$(nmcli -t -f ACTIVE,SSID,SIGNAL dev wifi 2>/dev/null | grep '^yes' | cut -d: -f2,3)
+            net=$(nmcli -t -f NAME,TYPE con show --active 2>/dev/null | awk -F: '$2=="802-11-wireless"{print $1; exit}')
             if [ -n "$net" ]; then
-                local ssid sig
-                ssid=$(echo "$net" | cut -d: -f1)
-                sig=$(echo "$net" | cut -d: -f2)
-                echo -e "${GREEN}● Connected:${RESET} ${ssid} (${sig}% signal)"
+                echo -e "${GREEN}● Connected:${RESET} ${net}"
             else
                 echo -e "${YELLOW}○ Disconnected${RESET}"
             fi
@@ -152,9 +227,12 @@ get_live_telemetry() {
             ;;
         nixos)
             local gen
-            gen=$(nixos-rebuild list-generations 2>/dev/null | grep current | awk '{print "Generation " $1 " (" $2 " " $3 ")"}')
-            [ -z "$gen" ] && gen="Current flake generation active"
-            echo -e "${BLUE}● NixOS System:${RESET} ${gen}"
+            gen=$(readlink /nix/var/nix/profiles/system 2>/dev/null | grep -oP 'system-\K\d+' || echo "")
+            if [ -n "$gen" ]; then
+                echo -e "${BLUE}● NixOS System:${RESET} Generation ${gen} (Current active)"
+            else
+                echo -e "${BLUE}● NixOS System:${RESET} Current flake generation active"
+            fi
             ;;
         service)
             local failed
@@ -184,18 +262,11 @@ get_live_telemetry() {
             ;;
         log)
             local err_cnt
-            err_cnt=$(journalctl -p 3 -xb -n 50 --no-pager 2>/dev/null | grep -c -E '(error|fail|crit)' || echo "0")
+            err_cnt=$(journalctl -p 3 -xb -n 25 --no-pager 2>/dev/null | grep -c -E '(error|fail|crit)' || echo "0")
             echo -e "${RED}● Recent Boot Alerts:${RESET} ${err_cnt} error events recorded"
             ;;
         repo)
-            local dcnt=0
-            if [ -d "$HOME/Code" ]; then
-                while IFS= read -r g; do
-                    local r="$(dirname "$g")"
-                    [ -n "$(git -C "$r" status --porcelain 2>/dev/null)" ] && ((dcnt++))
-                done < <(find "$HOME/Code" -maxdepth 3 -name ".git" -type d 2>/dev/null)
-            fi
-            echo -e "${MAGENTA}● Git Repositories:${RESET} ${dcnt} local repo(s) with uncommitted work"
+            echo -e "${MAGENTA}● Git Repositories:${RESET} Multi-repository workspace dashboard"
             ;;
         tm)
             local scnt=0
@@ -321,7 +392,7 @@ EOF
 
     # Hotkeys / help snippet from script
     echo -e "${MAGENTA}${BOLD}── Interactive Hotkeys inside ${r_cmd} ─────────────────────────────${RESET}"
-    "$script_f" help 2>/dev/null | sed -n '/INTERACTIVE HOTKEYS/,/^$/p' | tail -n +2 | head -n 12 || echo "Launch with Enter to view hotkeys"
+    get_tool_hotkeys "$r_cmd"
 }
 
 # ------------------------------------------------------------------------------

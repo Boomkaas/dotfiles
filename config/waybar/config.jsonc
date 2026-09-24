@@ -101,7 +101,7 @@
         "tooltip-format-disconnected": "Disconnected",
         "interval": 3,
         "spacing": 1,
-        "on-click": "omarchy-launch-wifi"
+        "on-click": "/home/peng/.local/bin/tui-popup wifi"
     },
     "battery": {
         "format": "{icon} {capacity}%",
@@ -140,7 +140,7 @@
         "tooltip-format-discharging": "{timeTo}",
         "tooltip-format-charging": "{timeTo}",
         "interval": 5,
-        "on-click": "omarchy-menu power",
+        "on-click": "/home/peng/.local/bin/tui-popup setting",
         "on-click-right": "notify-send -u low \"$(omarchy-battery-status)\"",
         "states": {
             "warning": 20,
@@ -153,11 +153,11 @@
         "format-disabled": "\udb80\udcb2 {status}",
         "format-connected": "\udb80\udcb1 {num_connections}",
         "tooltip-format": "Devices connected: {num_connections}",
-        "on-click": "omarchy-launch-bluetooth"
+        "on-click": "/home/peng/.local/bin/tui-popup bluetooth"
     },
     "pulseaudio": {
         "format": "{icon} {volume}%",
-        "on-click": "omarchy-launch-audio",
+        "on-click": "/home/peng/.local/bin/tui-popup audio",
         "on-click-right": "pamixer -t",
         "tooltip-format": "Playing at {volume}%",
         "scroll-step": 5,
@@ -225,7 +225,7 @@
         "format": "\udb82\udfaf",
         "tooltip": true,
         "tooltip-format": "Application Menu",
-        "on-click": "$HOME/.local/bin/hakumenu.sh"
+        "on-click": "/home/peng/.local/bin/tui-popup s"
     },
     "custom/power": {
         "format": "\u23fb",
