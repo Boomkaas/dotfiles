@@ -186,12 +186,12 @@ get_mode() {
     if [ -f "$MODE_FILE" ]; then
         local m
         m=$(cat "$MODE_FILE" 2>/dev/null | tr -d '[:space:]')
-        if [ "$m" = "full" ]; then
-            echo "full"
+        if [ "$m" = "split" ]; then
+            echo "split"
             return 0
         fi
     fi
-    echo "split"
+    echo "full"
 }
 
 get_tun_ip() {
@@ -1242,31 +1242,44 @@ cmd_connect() {
         nmcli connection modify "$con_name" connection.autoconnect no >/dev/null 2>&1 || true
     fi
 
+    # Determine remote host from ovpn file for explicit IPv4 binding
+    local rem_host
+    rem_host=$(awk '$1=="remote" { print $2; exit }' "$ovpn_file" 2>/dev/null)
+    [ -z "$rem_host" ] && rem_host="${country,,}.lazerpenguin.com"
+
     # Set credentials, autoconnect policy (never autostart on boot), and routing mode
     local cur_mode
     cur_mode=$(get_mode)
     if [ "$cur_mode" = "split" ]; then
         nmcli connection modify "$con_name" \
             connection.autoconnect no \
-            +vpn.data "username=$AUTH_USER, password-flags=0" \
+            +vpn.data "username=$AUTH_USER, password-flags=0, remote=${rem_host}:443:udp4" \
             vpn.user-name "$AUTH_USER" \
             vpn.secrets "password=$AUTH_PASS" \
+            ipv4.never-default yes \
             ipv4.route-table 51820 \
-            ipv4.routing-rules "priority 1000 from 10.0.0.0/8 table 51820, priority 1001 from 172.16.0.0/12 table 51820" >/dev/null 2>&1
+            ipv4.routing-rules "" \
+            ipv6.method disabled >/dev/null 2>&1
     else
         nmcli connection modify "$con_name" \
             connection.autoconnect no \
-            +vpn.data "username=$AUTH_USER, password-flags=0" \
+            +vpn.data "username=$AUTH_USER, password-flags=0, remote=${rem_host}:443:udp4" \
             vpn.user-name "$AUTH_USER" \
             vpn.secrets "password=$AUTH_PASS" \
+            ipv4.never-default no \
             ipv4.route-table 0 \
-            ipv4.routing-rules "" >/dev/null 2>&1
+            ipv4.routing-rules "" \
+            ipv4.dns-priority -50 \
+            ipv6.method disabled >/dev/null 2>&1
     fi
 
     echo -e "${CYAN}Establishing secure tunnel to $flag ${BOLD}$country${RESET}..."
     if nmcli connection up id "$con_name"; then
-        # Start proxy daemon if in split mode
+        # Start proxy daemon and configure dynamic split rules if in split mode
         if [ "$cur_mode" = "split" ]; then
+            local tun_ip
+            tun_ip=$(get_tun_ip)
+            [ -n "$tun_ip" ] && ip rule add priority 1000 from "$tun_ip"/32 table 51820 2>/dev/null || true
             start_proxy
         fi
 
@@ -1344,6 +1357,13 @@ cmd_disconnect() {
         rm -f "$SESSION_FILE"
     fi
 
+    # Clean up any split routing rules
+    local tun_ip
+    tun_ip=$(get_tun_ip)
+    [ -n "$tun_ip" ] && ip rule del from "$tun_ip"/32 table 51820 2>/dev/null || true
+    ip rule del priority 1000 table 51820 2>/dev/null || true
+    ip rule del priority 1001 table 51820 2>/dev/null || true
+
     # Stop local proxy
     stop_proxy
 
@@ -1406,11 +1426,17 @@ cmd_login() {
     local count=0
     while IFS= read -r con; do
         [ -z "$con" ] && continue
+        local c_country="${con#TunnelBear }"
+        local c_ovpn
+        c_ovpn=$(find_ovpn "$c_country")
+        local c_rem=""
+        [ -n "$c_ovpn" ] && c_rem=$(awk '$1=="remote" { print $2; exit }' "$c_ovpn" 2>/dev/null)
         nmcli connection modify "$con" \
             connection.autoconnect no \
-            +vpn.data "username=$user, password-flags=0" \
+            +vpn.data "username=$user, password-flags=0$([ -n "$c_rem" ] && echo ", remote=${c_rem}:443:udp4")" \
             vpn.user-name "$user" \
-            vpn.secrets "password=$pass" >/dev/null 2>&1 || true
+            vpn.secrets "password=$pass" \
+            ipv6.method disabled >/dev/null 2>&1 || true
         ((count++)) || true
     done < <(nmcli -t -f NAME con show 2>/dev/null | grep '^TunnelBear ')
 
@@ -1515,6 +1541,9 @@ for filepath in glob.glob(os.path.join(ovpn_dir, '*.ovpn')):
             f.write(content)
 " 2>/dev/null || true
     fi
+
+    # Ensure proto udp4 is set in all profiles to prevent DNS64 / IPv6 translation stalls
+    sed -i 's/^proto udp$/proto udp4/' "$OVPN_DIR"/*.ovpn 2>/dev/null || true
 
     local count
     count=$(find "$OVPN_DIR" -maxdepth 1 -name "*.ovpn" | wc -l)
@@ -1773,19 +1802,40 @@ cmd_mode() {
     active_con=$(get_active_con)
     if [ -n "$active_con" ]; then
         echo -e "${CYAN}Applying $target_mode mode to active connection '$active_con'...${RESET}"
+        local country="${active_con#TunnelBear }"
+        local ovpn_file
+        ovpn_file=$(find_ovpn "$country")
+        local rem_host=""
+        [ -n "$ovpn_file" ] && rem_host=$(awk '$1=="remote" { print $2; exit }' "$ovpn_file" 2>/dev/null)
         if [ "$target_mode" = "split" ]; then
             nmcli connection modify "$active_con" \
                 connection.autoconnect no \
+                $([ -n "$rem_host" ] && echo "+vpn.data remote=${rem_host}:443:udp4") \
+                ipv4.never-default yes \
                 ipv4.route-table 51820 \
-                ipv4.routing-rules "priority 1000 from 10.0.0.0/8 table 51820, priority 1001 from 172.16.0.0/12 table 51820" >/dev/null 2>&1
+                ipv4.routing-rules "" \
+                ipv6.method disabled >/dev/null 2>&1
             nmcli connection up id "$active_con" >/dev/null 2>&1 || true
+            local tun_ip
+            tun_ip=$(get_tun_ip)
+            [ -n "$tun_ip" ] && ip rule add priority 1000 from "$tun_ip"/32 table 51820 2>/dev/null || true
             start_proxy
         else
+            local tun_ip
+            tun_ip=$(get_tun_ip)
+            [ -n "$tun_ip" ] && ip rule del from "$tun_ip"/32 table 51820 2>/dev/null || true
+            ip rule del priority 1000 table 51820 2>/dev/null || true
+            ip rule del priority 1001 table 51820 2>/dev/null || true
             nmcli connection modify "$active_con" \
                 connection.autoconnect no \
+                $([ -n "$rem_host" ] && echo "+vpn.data remote=${rem_host}:443:udp4") \
+                ipv4.never-default no \
                 ipv4.route-table 0 \
-                ipv4.routing-rules "" >/dev/null 2>&1
+                ipv4.routing-rules "" \
+                ipv4.dns-priority -50 \
+                ipv6.method disabled >/dev/null 2>&1
             nmcli connection up id "$active_con" >/dev/null 2>&1 || true
+            stop_proxy
         fi
     fi
 
