@@ -194,27 +194,35 @@ get_mode() {
     echo "full"
 }
 
-get_tun_ip() {
-    local ip
-    local con
+get_tun_dev() {
+    local con dev
     con=$(get_active_con)
     if [ -n "$con" ]; then
-        ip=$(nmcli -t -f IP4.ADDRESS con show "$con" 2>/dev/null | head -n 1 | cut -d: -f2 | cut -d/ -f1)
+        dev=$(nmcli -t -f vpn.data con show "$con" 2>/dev/null | grep -o 'dev = [^,]*' | awk '{print $3}')
+        if [ -n "$dev" ] && [ -d "/sys/class/net/$dev" ]; then
+            echo "$dev"
+            return 0
+        fi
+    fi
+    for d in /sys/class/net/tun*; do
+        if [ -d "$d" ]; then
+            basename "$d"
+            return 0
+        fi
+    done
+    echo "tun0"
+}
+
+get_tun_ip() {
+    local dev
+    dev=$(get_tun_dev)
+    local ip
+    if [ -n "$dev" ] && [ -d "/sys/class/net/$dev" ]; then
+        ip=$(ip -4 -o addr show dev "$dev" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n 1)
         if [ -n "$ip" ]; then
             echo "$ip"
             return 0
         fi
-    fi
-    ip=$(ip -4 -o addr show dev tun0 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
-    if [ -n "$ip" ]; then
-        echo "$ip"
-        return 0
-    fi
-    local dev
-    dev=$(ip -o link show type tun 2>/dev/null | head -n 1 | awk -F': ' '{print $2}')
-    if [ -n "$dev" ]; then
-        ip=$(ip -4 -o addr show dev "$dev" 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
-        [ -n "$ip" ] && echo "$ip" && return 0
     fi
     return 1
 }
@@ -275,7 +283,6 @@ stop_proxy() {
 }
 
 ensure_bind_lib() {
-    [ -f "$BIND_LIB" ] && return 0
     mkdir -p "$CONFIG_DIR"
     cat << 'EOF' > "$BIND_SRC"
 #define _GNU_SOURCE
@@ -307,6 +314,12 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 
         if ((dest_ip >> 24) != 127 && (dest_ip >> 24) != 255) {
             const char *bind_ip_str = getenv("TB_BIND_IP");
+            const char *bind_dev_str = getenv("TB_BIND_DEV");
+            if (bind_dev_str && *bind_dev_str) {
+                setsockopt(sockfd, SOL_SOCKET, 25, bind_dev_str, strlen(bind_dev_str) + 1);
+            } else {
+                setsockopt(sockfd, SOL_SOCKET, 25, "tun0", 5);
+            }
             if (bind_ip_str && *bind_ip_str) {
                 struct sockaddr_in bound_addr;
                 socklen_t bound_len = sizeof(bound_addr);
@@ -420,7 +433,6 @@ PYEOF
 }
 
 ensure_proxy_script() {
-    [ -f "$PROXY_SCRIPT" ] && return 0
     mkdir -p "$CONFIG_DIR"
     cat << 'PYEOF' > "$PROXY_SCRIPT"
 import socket, struct, fcntl, select, threading, sys, os, signal
@@ -428,15 +440,16 @@ from urllib.parse import urlparse
 
 PORT = int(os.environ.get('TB_PROXY_PORT', 10808))
 
-def get_tun_ip():
+def get_tun_info():
     for ifname in ['tun0', 'tun1', 'tun2']:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            return socket.inet_ntoa(fcntl.ioctl(
+            ip = socket.inet_ntoa(fcntl.ioctl(
                 s.fileno(),
                 0x8915, # SIOCGIFADDR
                 struct.pack('256s', ifname[:15].encode('utf-8'))
             )[20:24])
+            return ip, ifname
         except Exception:
             pass
         finally:
@@ -446,18 +459,19 @@ def get_tun_ip():
             if iface.startswith('tun'):
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 try:
-                    return socket.inet_ntoa(fcntl.ioctl(
+                    ip = socket.inet_ntoa(fcntl.ioctl(
                         s.fileno(),
                         0x8915,
                         struct.pack('256s', iface[:15].encode('utf-8'))
                     )[20:24])
+                    return ip, iface
                 except Exception:
                     pass
                 finally:
                     s.close()
     except Exception:
         pass
-    return None
+    return None, None
 
 def forward_duplex(sock1, sock2):
     sockets = [sock1, sock2]
@@ -503,7 +517,7 @@ def handle_client(client):
             return
         client.settimeout(None)
 
-        tun_ip = get_tun_ip()
+        tun_ip, tun_dev = get_tun_info()
         if not tun_ip:
             client.close()
             return
@@ -526,6 +540,11 @@ def handle_client(client):
             target_port = int.from_bytes(port_bytes, 'big')
 
             remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if tun_dev:
+                try:
+                    remote.setsockopt(socket.SOL_SOCKET, 25, tun_dev.encode('utf-8') + b'\0')
+                except Exception:
+                    pass
             remote.bind((tun_ip, 0))
             remote.connect((target_ip, target_port))
             client.sendall(b'\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00')
@@ -557,6 +576,11 @@ def handle_client(client):
                     if hdr == b'\r\n' or not hdr:
                         break
                 remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                if tun_dev:
+                    try:
+                        remote.setsockopt(socket.SOL_SOCKET, 25, tun_dev.encode('utf-8') + b'\0')
+                    except Exception:
+                        pass
                 remote.bind((tun_ip, 0))
                 remote.connect((target_host, target_port))
                 client.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
@@ -566,6 +590,11 @@ def handle_client(client):
                 target_host = parsed.hostname or parts[1]
                 target_port = parsed.port or 80
                 remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                if tun_dev:
+                    try:
+                        remote.setsockopt(socket.SOL_SOCKET, 25, tun_dev.encode('utf-8') + b'\0')
+                    except Exception:
+                        pass
                 remote.bind((tun_ip, 0))
                 remote.connect((target_host, target_port))
                 remote.sendall(line)
@@ -1256,9 +1285,10 @@ cmd_connect() {
             +vpn.data "username=$AUTH_USER, password-flags=0, remote=${rem_host}:443:udp4" \
             vpn.user-name "$AUTH_USER" \
             vpn.secrets "password=$AUTH_PASS" \
-            ipv4.never-default yes \
+            ipv4.never-default no \
             ipv4.route-table 51820 \
-            ipv4.routing-rules "" \
+            ipv4.ignore-auto-dns yes \
+            ipv4.routing-rules "priority 1000 from 172.18.0.0/16 table 51820, priority 1001 oif tun0 table 51820" \
             ipv6.method disabled >/dev/null 2>&1
     else
         nmcli connection modify "$con_name" \
@@ -1268,6 +1298,7 @@ cmd_connect() {
             vpn.secrets "password=$AUTH_PASS" \
             ipv4.never-default no \
             ipv4.route-table 0 \
+            ipv4.ignore-auto-dns no \
             ipv4.routing-rules "" \
             ipv4.dns-priority -50 \
             ipv6.method disabled >/dev/null 2>&1
@@ -1275,11 +1306,8 @@ cmd_connect() {
 
     echo -e "${CYAN}Establishing secure tunnel to $flag ${BOLD}$country${RESET}..."
     if nmcli connection up id "$con_name"; then
-        # Start proxy daemon and configure dynamic split rules if in split mode
+        # Start proxy daemon if in split mode
         if [ "$cur_mode" = "split" ]; then
-            local tun_ip
-            tun_ip=$(get_tun_ip)
-            [ -n "$tun_ip" ] && ip rule add priority 1000 from "$tun_ip"/32 table 51820 2>/dev/null || true
             start_proxy
         fi
 
@@ -1288,7 +1316,7 @@ cmd_connect() {
 
         # Record session start state for data transfer tracking
         local dev_line
-        dev_line=$(nmcli -t -f GENERAL.DEVICES con show "$con_name" 2>/dev/null | head -n 1 | cut -d: -f2)
+        dev_line=$(get_tun_dev)
         local start_rx=0 start_tx=0
         if [ -n "$dev_line" ] && [ -d "/sys/class/net/$dev_line" ]; then
             start_rx=$(cat "/sys/class/net/$dev_line/statistics/rx_bytes" 2>/dev/null || echo 0)
@@ -1581,7 +1609,9 @@ except Exception:
 " 2>/dev/null || echo "Poland")
 
         echo -e "${YELLOW}🐻 TunnelBear VPN is not connected.${RESET}"
-        echo -e "${CYAN}Establishing secure tunnel to $last_country...${RESET}"
+        echo -e "${CYAN}Establishing secure tunnel to $last_country (Split Tunneling)...${RESET}"
+        mkdir -p "$CONFIG_DIR"
+        echo "split" > "$MODE_FILE"
         if ! cmd_connect "$last_country"; then
             echo -e "${RED}Error: Failed to connect to VPN. Aborting command to prevent traffic leakage.${RESET}" >&2
             return 1
@@ -1595,8 +1625,9 @@ except Exception:
     # Ensure LD_PRELOAD socket binder library is built
     ensure_bind_lib
 
-    local tun_ip
+    local tun_ip tun_dev
     tun_ip=$(get_tun_ip)
+    tun_dev=$(get_tun_dev)
     if [ -z "$tun_ip" ]; then
         echo -e "${RED}Error: Could not determine TunnelBear VPN IP address.${RESET}" >&2
         return 1
@@ -1620,6 +1651,7 @@ except Exception:
     export https_proxy="http://127.0.0.1:$PROXY_PORT"
     export all_proxy="socks5h://127.0.0.1:$PROXY_PORT"
     export TB_BIND_IP="$tun_ip"
+    export TB_BIND_DEV="${tun_dev:-tun0}"
 
     if [ -f "$BIND_LIB" ]; then
         if [ -n "${LD_PRELOAD:-}" ]; then
@@ -1811,29 +1843,25 @@ cmd_mode() {
             nmcli connection modify "$active_con" \
                 connection.autoconnect no \
                 $([ -n "$rem_host" ] && echo "+vpn.data remote=${rem_host}:443:udp4") \
-                ipv4.never-default yes \
+                ipv4.never-default no \
                 ipv4.route-table 51820 \
-                ipv4.routing-rules "" \
+                ipv4.ignore-auto-dns yes \
+                ipv4.routing-rules "priority 1000 from 172.18.0.0/16 table 51820, priority 1001 oif tun0 table 51820" \
                 ipv6.method disabled >/dev/null 2>&1
+            nmcli connection down id "$active_con" >/dev/null 2>&1 || true
             nmcli connection up id "$active_con" >/dev/null 2>&1 || true
-            local tun_ip
-            tun_ip=$(get_tun_ip)
-            [ -n "$tun_ip" ] && ip rule add priority 1000 from "$tun_ip"/32 table 51820 2>/dev/null || true
             start_proxy
         else
-            local tun_ip
-            tun_ip=$(get_tun_ip)
-            [ -n "$tun_ip" ] && ip rule del from "$tun_ip"/32 table 51820 2>/dev/null || true
-            ip rule del priority 1000 table 51820 2>/dev/null || true
-            ip rule del priority 1001 table 51820 2>/dev/null || true
             nmcli connection modify "$active_con" \
                 connection.autoconnect no \
                 $([ -n "$rem_host" ] && echo "+vpn.data remote=${rem_host}:443:udp4") \
                 ipv4.never-default no \
                 ipv4.route-table 0 \
+                ipv4.ignore-auto-dns no \
                 ipv4.routing-rules "" \
                 ipv4.dns-priority -50 \
                 ipv6.method disabled >/dev/null 2>&1
+            nmcli connection down id "$active_con" >/dev/null 2>&1 || true
             nmcli connection up id "$active_con" >/dev/null 2>&1 || true
             stop_proxy
         fi
