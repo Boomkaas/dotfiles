@@ -49,7 +49,7 @@ get_active_ssid() {
     if [ -n "$s" ]; then
         echo "$s"
     else
-        nmcli --rescan no -t -f ACTIVE,SSID dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}'
+        nmcli -t -f ACTIVE,SSID dev wifi list --rescan no 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}'
     fi
 }
 
@@ -160,7 +160,7 @@ cmd_status() {
         dns_info=$(nmcli -t -f IP4.DNS dev show "$iface" 2>/dev/null | tr '\n' ' ' | sed 's/IP4.DNS\[[0-9]*\]://g' | xargs)
         
         local active_line
-        active_line=$(nmcli --rescan no -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list 2>/dev/null | grep '^\*' | head -n 1 || true)
+        active_line=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null | grep '^\*' | head -n 1 || true)
         if [ -n "$active_line" ]; then
             local line_sub="${active_line//\\:/$'\001'}"
             IFS=':' read -r _ _ bssid_info chan_info freq_info rate_info sig_info _ sec_info <<< "$line_sub"
@@ -313,7 +313,7 @@ cmd_connect() {
     fi
 
     local sec
-    sec=$(nmcli --rescan no -t -f SSID,SECURITY dev wifi list 2>/dev/null | awk -F: -v s="$target_ssid" '$1 == s { print $2; exit }')
+    sec=$(nmcli -t -f SSID,SECURITY dev wifi list --rescan no 2>/dev/null | awk -F: -v s="$target_ssid" '$1 == s { print $2; exit }')
 
     if [ -z "$password" ] && [ -n "$sec" ] && [ "$sec" != "--" ]; then
         echo -e "${YELLOW}Network '$target_ssid' is secured ($sec).${RESET}"
@@ -436,7 +436,7 @@ cmd_monitor() {
             gw_info=$(nmcli -t -f IP4.GATEWAY dev show "$iface" 2>/dev/null | head -n 1 | cut -d: -f2)
             
             local active_line
-            active_line=$(nmcli --rescan no -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list 2>/dev/null | grep '^\*' | head -n 1 || true)
+            active_line=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null | grep '^\*' | head -n 1 || true)
             local a_bssid a_chan a_freq a_rate a_sig a_sec
             if [ -n "$active_line" ]; then
                 local line_sub="${active_line//\\:/$'\001'}"
@@ -459,7 +459,7 @@ cmd_monitor() {
         echo -e "${DIM}------------------------------------------------------------------------------------------------${RESET}"
 
         local raw_list
-        raw_list=$(nmcli --rescan no -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list 2>/dev/null || true)
+        raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null || true)
         
         declare -A SEEN_MON_SIG SEEN_MON_CHAN SEEN_MON_BAND SEEN_MON_SEC SEEN_MON_RATE SEEN_MON_ACT
         while IFS= read -r line; do
@@ -562,7 +562,7 @@ cmd_preview() {
     iface=$(get_wifi_iface)
 
     local match_line
-    match_line=$(nmcli --rescan no -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list 2>/dev/null | grep -F ":$target:" | head -n 1 || true)
+    match_line=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null | grep -F ":$target:" | head -n 1 || true)
 
     local p_in_use p_ssid p_bssid p_chan p_freq p_rate p_sig p_bars p_sec
     if [ -n "$match_line" ]; then
@@ -646,7 +646,12 @@ cmd_interactive() {
 
         # Fetch scanned networks
         local raw_list
-        raw_list=$(nmcli --rescan no -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list 2>/dev/null || true)
+        raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null || true)
+        if [ -z "$raw_list" ]; then
+            nmcli dev wifi rescan >/dev/null 2>&1 || true
+            sleep 1
+            raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null || true)
+        fi
 
         declare -A SEEN_SIG SEEN_SEC SEEN_BAND SEEN_CHAN SEEN_RATE SEEN_ACT
 
