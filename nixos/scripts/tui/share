@@ -704,53 +704,99 @@ cmd_interactive() {
                 sleep 0.5
                 ;;
             samba_shared|samba_code)
-                local share_target="Shared"
-                local local_dir="$HOME/Shared"
-                local win_path="\\\\${ham_ip:-25.6.89.170}\\Shared"
-                local mac_path="smb://${ham_ip:-25.6.89.170}/Shared"
+                if [ "$action_key" = "samba_code" ]; then
+                    local share_target="Code"
+                    local local_dir="$HOME/Code"
+                    local win_code="\\\\192.168.122.1\\Code"
+                    local win_ws="\\\\192.168.122.1\\workspace"
+                    local mac_path="smb://192.168.122.1/Code"
 
-                if [ "$choice" = "samba_code" ]; then
-                    share_target="Code"
-                    local_dir="$HOME/Code"
-                    win_path="\\\\192.168.122.1\\Code"
-                    mac_path="smb://192.168.122.1/Code"
+                    local act
+                    act=$(printf "1. Copy Windows Path (%s)\n2. Copy Legacy VM Path (%s)\n3. Copy Mac/Linux URL (%s)\n4. Open Local Folder in Thunar\n5. Restart Samba Service\n6. Cancel" "$win_code" "$win_ws" "$mac_path" | fzf \
+                        --prompt="Share [${share_target}] > " \
+                        --reverse --height=45% --border=rounded) || true
+
+                    case "$act" in
+                        *"Copy Windows Path"*)
+                            if command -v wl-copy >/dev/null 2>&1; then
+                                echo -n "$win_code" | wl-copy
+                                echo -e "${GREEN}Copied $win_code to clipboard.${RESET}"
+                            else
+                                echo -e "Path: ${BOLD}$win_code${RESET}"
+                            fi
+                            sleep 1
+                            ;;
+                        *"Copy Legacy VM Path"*)
+                            if command -v wl-copy >/dev/null 2>&1; then
+                                echo -n "$win_ws" | wl-copy
+                                echo -e "${GREEN}Copied $win_ws to clipboard.${RESET}"
+                            else
+                                echo -e "Path: ${BOLD}$win_ws${RESET}"
+                            fi
+                            sleep 1
+                            ;;
+                        *"Copy Mac/Linux URL"*)
+                            if command -v wl-copy >/dev/null 2>&1; then
+                                echo -n "$mac_path" | wl-copy
+                                echo -e "${GREEN}Copied $mac_path to clipboard.${RESET}"
+                            else
+                                echo -e "Path: ${BOLD}$mac_path${RESET}"
+                            fi
+                            sleep 1
+                            ;;
+                        *"Open Local Folder"*)
+                            mkdir -p "$local_dir"
+                            ( thunar "$local_dir" >/dev/null 2>&1 & )
+                            sleep 0.5
+                            ;;
+                        *"Restart Samba"*)
+                            cmd_samba restart
+                            echo -e "\n${DIM}Press enter to continue...${RESET}"
+                            read -r < /dev/tty || read -r
+                            ;;
+                    esac
+                else
+                    local share_target="Shared"
+                    local local_dir="$HOME/Shared"
+                    local win_path="\\\\${ham_ip:-25.6.89.170}\\Shared"
+                    local mac_path="smb://${ham_ip:-25.6.89.170}/Shared"
+
+                    local act
+                    act=$(printf "1. Copy Windows Path (%s)\n2. Copy Mac/Linux URL (%s)\n3. Open Local Folder in Thunar\n4. Restart Samba Service\n5. Cancel" "$win_path" "$mac_path" | fzf \
+                        --prompt="Share [${share_target}] > " \
+                        --reverse --height=45% --border=rounded) || true
+
+                    case "$act" in
+                        *"Copy Windows Path"*)
+                            if command -v wl-copy >/dev/null 2>&1; then
+                                echo -n "$win_path" | wl-copy
+                                echo -e "${GREEN}Copied $win_path to clipboard.${RESET}"
+                            else
+                                echo -e "Path: ${BOLD}$win_path${RESET}"
+                            fi
+                            sleep 1
+                            ;;
+                        *"Copy Mac/Linux URL"*)
+                            if command -v wl-copy >/dev/null 2>&1; then
+                                echo -n "$mac_path" | wl-copy
+                                echo -e "${GREEN}Copied $mac_path to clipboard.${RESET}"
+                            else
+                                echo -e "Path: ${BOLD}$mac_path${RESET}"
+                            fi
+                            sleep 1
+                            ;;
+                        *"Open Local Folder"*)
+                            mkdir -p "$local_dir"
+                            ( thunar "$local_dir" >/dev/null 2>&1 & )
+                            sleep 0.5
+                            ;;
+                        *"Restart Samba"*)
+                            cmd_samba restart
+                            echo -e "\n${DIM}Press enter to continue...${RESET}"
+                            read -r < /dev/tty || read -r
+                            ;;
+                    esac
                 fi
-
-                local act
-                act=$(printf "1. Copy Windows Path (%s)\n2. Copy Mac/Linux URL (%s)\n3. Open Local Folder in Thunar\n4. Restart Samba Service\n5. Cancel" "$win_path" "$mac_path" | fzf \
-                    --prompt="Share [${share_target}] > " \
-                    --reverse --height=45% --border=rounded) || true
-
-                case "$act" in
-                    *"Copy Windows Path"*)
-                        if command -v wl-copy >/dev/null 2>&1; then
-                            echo -n "$win_path" | wl-copy
-                            echo -e "${GREEN}Copied $win_path to clipboard.${RESET}"
-                        else
-                            echo -e "Path: ${BOLD}$win_path${RESET}"
-                        fi
-                        sleep 1
-                        ;;
-                    *"Copy Mac/Linux URL"*)
-                        if command -v wl-copy >/dev/null 2>&1; then
-                            echo -n "$mac_path" | wl-copy
-                            echo -e "${GREEN}Copied $mac_path to clipboard.${RESET}"
-                        else
-                            echo -e "Path: ${BOLD}$mac_path${RESET}"
-                        fi
-                        sleep 1
-                        ;;
-                    *"Open Local Folder"*)
-                        mkdir -p "$local_dir"
-                        ( thunar "$local_dir" >/dev/null 2>&1 & )
-                        sleep 0.5
-                        ;;
-                    *"Restart Samba"*)
-                        cmd_samba restart
-                        echo -e "\n${DIM}Press enter to continue...${RESET}"
-                        read -r < /dev/tty || read -r
-                        ;;
-                esac
                 ;;
             cifs_mount)
                 local default_ip="${ham_ip:-25.6.89.170}"
