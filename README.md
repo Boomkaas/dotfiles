@@ -1,6 +1,6 @@
 # ❄️ NixOS & MangoWM / Hyprland Dotfiles
 
-A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)** flake configuration featuring **MangoWM** (Scroller tiling compositor), **Hyprland** ecosystem utilities, **80+ Waybar themes**, **Tmux & Yazi terminal workflow**, **Rofi interactive control menus**, **Fish shell with Starship**, custom browser skins, automation scripts, and an integrated **Graphify** knowledge graph.
+A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)** flake configuration featuring **MangoWM** (Scroller tiling compositor), **Hyprland** ecosystem utilities, **Hancore Waybar theme**, **Tmux & Yazi terminal workflow**, **Rofi interactive control menus**, **Fish shell with Starship**, custom browser skins, automation scripts, and an integrated **Graphify** knowledge graph.
 
 ---
 
@@ -12,17 +12,17 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 | **Compositor** | [MangoWM](https://github.com/Mangowm/mangowm) (v0.3.4) | Wayland tiling compositor with dynamic Scroller layout & 2-pass blur |
 | **Idle & Lockscreen** | [Hypridle](https://github.com/hyprwm/hypridle) + [Hyprlock](https://github.com/hyprwm/hyprlock) | Intelligent AC/Battery dual power saving, blurred lockscreen, & `awake` caffeine tool |
 | **Display Manager** | [GDM](https://wiki.gnome.org/Projects/GDM) | Native Wayland session display manager |
-| **Status Bar** | [Waybar](https://github.com/Alexays/Waybar) | Modular status bar featuring 80+ switchable Hancore & Jakoolit themes via `waybar_manager.sh` |
+| **Status Bar** | [Waybar](https://github.com/Alexays/Waybar) | Minimalist status bar running active `hancore-v1-9b` theme with toggle controls |
 | **Notification Center**| [SwayNC](https://github.com/ErikReider/SwayNotificationCenter) | GTK-based control center with quick toggles, sliders, and media widget |
 | **App Launcher & Menus**| [Rofi](https://github.com/davatorium/rofi) (Wayland) | Multi-mode launcher + interactive submenus (Wi-Fi, Bluetooth, Audio, Processes, Disk, Clean, Config) |
 | **Terminal & Multiplexer**| [Kitty](https://sw.kovidgoyal.net/kitty/) + [Tmux](https://github.com/tmux/tmux) | GPU-accelerated terminal (Gruvbox Dark) + Tmux patched for 100MB buffer limit |
-| **TUI Control Center** | [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) + 19 TUI Suite | Master CLI/FZF launcher & 19 unified interactive TUIs for system, network, dev & desktop |
+| **TUI Control Center** | [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) + 21 TUI Suite | Master CLI/FZF launcher & 21 unified interactive TUIs for system, network, dev & desktop |
 | **Code Editor** | [Neovim](https://neovim.io/) | LazyVim IDE with OLED #000000 theme, full VS Code key parity, & Antigravity AI |
 | **File Managers** | [Yazi](https://github.com/sxyazi/yazi) + [Thunar](https://docs.xfce.org/xfce/thunar/start) | Lightning-fast TUI file manager with Ueberzug++ previews & shell cd integration + GUI fallback |
 | **Shell** | [Fish](https://fishshell.com/) + [Starship](https://starship.rs/) | Interactive shell with Zoxide, Direnv, Eza, Yazi `Ctrl+O` hotkey, and smart `agy` token wrapper |
 | **Audio Stack** | [PipeWire](https://pipewire.org/) + WireMix | PipeWire + ALSA + Pulse + JACK + WireMix TUI + Realtek ALC256 ASUS mic pin routing |
 | **Network & Diagnostics**| NetworkManager + Wireshark | System-wide packet capturing (GUI & CLI `wireshark`, `termshark`) with user permissions |
-| **VPN & File Sharing** | TunnelBear + Hamachi + Samba | TunnelBear VPN (19 TUI tools, per-app split tunneling, cloud quota) + Hamachi & Samba LAN share (`~/Shared`) |
+| **VPN & File Sharing** | TunnelBear + Hamachi + Samba | TunnelBear VPN (21 TUI tools, per-app split tunneling, cloud quota) + Hamachi & Samba LAN share (`~/Shared`, `~/Code`) |
 | **Virtualization** | Docker, KVM / Libvirt | Container and virtual machine virtualization with SPICE USB redirection |
 | **Media & Images** | Viewnior + Swappy + VLC | Lightweight image viewer (`viewnior`), Wayland snapshot annotator (`swappy`), and media player |
 | **Browser Theme** | Custom Firefox `userChrome.css` | Glassmorphic dark translucent panels & AMOLED gold startpage |
@@ -86,12 +86,11 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   ├── tmux/                           # Tmux terminal multiplexer suite
 │   │   ├── tmux.conf                   # Gruvbox styling, Vi keybindings, statusbar format, prefix configuration
 │   │   └── cheatsheet.sh               # Interactive floating cheat-sheet script for tmux shortcuts
-│   ├── waybar/                         # Extensive Waybar library (80+ switchable themes)
+│   ├── waybar/                         # Waybar configuration and style
 │   │   ├── config                      # Active Waybar module configuration
 │   │   ├── config.jsonc                # Alternative / extended JSONC module definition
-│   │   ├── style.css                   # Active Waybar stylesheet
-│   │   ├── hancore-*/                  # Hancore theme collection (v1 through v7 iterations, cyber, glass, neon, pill)
-│   │   └── jakoolit-*/                 # Jakoolit theme collection (camellia, everforest, minimal, sleek, summitsplit)
+│   │   ├── style.css                   # Active Waybar stylesheet (polished and deduplicated)
+│   │   └── hancore-v1-9b/              # Active Hancore v1-9b reference theme
 │   └── yazi/                           # Yazi terminal file manager configuration
 │       ├── keymap.toml                 # Custom keybindings (quick editor, cd-on-exit, shell integrations)
 │       └── yazi.toml                   # Ratio layout (1:4:3), natural sort, image previews, trash behavior
@@ -108,14 +107,15 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── core/
 │   │   │   ├── audio.nix               # PipeWire sound server + Realtek ALC256 ASUS mic pin routing fix
 │   │   │   ├── connections.nix         # NetworkManager, Bluetooth, Wireshark CLI, rfkill unblock, firewall
-│   │   │   ├── services.nix            # Virtualization (Docker, Libvirt/KVM), PostgreSQL 16, UPower, printing
+│   │   │   ├── services.nix            # Virtualization (Docker, Libvirt/KVM), PostgreSQL 16, Samba VM shares, UPower
 │   │   │   ├── system.nix              # systemd-boot, kernel params (mem_sleep_default, i915), nix-ld, Wayland flags
 │   │   │   └── user.nix                # User 'peng' (groups: wheel, video, docker, libvirtd, input, uinput, wireshark)
 │   │   └── utils/
 │   │       └── xserver.nix             # GDM Wayland display manager, Hyprlock PAM auth, XDG desktop portals
 │   ├── scripts/
-│   │   ├── tui/                        # Unified FZF interactive terminal control suite (19 tools + launcher)
+│   │   ├── tui/                        # Unified FZF interactive terminal control suite (21 tools + launcher)
 │   │   │   ├── s                       # Master TUI command center & script launcher
+│   │   │   ├── app                     # Application launcher & .desktop browser with theme sync
 │   │   │   ├── audio                   # PipeWire & WirePlumber audio mixer & node routing
 │   │   │   ├── bluetooth               # Bluetooth device scanner, pairing, and battery status
 │   │   │   ├── clip                    # Wayland clipboard history & snippet manager (`cliphist`)
@@ -126,16 +126,18 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   │   ├── nixos                   # NixOS generations, closure diffs & rollback manager
 │   │   │   ├── pkg                     # Declared package explorer & ephemeral nix-shell tester
 │   │   │   ├── ports                   # Real-time listening ports, sockets & server killer
+│   │   │   ├── ram                     # Memory recovery, process pruner & boot state restorer
 │   │   │   ├── repo                    # Multi-repository Git radar & project status dashboard
 │   │   │   ├── service                 # Systemd user & system service daemon controller
-│   │   │   ├── setting                 # Desktop settings (brightness, power, idle, DND)
-│   │   │   ├── share                   # Samba LAN share & LogMeIn Hamachi VPN manager
+│   │   │   ├── setting                 # Desktop settings (brightness, power, idle, DND, volume)
+│   │   │   ├── share                   # Samba LAN/VM shares & LogMeIn Hamachi VPN manager
 │   │   │   ├── task                    # Process monitor & MangoWM window controller
 │   │   │   ├── tb                      # TunnelBear VPN & per-app split tunneling manager (`tunnelbear` / `tb`)
-│   │   │   ├── theme                   # Waybar theme switcher (80+ presets), wallpapers, fonts
+│   │   │   ├── theme                   # Theme manager, wallpapers, and fonts
 │   │   │   ├── tm                      # Tmux session manager & project workspace jumper
 │   │   │   └── wifi                    # Wi-Fi network scanner, connection & signal monitor
 │   │   ├── s -> tui/s                  # Canonical symlink to master command center
+│   │   ├── app -> tui/app              # Application launcher CLI wrapper
 │   │   ├── audio -> tui/audio          # PipeWire terminal mixer CLI wrapper
 │   │   ├── bluetooth -> tui/bluetooth  # Bluetooth device manager CLI wrapper
 │   │   ├── clip -> tui/clip            # Clipboard history CLI wrapper
@@ -146,7 +148,10 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── nixos -> tui/nixos          # NixOS generations & rollback CLI wrapper
 │   │   ├── pkg -> tui/pkg              # Nix packages explorer CLI wrapper
 │   │   ├── ports -> tui/ports          # Network ports & dev server CLI wrapper
+│   │   ├── ram -> tui/ram              # Memory recovery CLI wrapper
 │   │   ├── repo -> tui/repo            # Git repositories dashboard CLI wrapper
+│   │   ├── restore-ram -> tui/ram      # Boot state memory restore symlink
+│   │   ├── restore_boot_state.sh       # Script to return system to post-boot RAM state
 │   │   ├── service -> tui/service      # Systemd service manager CLI wrapper
 │   │   ├── setting -> tui/setting      # Desktop settings dispatcher CLI wrapper
 │   │   ├── share -> tui/share          # File sharing & VPN manager CLI wrapper
@@ -154,6 +159,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── tb -> tui/tb                # TunnelBear VPN CLI wrapper
 │   │   ├── theme -> tui/theme          # Desktop theme switcher CLI wrapper
 │   │   ├── tm -> tui/tm                # Tmux session manager CLI wrapper
+│   │   ├── tui-popup                   # Centered floating Wayland modal window launcher
 │   │   ├── tunnelbear -> tui/tb        # TunnelBear VPN full command wrapper
 │   │   ├── wifi -> tui/wifi            # Wi-Fi network scanner CLI wrapper
 │   │   ├── agy-tokens.py               # Antigravity Global Token & Quota Reporter CLI
@@ -240,11 +246,11 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 
 ### 3. Package Management & System Menu Wrappers (`nixos/modules/pkgs.nix`)
 - Declares development toolchains (`lazygit`, `git`, `neovim`), networking & VPN utilities (`openvpn`, `haguichi`, `cifs-utils`), audio tools (`pkgs_unstable.wiremix`), desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), and custom binary wrappers:
-  - **Master TUI Launcher**: `s` (interactive CLI & fzf command center unifying all 19 system tools).
-  - **19 Interactive TUI Tools**: `wifi`, `bluetooth` (`bt`), `tb` (`tunnelbear`), `ports` (`port`), `share`, `nixos` (`gens`), `service` (`services`), `disk` (`storage`), `task` (`tasks`), `log` (`logs`, `journal`), `repo` (`repos`, `gitui`), `tm` (`project`), `pkg` (`pkgs`), `container` (`containers`, `vm`), `conf` (`config`, `configs`), `audio`, `setting` (`settings`), `theme`, `clip` (`clips`).
+  - **Master TUI Launcher**: `s` (interactive CLI & fzf command center unifying all 21 system tools).
+  - **21 Interactive TUI Tools**: `wifi`, `bluetooth` (`bt`), `tb` (`tunnelbear`), `ports` (`port`), `share`, `nixos` (`gens`), `service` (`services`), `disk` (`storage`), `task` (`tasks`), `ram` (`restore`, `restore-ram`), `log` (`logs`, `journal`), `app` (`apps`, `launch`), `repo` (`repos`, `gitui`), `tm` (`project`), `pkg` (`pkgs`), `container` (`containers`, `vm`), `conf` (`config`, `configs`), `audio`, `setting` (`settings`), `theme`, `clip` (`clips`).
   - **System Test Suite**: `nixtest` (modular 14-subsystem verification suite).
   - **GUI / Rofi Menus**: `wifi-menu`, `bluetooth-menu`, `audio-menu`, `process-menu`, `disk-menu`, `clean-menu`, `config-menu`, `gtk-theme-menu`, `share-menu`.
-  - **Core Helpers**: `share`, `nixreb`, `awake`, `controlbot`, `epic`, `twitch` (`tdrops`), `gfn`, `roblox`.
+  - **Core Helpers**: `share`, `nixreb`, `awake`, `ram`, `restore-boot-state`, `restore-ram`, `controlbot`, `epic`, `twitch` (`tdrops`), `gfn`, `roblox`, `libredb-studio`.
 
 ---
 
@@ -264,8 +270,13 @@ MangoWM is a dynamic tiling Wayland compositor built on the **Scroller layout** 
 | `Super + Q` | Open standalone clean Kitty terminal |
 | `Super + Shift + Q` | Open Kitty terminal running **Tmux** in fullscreen |
 | `Super + R` | Launch **Antigravity IDE** (`antigravity-ide`) |
-| `Super + TAB` | Open Application launcher (`tui-popup app`) |
-| `Super + Shift + TAB` | Open task and process monitor (`tui-popup task`) |
+| `Super + Escape` | Open Master TUI Command Center modal (`tui-popup s`) |
+| `Super + ,` | Open Quick Settings modal (`tui-popup setting`) |
+| `Super + TAB` | Open Application launcher modal (`tui-popup app`) |
+| `Super + Shift + TAB` | Open task & process monitor modal (`tui-popup task`) |
+| `Super + V` | Open clipboard history modal (`tui-popup clip`) |
+| `Super + Shift + V` | Wipe clipboard history modal (`tui-popup clip wipe`) |
+| `Super + X` | Toggle Waybar visibility (`waybar_manager.sh --toggle`) |
 | `Super + B` | Launch Firefox |
 | `Super + E` | Open Thunar file manager |
 | `Super + T` | Launch Telegram Desktop |
@@ -274,12 +285,10 @@ MangoWM is a dynamic tiling Wayland compositor built on the **Scroller layout** 
 | `Super + M` / `Super + K` | Lock screen via Hyprlock |
 | `Super + P` | Capture area screenshot (`screenshot.sh`) |
 | `Super + Shift + P` | Capture fullscreen screenshot (`screenshot.sh --fullscreen`) |
-| `Super + Ctrl + Shift + P` | Start screen recording |
-| `Super + V` | Open clipboard history menu |
-| `Super + Alt + C` | Cycle to next Waybar theme preset |
+| `Super + Ctrl + Shift + P` / `F11` | Start screen recording (`record.sh`) |
 | `Super + Alt + B` | Toggle bottom dockbar visibility |
 | `Super + L` | Toggle nightlight (Gammastep) |
-| `Super + [A/S/W/D]` | Focus window Left / Down / Up / Right |
+| `Super + [A/S/W/D]` | Focus Left / Next Desktop / Prev Desktop / Right |
 | `Super + Shift + [A/S/W/D]` | Move window Left / Down / Up / Right |
 | `Super + Z` | Toggle window floating state |
 | `Super + Shift + F` | Toggle maximized window state |
@@ -319,7 +328,7 @@ All custom system scripts are wrapped directly into NixOS binaries via `nixos/mo
 
 ---
 
-## 🎛️ Unified TUI Command Center & 19 Interactive Terminal Tools (`nixos/scripts/tui/`)
+## 🎛️ Unified TUI Command Center & 21 Interactive Terminal Tools (`nixos/scripts/tui/`)
 
 In addition to graphical Rofi menus, the system features a complete, standalone terminal control suite built on `fzf`, ANSI styling, live previews, and keyboard navigation.
 
@@ -328,34 +337,37 @@ Run `s` anywhere in the terminal to summon the interactive launcher. Filter tool
 
 ```bash
 s               # Open interactive fzf launcher with live category filters and preview
-s <tool>        # Directly invoke any tool or alias (e.g., 's wifi', 's bt', 's tb', 's port')
-s --list        # Print clean, formatted tabular list of all 19 tools and aliases
+s <tool>        # Directly invoke any tool or alias (e.g., 's wifi', 's bt', 's tb', 's port', 's ram', 's app')
+s list          # Print clean, formatted tabular list of all 21 tools and aliases
+tui-popup <cmd> # Summon any TUI tool in a floating, centered Wayland modal window
 ```
 
 ### 📋 Complete Tool Suite
 
 | Command | Aliases | Category | Purpose & Interactive Features |
 | :--- | :--- | :--- | :--- |
-| [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) | — | **Launcher** | **Master Command Center**: Unified launcher searching all 19 tools by name, alias, and description. |
+| [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) | — | **Launcher** | **Master Command Center**: Unified launcher searching all 21 tools by name, alias, and description. |
 | [`wifi`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/wifi) | `wifi` | **Network** | **Wi-Fi Manager**: Scan nearby APs, monitor live signal dBm, connect with password prompt, display Wi-Fi QR codes, and WPS. |
 | [`bluetooth`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/bluetooth) | `bt` | **Network** | **Bluetooth Manager**: Controller power, scan, pair, trust, connect/disconnect audio devices & peripherals, battery % gauges. |
 | [`tb`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/tb) | `tunnelbear`, `vpn` | **Network** | **TunnelBear VPN & Split Tunneling**: Connect servers, usage-based ranking, per-app split tunneling (`tb run <cmd>`), live cloud quota sync, auto-connect disabled on boot. |
 | [`ports`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/ports) | `port`, `net` | **Network** | **Listening Ports & Dev Servers**: Real-time listening TCP/UDP sockets, bound processes, PIDs, and instant `kill` for stuck servers. |
-| [`share`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/share) | `share` | **Network** | **Samba & Hamachi File Sharing**: Manage Samba `/home/peng/Shared`, view Hamachi mesh VPN peers, and mount remote CIFS shares. |
+| [`share`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/share) | `share` | **Network** | **Samba & Hamachi File Sharing**: Manage Samba `/home/peng/Shared` & VM `/home/peng/Code`, view Hamachi mesh VPN peers, mount CIFS shares. |
 | [`nixos`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/nixos) | `gens` | **System** | **NixOS Generations & Rollback**: Generation history, active boot entry, closure size diffing (`nix profile diff-closures`), rollbacks, and GC. |
 | [`service`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/service) | `services` | **System** | **Systemd Service Manager**: Filter user & system units, start, stop, restart, reload, inspect unit status, and tail live logs. |
 | [`disk`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/disk) | `storage` | **System** | **Storage & USB Cleaner**: Filesystem usage gauges, USB auto-mount/safe-eject, interactive `ncdu`, `nh clean`, and nix-store GC. |
 | [`task`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/task) | `tasks` | **System** | **Process & MangoWM Window Controller**: Top CPU/RAM consumers, filter processes, Wayland window focus, `SIGTERM`/`SIGKILL`, freeze. |
+| [`ram`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/ram) | `restore`, `restore-ram` | **System** | **Memory Recovery & Boot State Restorer**: Prunes background apps, closes windows, drops caches, and restores post-boot ~1.0 GB RAM footprint without restarting Wayland. |
 | [`log`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/log) | `logs`, `journal` | **System** | **Journal & Kernel Explorer**: Systemd journal filter by priority (`-p err`), systemd unit logs, `dmesg` kernel ring buffer, live `-f` tailing. |
+| [`app`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/app) | `apps`, `launch` | **Desktop** | **Application Launcher & .desktop Browser**: Fast fuzzy desktop launcher parsing system & user applications with dark theme synchronization and systemd-run isolation. |
 | [`repo`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/repo) | `repos`, `gitui` | **Dev** | **Git Multi-Repo Radar**: Discovers all Git repositories under `~/Code`, branch state, dirty working tree status, fetch, pull, and push. |
 | [`tm`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/tm) | `project` | **Dev** | **Tmux Sessions & Projects**: Interactive session switcher, window/pane preview, kill/detach sessions, and new project session bootstrap. |
 | [`pkg`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/pkg) | `pkgs` | **Dev** | **Nix Package Explorer**: Search systemPackages, view derivation details, copy package names, or spawn instant `nix-shell -p <pkg>`. |
 | [`container`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/container) | `containers`, `vm` | **Dev** | **Docker & Libvirt VM Manager**: Inspect running/stopped containers, start/stop/restart, follow container logs, and attach `/bin/sh`. |
 | [`conf`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/conf) | `config`, `configs` | **Dev** | **Dotfiles & Config Picker**: Syntax-highlighted `bat` previews, Git diff indicators, and instant jump into Neovim for any dotfile. |
 | [`audio`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/audio) | `audio` | **Desktop** | **PipeWire & WirePlumber Mixer**: Terminal volume faders, sink/source routing, mute toggles, WireMix integration, ALC256 mic testing. |
-| [`setting`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/setting) | `settings` | **Desktop** | **Quick Settings**: Backlight brightness faders (`brightnessctl`), volume, power governor, screen idle inhibit, SwayNC DND toggle. |
-| [`theme`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/theme) | `theme` | **Desktop** | **Theme & Wallpaper Customizer**: Interactive selector for 80+ Waybar themes, dynamic wallpaper transitions, fonts, and cava styles. |
-| [`clip`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/clip) | `clips`, `clipboard` | **Desktop** | **Clipboard & Snippets**: Wayland clipboard history (`cliphist`), decode text/image entries with syntax preview, pin snippets, delete. |
+| [`setting`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/setting) | `settings` | **Desktop** | **Quick Settings**: Backlight brightness faders (`brightnessctl`), volume sliders, power governor, screen idle inhibit, SwayNC DND toggle. |
+| [`theme`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/theme) | `theme` | **Desktop** | **Themes & Wallpapers**: Wallpaper transitions, fonts, and cava audio visualizer styles. |
+| [`clip`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/clip) | `clips`, `clipboard` | **Desktop** | **Clipboard & Snippets**: Wayland clipboard history (`cliphist`), decode text/image entries with syntax preview, auto-paste on Enter, wipe history. |
 
 ### 🐻 TunnelBear VPN & Per-App Split Tunneling (`tb`)
 The system integrates official TunnelBear OpenVPN profiles directly with NetworkManager, offering both full-system VPN routing and lightweight, application-specific split tunneling:
@@ -469,14 +481,11 @@ Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
 
 ## 🎨 UI Customization, Bars & Themes
 
-### 📊 Waybar Theme Library (`config/waybar/`)
-The repository contains **over 80 modular Waybar themes** that can be cycled dynamically via `Super + Alt + C` or `waybar_manager.sh`:
-- **Hancore Collection**:
-  - `hancore-v1` through `hancore-v7` (with progressive micro-iterations `v1-1` to `v1-9d`, `v2-1` to `v2-9e`, `v3-1` to `v3-7`, `v4`, `v5`, `v6`, `v7`).
-  - Aesthetic variants: `hancore-compact`, `hancore-cyber`, `hancore-glass`, `hancore-neon`, `hancore-pill`, `hancore-rounded`.
-- **Jakoolit Collection**:
-  - `jakoolit-camellia`, `jakoolit-everforest`, `jakoolit-minimal`, `jakoolit-sleek`, `jakoolit-summitsplit`.
-  - Top bar styles: `jakoolit-top-arrow`, `jakoolit-top-chrysanthemum`, `jakoolit-top-default`, `jakoolit-top-default-laptop`, `jakoolit-top-gardenia`, `jakoolit-top-peony`, `jakoolit-top-simple`.
+### 📊 Waybar (`config/waybar/`)
+The system runs the sleek and refined **`hancore-v1-9b`** theme, tailored for high-contrast visibility and minimal resource usage:
+- **Active Theme Architecture**: Modular layout with workspaces, window title, clock/calendar, network status, audio faders, battery indicators, and SwayNC notification triggers.
+- **Deduplicated & Polished CSS**: Clean CSS styling without redundant rules, utilizing hardware-accelerated rendering and consistent Gruvbox/translucent dark accents.
+- **Toggle Control**: Instantly hide or restore Waybar with `Super + X` or `waybar_manager.sh --toggle`.
 
 ### 🔔 Sway Notification Center (`config/swaync/`)
 - Sleek 420px slide-out control center with volume level sliders, Do-Not-Disturb toggle, quick action buttons, and a media player widget styled with GTK CSS.
@@ -565,7 +574,7 @@ share-menu              # Terminal-based quick control menu
 ```
 Unified network sharing controller:
 - **Hamachi VPN**: On-demand service startup, account login, join/leave mesh networks, peer listing, and nickname assignment.
-- **Samba LAN Sharing**: On-demand daemon startup, manage `/home/peng/Shared`, set SMB user passwords, and mount remote network shares into `/mnt` via `cifs-utils`.
+- **Samba LAN & VM Sharing**: On-demand daemon startup, manage LAN `/home/peng/Shared` & VM-restricted `/home/peng/Code` (`192.168.122.0/24`), set SMB user passwords, and mount remote network shares into `/mnt` via `cifs-utils`.
 
 ---
 
@@ -623,10 +632,10 @@ Apply the flake configuration to your system:
 nixreb
 ```
 
-### 3. Cycle Waybar Themes
-Press `Super + Alt + C` or run:
+### 3. Toggle Waybar
+Press `Super + X` or run:
 ```bash
-waybar_manager.sh --cycle
+waybar_manager.sh --toggle
 ```
 
 ---
