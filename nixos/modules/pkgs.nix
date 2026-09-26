@@ -401,6 +401,7 @@ in
     # Dev Tools
     git
     lazygit
+    gh
     neovim
     codex
     go
