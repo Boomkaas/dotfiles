@@ -255,10 +255,55 @@ launch_app() {
         cd_prefix="cd $(printf '%q' "$workdir") && "
     fi
 
-    if [[ "$terminal" == "true" ]]; then
-        ( setsid kitty -e bash -c "${cd_prefix}${exec_cmd}" >/dev/null 2>&1 & )
+    # Escape the transient Kitty systemd scope so closing the launcher popup does not kill the spawned app
+    if command -v systemd-run >/dev/null 2>&1; then
+        local unit_id="app-$(date +%s%N)"
+        local workdir_arg=()
+        if [[ -n "$workdir" && -d "$workdir" ]]; then
+            workdir_arg=(--working-directory="$workdir")
+        fi
+
+        if [[ "$terminal" == "true" ]]; then
+            systemd-run --user \
+                --slice=app.slice \
+                --unit="$unit_id" \
+                --description="App Terminal - $exec_cmd" \
+                "${workdir_arg[@]}" \
+                --setenv=PATH="$PATH" \
+                --setenv=WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}" \
+                --setenv=DISPLAY="${DISPLAY:-:0}" \
+                --setenv=XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-mango}" \
+                --setenv=XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}" \
+                --setenv=NIXOS_OZONE_WL="${NIXOS_OZONE_WL:-1}" \
+                --setenv=MOZ_ENABLE_WAYLAND="${MOZ_ENABLE_WAYLAND:-1}" \
+                --setenv=QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland}" \
+                --setenv=QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-gtk3}" \
+                kitty -e bash -c "${cd_prefix}${exec_cmd}" >/dev/null 2>&1 || \
+                ( setsid kitty -e bash -c "${cd_prefix}${exec_cmd}" >/dev/null 2>&1 & )
+        else
+            systemd-run --user \
+                --slice=app.slice \
+                --unit="$unit_id" \
+                --description="App - $exec_cmd" \
+                "${workdir_arg[@]}" \
+                --setenv=PATH="$PATH" \
+                --setenv=WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}" \
+                --setenv=DISPLAY="${DISPLAY:-:0}" \
+                --setenv=XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-mango}" \
+                --setenv=XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}" \
+                --setenv=NIXOS_OZONE_WL="${NIXOS_OZONE_WL:-1}" \
+                --setenv=MOZ_ENABLE_WAYLAND="${MOZ_ENABLE_WAYLAND:-1}" \
+                --setenv=QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland}" \
+                --setenv=QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-gtk3}" \
+                bash -c "${cd_prefix}${exec_cmd}" >/dev/null 2>&1 || \
+                ( setsid bash -c "${cd_prefix}${exec_cmd}" >/dev/null 2>&1 & )
+        fi
     else
-        ( setsid bash -c "${cd_prefix}${exec_cmd}" >/dev/null 2>&1 & )
+        if [[ "$terminal" == "true" ]]; then
+            ( setsid kitty -e bash -c "${cd_prefix}${exec_cmd}" >/dev/null 2>&1 & )
+        else
+            ( setsid bash -c "${cd_prefix}${exec_cmd}" >/dev/null 2>&1 & )
+        fi
     fi
 }
 
