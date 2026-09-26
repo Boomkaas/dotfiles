@@ -48,6 +48,7 @@
         "hosts deny" = "0.0.0.0/0";
         "guest account" = "nobody";
         "map to guest" = "bad user";
+        "smb2 leases" = "no";
       };
       "Shared" = {
         "path" = "/home/peng/Shared";
@@ -58,6 +59,7 @@
         "create mask" = "0644";
         "directory mask" = "0755";
         "force user" = "peng";
+        "csc policy" = "disable";
       };
       "Code" = {
         "path" = "/home/peng/Code";
@@ -70,6 +72,9 @@
         "create mask" = "0644";
         "directory mask" = "0755";
         "force user" = "peng";
+        "csc policy" = "disable";
+        "oplocks" = "no";
+        "level2 oplocks" = "no";
       };
       "workspace" = {
         "path" = "/home/peng/Code";
@@ -82,6 +87,9 @@
         "create mask" = "0644";
         "directory mask" = "0755";
         "force user" = "peng";
+        "csc policy" = "disable";
+        "oplocks" = "no";
+        "level2 oplocks" = "no";
       };
     };
   };
