@@ -77,13 +77,13 @@
                     "label": "󰖔 Night Light",
                     "type": "toggle",
                     "active": false,
-                    "command": "hyprsunset -t 4000 &",
-                    "command-off": "pkill -f hyprsunset",
-                    "update-command": "sh -c 'pgrep -f hyprsunset >/dev/null && echo true || echo false'"
+                    "command": "/home/peng/.local/bin/nightlight_toggle.sh",
+                    "command-off": "/home/peng/.local/bin/nightlight_toggle.sh",
+                    "update-command": "sh -c '/home/peng/.local/bin/nightlight_toggle.sh --check >/dev/null 2>&1 && echo true || echo false'"
                 },
                 {
                     "label": "󰍃 Lock",
-                    "command": "hyprlock"
+                    "command": "/home/peng/.local/bin/lock.sh"
                 }
             ]
         },

@@ -2,8 +2,8 @@
 /* SWAY NOTIFICATION CENTER - MODERN CONTROL CENTER THEME                         */
 /* ============================================================================== */
 
-@import url("../../.local/state/haku_theme/colors.css");
-@import url("../../.local/state/haku_theme/fonts.css");
+@import url("/home/peng/.local/state/haku_theme/colors.css");
+@import url("/home/peng/.local/state/haku_theme/fonts.css");
 
 /* Global reset for focus outlines & clean font rendering */
 * {
