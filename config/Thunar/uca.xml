@@ -61,4 +61,132 @@
 	<text-files/>
 	<video-files/>
 </action>
+<action>
+	<icon>media-record</icon>
+	<name>Red</name>
+	<submenu>Tags / Color</submenu>
+	<unique-id>1787933284835998-10</unique-id>
+	<command>/home/peng/.local/bin/thunar-color.sh red %F</command>
+	<description>Mark selected items with red color tag</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+<action>
+	<icon>media-record</icon>
+	<name>Orange</name>
+	<submenu>Tags / Color</submenu>
+	<unique-id>1787933284835998-11</unique-id>
+	<command>/home/peng/.local/bin/thunar-color.sh orange %F</command>
+	<description>Mark selected items with orange color tag</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+<action>
+	<icon>media-record</icon>
+	<name>Yellow</name>
+	<submenu>Tags / Color</submenu>
+	<unique-id>1787933284835998-12</unique-id>
+	<command>/home/peng/.local/bin/thunar-color.sh yellow %F</command>
+	<description>Mark selected items with yellow color tag</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+<action>
+	<icon>media-record</icon>
+	<name>Green</name>
+	<submenu>Tags / Color</submenu>
+	<unique-id>1787933284835998-13</unique-id>
+	<command>/home/peng/.local/bin/thunar-color.sh green %F</command>
+	<description>Mark selected items with green color tag</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+<action>
+	<icon>media-record</icon>
+	<name>Blue</name>
+	<submenu>Tags / Color</submenu>
+	<unique-id>1787933284835998-14</unique-id>
+	<command>/home/peng/.local/bin/thunar-color.sh blue %F</command>
+	<description>Mark selected items with blue color tag</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+<action>
+	<icon>media-record</icon>
+	<name>Purple</name>
+	<submenu>Tags / Color</submenu>
+	<unique-id>1787933284835998-15</unique-id>
+	<command>/home/peng/.local/bin/thunar-color.sh purple %F</command>
+	<description>Mark selected items with purple color tag</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+<action>
+	<icon>media-record</icon>
+	<name>Gray</name>
+	<submenu>Tags / Color</submenu>
+	<unique-id>1787933284835998-16</unique-id>
+	<command>/home/peng/.local/bin/thunar-color.sh gray %F</command>
+	<description>Mark selected items with gray color tag</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+<action>
+	<icon>edit-clear</icon>
+	<name>Clear Color Tag</name>
+	<submenu>Tags / Color</submenu>
+	<unique-id>1787933284835998-17</unique-id>
+	<command>/home/peng/.local/bin/thunar-color.sh reset %F</command>
+	<description>Remove color highlight tag from selected items</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
 </actions>
