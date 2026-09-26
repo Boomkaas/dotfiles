@@ -59,6 +59,30 @@
         "directory mask" = "0755";
         "force user" = "peng";
       };
+      "Code" = {
+        "path" = "/home/peng/Code";
+        "browseable" = "yes";
+        "read only" = "no";
+        "guest ok" = "no";
+        "valid users" = "peng";
+        "hosts allow" = "192.168.122. 127.0.0.1 localhost";
+        "hosts deny" = "0.0.0.0/0";
+        "create mask" = "0644";
+        "directory mask" = "0755";
+        "force user" = "peng";
+      };
+      "workspace" = {
+        "path" = "/home/peng/Code";
+        "browseable" = "yes";
+        "read only" = "no";
+        "guest ok" = "no";
+        "valid users" = "peng";
+        "hosts allow" = "192.168.122. 127.0.0.1 localhost";
+        "hosts deny" = "0.0.0.0/0";
+        "create mask" = "0644";
+        "directory mask" = "0755";
+        "force user" = "peng";
+      };
     };
   };
 

@@ -188,8 +188,12 @@ mod_security() {
     "$NIXOS_DIR/modules/core/services.nix" '"Shared"'
   has   "Samba: path set to /home/peng/Shared" \
     "$NIXOS_DIR/modules/core/services.nix" '"/home/peng/Shared"'
-  hasnt "Samba: workspace share removed" \
-    "$NIXOS_DIR/modules/core/services.nix" '"workspace"'
+  has   "Samba: Code share configured" \
+    "$NIXOS_DIR/modules/core/services.nix" '"Code"'
+  has   "Samba: path set to /home/peng/Code" \
+    "$NIXOS_DIR/modules/core/services.nix" '"/home/peng/Code"'
+  has   "Samba: Code share restricted to VM network" \
+    "$NIXOS_DIR/modules/core/services.nix" '"192\.168\.122\.'
   hasnt "Samba: Test share removed" \
     "$NIXOS_DIR/modules/core/services.nix" '"Test"'
 
