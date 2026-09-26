@@ -401,6 +401,8 @@ in
     # Dev Tools
     git
     lazygit
+    lazydocker
+    lazysql
     gh
     neovim
     codex
