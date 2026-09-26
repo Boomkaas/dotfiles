@@ -7,7 +7,7 @@
 
 set -eo pipefail
 
-export PATH="$HOME/.local/bin:/run/current-system/sw/bin:$PATH"
+export PATH="/run/wrappers/bin:$HOME/.local/bin:/run/current-system/sw/bin:$PATH"
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$UID}"
 

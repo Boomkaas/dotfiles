@@ -101,7 +101,7 @@ if [[ $EUID -eq 0 ]]; then
         # Run UI prompt in user context
         set +e
         runuser -u "$TARGET_USER" -- env \
-            PATH="/run/current-system/sw/bin:/etc/profiles/per-user/$TARGET_USER/bin:$TARGET_HOME/.local/bin:$PATH" \
+            PATH="/run/wrappers/bin:/run/current-system/sw/bin:/etc/profiles/per-user/$TARGET_USER/bin:$TARGET_HOME/.local/bin:$PATH" \
             XDG_RUNTIME_DIR="/run/user/$TARGET_UID" \
             DBUS_SESSION_BUS_ADDRESS="unix:path=$USER_BUS" \
             WAYLAND_DISPLAY="$WAYLAND_DISP" \
@@ -139,7 +139,7 @@ if [[ $EUID -eq 0 ]]; then
     fi
 else
     # User context mode (running directly as user)
-    export PATH="/run/current-system/sw/bin:/etc/profiles/per-user/$USER/bin:$HOME/.local/bin:$PATH"
+    export PATH="/run/wrappers/bin:/run/current-system/sw/bin:/etc/profiles/per-user/$USER/bin:$HOME/.local/bin:$PATH"
     export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
     export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
 

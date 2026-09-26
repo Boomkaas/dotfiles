@@ -11,7 +11,7 @@
 # All tests are READ-ONLY — nothing is modified or restarted.
 # ==============================================================================
 
-export PATH="/run/current-system/sw/bin:/etc/profiles/per-user/${USER:-peng}/bin:$HOME/.local/bin:/run/wrappers/bin:$PATH"
+export PATH="/run/wrappers/bin:/run/current-system/sw/bin:/etc/profiles/per-user/${USER:-peng}/bin:$HOME/.local/bin:$PATH"
 
 DOTFILES="${DOTFILES_DIR:-/home/peng/Code/Dotfiles}"
 NIXOS_DIR="$DOTFILES/nixos"

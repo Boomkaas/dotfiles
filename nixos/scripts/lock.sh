@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-export PATH="/run/current-system/sw/bin:/etc/profiles/per-user/${USER:-peng}/bin:$HOME/.local/bin:/run/wrappers/bin:$PATH"
+export PATH="/run/wrappers/bin:/run/current-system/sw/bin:/etc/profiles/per-user/${USER:-peng}/bin:$HOME/.local/bin:$PATH"
 
 # This script locks the screen using hyprlock, with different configurations based on the monitor resolution.
 

@@ -30,6 +30,9 @@ else
     RESET=''
 fi
 
+# Ensure NixOS setuid wrapper (/run/wrappers/bin/sudo) takes precedence in PATH
+export PATH="/run/wrappers/bin:$HOME/.local/bin:/run/current-system/sw/bin:$PATH"
+
 export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
 
 # ------------------------------------------------------------------------------
@@ -37,6 +40,7 @@ export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,ma
 # ------------------------------------------------------------------------------
 
 ensure_sudo() {
+    [ -d "/run/wrappers/bin" ] && export PATH="/run/wrappers/bin:$PATH"
     if ! sudo -n true 2>/dev/null; then
         echo -e "${YELLOW}${BOLD}[sudo]${RESET} Privilege required for network/service operations."
         if [ -c /dev/tty ]; then
