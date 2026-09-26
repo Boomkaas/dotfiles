@@ -82,7 +82,8 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── config.json                 # Panel dimensions (420px), notification width (500px), widget layout
 │   │   └── style.css                   # GTK stylesheet with JetBrainsMono Nerd Font and translucent cards
 │   ├── Thunar/
-│   │   └── uca.xml                     # Thunar custom actions ("Open Terminal Here", "Compress to .zip")
+│   │   ├── accels.scm                  # Thunar keyboard accelerator bindings (Ctrl+Shift+H highlight shortcut)
+│   │   └── uca.xml                     # Thunar custom actions (Finder-like color tagging, terminal, zip)
 │   ├── tmux/                           # Tmux terminal multiplexer suite
 │   │   ├── tmux.conf                   # Gruvbox styling, Vi keybindings, statusbar format, prefix configuration
 │   │   └── cheatsheet.sh               # Interactive floating cheat-sheet script for tmux shortcuts
@@ -242,10 +243,10 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 - **Tmux Buffer Patch**: Overrides `tmux` input buffer size from 1MB to 100MB (`#define INPUT_BUF_LIMIT 104857600`) in `input.c`, eliminating scrollback truncations during large build or log outputs.
 - **Yazi Terminal Reset Patch**: Applies `yazi-disable-trt.patch` onto `yazi-unwrapped` to prevent spurious terminal state clears when transitioning between preview filters.
 - **Wayland-VPet Fullscreen Patch**: Applies `wayland-vpet-fullscreen.patch` to allow the desktop pet overlay to persist during full-screen applications without auto-hiding.
-- **Default Image Applications**: Default image associations (PNG, JPEG, WebP, SVG, BMP, ICO) mapped to lightweight [Viewnior](https://github.com/hellnest/viewnior) with [Swappy](https://github.com/jtheoof/swappy) for annotations.
+- **Default Applications**: Default text and code MIME associations (text/plain, markdown, python, C/C++, Rust, shell, lua, yaml, json, js) mapped to [Neovim](https://neovim.io/) (`nvim.desktop`); default images mapped to lightweight [Viewnior](https://github.com/hellnest/viewnior) with [Swappy](https://github.com/jtheoof/swappy) for annotations.
 
 ### 3. Package Management & System Menu Wrappers (`nixos/modules/pkgs.nix`)
-- Declares development toolchains (`lazygit`, `git`, `neovim`), networking & VPN utilities (`openvpn`, `haguichi`, `cifs-utils`), audio tools (`pkgs_unstable.wiremix`), desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), and custom binary wrappers:
+- Declares development toolchains (`gh`, `lazygit`, `lazydocker`, `lazysql`, `git`, `neovim`), networking & VPN utilities (`openvpn`, `haguichi`, `cifs-utils`), audio tools (`pkgs_unstable.wiremix`), desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), and custom binary wrappers:
   - **Master TUI Launcher**: `s` (interactive CLI & fzf command center unifying all 21 system tools).
   - **21 Interactive TUI Tools**: `wifi`, `bluetooth` (`bt`), `tb` (`tunnelbear`), `ports` (`port`), `share`, `nixos` (`gens`), `service` (`services`), `disk` (`storage`), `task` (`tasks`), `ram` (`restore`, `restore-ram`), `log` (`logs`, `journal`), `app` (`apps`, `launch`), `repo` (`repos`, `gitui`), `tm` (`project`), `pkg` (`pkgs`), `container` (`containers`, `vm`), `conf` (`config`, `configs`), `audio`, `setting` (`settings`), `theme`, `clip` (`clips`).
   - **System Test Suite**: `nixtest` (modular 14-subsystem verification suite).
@@ -269,7 +270,8 @@ MangoWM is a dynamic tiling Wayland compositor built on the **Scroller layout** 
 | :--- | :--- |
 | `Super + Q` | Open standalone clean Kitty terminal |
 | `Super + Shift + Q` | Open Kitty terminal running **Tmux** in fullscreen |
-| `Super + R` | Launch **Antigravity IDE** (`antigravity-ide`) |
+| `Super + R` | Launch **Neovim** in Kitty (`kitty -e nvim`) |
+| `Super + Shift + R` | Launch **Antigravity IDE** (`antigravity-ide`) |
 | `Super + Escape` | Open Master TUI Command Center modal (`tui-popup s`) |
 | `Super + ,` | Open Quick Settings modal (`tui-popup setting`) |
 | `Super + TAB` | Open Application launcher modal (`tui-popup app`) |
@@ -296,6 +298,10 @@ MangoWM is a dynamic tiling Wayland compositor built on the **Scroller layout** 
 | `Super + I` | Minimize window to scratchpad |
 | `Super + Shift + I` | Restore minimized window |
 | `Super + 1..9` | Switch to Workspace / Tag 1 through 9 |
+| `3-finger Swipe Up / Down` | Switch workspace / viewport (Scroller column) |
+| `3-finger Swipe Left / Right` | Switch focused window direction |
+| `4-finger Swipe Left / Right` | Jump to next workspace with active clients |
+| `4-finger Swipe Up / Down` | Toggle workspace overview |
 
 ### 🔒 Hyprland Utilities & Power Management (`config/hypr/`)
 - **`hypridle.conf`**: Context-aware power-saving daemon respecting native DBus and systemd idle inhibitors (media players, browser video playback, games):
@@ -437,6 +443,10 @@ The system integrates official TunnelBear OpenVPN profiles directly with Network
   - Smart `y` wrapper function that automatically changes the shell working directory (`cd`) to Yazi's last active directory upon exiting.
   - Global `Ctrl + O` hotkey to summon Yazi instantly from anywhere on the command line.
 
+### 📁 Thunar GUI File Manager (`config/Thunar/`)
+- **Finder-Style Color Tagging (`uca.xml`)**: Custom context menu actions with macOS Finder-style color emblems (Red, Orange, Yellow, Green, Blue, Purple, Gray) and color removal for visual organization.
+- **Custom Keyboard Shortcuts (`accels.scm`)**: Persisted accelerator configuration with `Ctrl + Shift + H` bound to toggle file highlighting.
+
 ### 🐟 Fish Shell (`config/fish/config.fish`)
 Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
 
@@ -469,7 +479,11 @@ Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
 | **AI / Tokens** | `tokens` / `agy tokens` | Run live Antigravity token quota and reset timer report |
 | **Power** | `awake on` / `awake off` | Inhibit or resume screen lock, display sleep, and poweroff |
 | **Gaming** | `gfn` / `roblox` | Launch GeForce NOW / Roblox (Sober) Flatpaks |
-| **Git** | `lg`, `gs`, `gd`, `ga`, `gc`, `gp`, `gl` | `lazygit`, status, diff, add, commit, push, log |
+| **Dev** | `ld` / `lazydocker` | Interactive terminal UI for Docker containers & images (`lazydocker`) |
+| **Dev** | `lsql` / `lazysql` | Interactive terminal UI for databases & SQL queries (`lazysql`) |
+| **Dev** | `gh` | Official GitHub CLI for issues, pull requests & auth |
+| **Git** | `lg` | `lazygit` (interactive project selector if run outside a git repository) |
+| **Git** | `gs`, `gd`, `ga`, `gc`, `gp`, `gl` | Git status, diff, add, commit, push, log |
 | **Listing** | `l`, `ll`, `la`, `lla` | `eza --icons --group-directories-first` aliases |
 
 ### 🚀 Starship Prompt (`config/starship.toml`)
