@@ -17,6 +17,7 @@ if status is-interactive
     # Env
     set -gx EDITOR nvim
     set -gx VISUAL nvim
+    set -gx IDE nvim
     set -gx GTK_USE_PORTAL 1
     set -gx MOZ_ENABLE_WAYLAND 1
     set -gx QT_QPA_PLATFORMTHEME gtk3

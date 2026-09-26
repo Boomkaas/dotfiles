@@ -110,6 +110,27 @@
       defaultApplications = {
         "inode/directory" = [ "thunar.desktop" ];
 
+        # Text & Code Files (Neovim)
+        "text/plain" = [ "nvim.desktop" ];
+        "text/markdown" = [ "nvim.desktop" ];
+        "text/x-c" = [ "nvim.desktop" ];
+        "text/x-csrc" = [ "nvim.desktop" ];
+        "text/x-chdr" = [ "nvim.desktop" ];
+        "text/x-c++" = [ "nvim.desktop" ];
+        "text/x-c++src" = [ "nvim.desktop" ];
+        "text/x-c++hdr" = [ "nvim.desktop" ];
+        "text/x-python" = [ "nvim.desktop" ];
+        "text/x-shellscript" = [ "nvim.desktop" ];
+        "text/x-lua" = [ "nvim.desktop" ];
+        "text/x-rust" = [ "nvim.desktop" ];
+        "text/x-diff" = [ "nvim.desktop" ];
+        "application/json" = [ "nvim.desktop" ];
+        "application/xml" = [ "nvim.desktop" ];
+        "application/x-yaml" = [ "nvim.desktop" ];
+        "text/yaml" = [ "nvim.desktop" ];
+        "text/javascript" = [ "nvim.desktop" ];
+        "application/javascript" = [ "nvim.desktop" ];
+
         # Web / Browsers
         "text/html" = [ "firefox.desktop" ];
         "x-scheme-handler/http" = [ "firefox.desktop" ];

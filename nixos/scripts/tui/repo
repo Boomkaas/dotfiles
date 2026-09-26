@@ -63,7 +63,10 @@ open_in_editor() {
 open_in_ide() {
     local target="$1"
     [ -z "$target" ] && return 1
-    if command -v antigravity-ide >/dev/null 2>&1; then
+    if [ "${IDE:-nvim}" = "nvim" ] && command -v nvim >/dev/null 2>&1; then
+        kitty -e nvim "$target" >/dev/null 2>&1 &
+        notify "normal" "nvim" "Git Workspace" "Opened in Neovim: $(basename "$target")"
+    elif command -v antigravity-ide >/dev/null 2>&1; then
         antigravity-ide "$target" >/dev/null 2>&1 &
         notify "normal" "antigravity" "Git Workspace" "Opened in Antigravity IDE: $(basename "$target")"
     elif command -v codex >/dev/null 2>&1; then

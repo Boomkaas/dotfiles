@@ -11,7 +11,9 @@ ROFI_THEME_STR='window { width: 44%; height: 55%; } listview { lines: 10; }'
 
 open_target() {
     local target="$1"
-    if command -v antigravity-ide >/dev/null 2>&1; then
+    if [ "${IDE:-nvim}" = "nvim" ] && command -v nvim >/dev/null 2>&1; then
+        kitty -e nvim "$target" &
+    elif command -v antigravity-ide >/dev/null 2>&1; then
         antigravity-ide "$target" &
     elif command -v codex >/dev/null 2>&1; then
         codex "$target" &
