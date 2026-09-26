@@ -58,6 +58,13 @@ sync_system_environment() {
     export MOZ_ENABLE_WAYLAND="${MOZ_ENABLE_WAYLAND:-1}"
     export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-mango}"
     export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
+
+    # Ensure full PATH across user profiles and system binaries
+    for p in "$HOME/.local/bin" "$HOME/.nix-profile/bin" "/etc/profiles/per-user/${USER:-peng}/bin" "/run/current-system/sw/bin"; do
+        if [[ -d "$p" && ":$PATH:" != *":$p:"* ]]; then
+            export PATH="$p:$PATH"
+        fi
+    done
 }
 
 # ------------------------------------------------------------------------------
@@ -126,7 +133,7 @@ parse_desktop_file() {
     local file="$1"
     [[ ! -f "$file" ]] && return
 
-    local name="" exec="" comment="" icon="" terminal="false" nodisplay="false"
+    local name="" exec="" comment="" icon="" terminal="false" nodisplay="false" path=""
     local in_desktop_entry=false
 
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -152,6 +159,7 @@ parse_desktop_file() {
             Icon=*)       [[ -z "$icon" ]] && icon="${line#Icon=}" ;;
             Terminal=*)   terminal="${line#Terminal=}" ;;
             NoDisplay=*)  nodisplay="${line#NoDisplay=}" ;;
+            Path=*)       [[ -z "$path" ]] && path="${line#Path=}" ;;
         esac
     done < "$file"
 
@@ -159,8 +167,8 @@ parse_desktop_file() {
     [[ "$nodisplay" == "true" ]] && return
     [[ -z "$name" ]] || [[ -z "$exec" ]] && return
 
-    # Output in format: name|exec|comment|icon|terminal|filepath
-    echo "$name|$exec|$comment|$icon|$terminal|$file"
+    # Output in format: name|exec|comment|icon|terminal|filepath|path
+    echo "$name|$exec|$comment|$icon|$terminal|$file|$path"
 }
 
 # Collect all .desktop entries dynamically across all application directories
@@ -197,10 +205,10 @@ collect_apps() {
 # Format app entry for fzf display (tab-delimited for instant file resolution)
 format_app_entry() {
     local entry="$1"
-    IFS='|' read -r name exec comment icon terminal filepath <<< "$entry"
+    IFS='|' read -r name exec comment icon terminal filepath workdir <<< "$entry"
 
     local icon_display="󰀻"
-    [[ "$terminal" == "true" ]] && icon_display=""
+    [[ "$terminal" == "true" ]] && icon_display=" "
 
     local comment_trunc="${comment:0:55}"
     [[ ${#comment} -gt 55 ]] && comment_trunc="${comment_trunc}..."
@@ -211,9 +219,17 @@ format_app_entry() {
 # Clean exec command (remove flatpak markers and field codes like %u, %f, etc.)
 clean_exec_command() {
     local cmd="$1"
-    cmd=$(echo "$cmd" | sed -E 's/@@[uU]? %([uUfFdDnNickvm]) @@//g')
-    cmd=$(echo "$cmd" | sed -E 's/ %[uUfFdDnNickvm]//g')
+    # Remove Flatpak argument wrappers
+    cmd=$(echo "$cmd" | sed -E 's/@@[uU]? %([a-zA-Z]) @@//g')
     cmd=$(echo "$cmd" | sed -E 's/@@//g')
+    # Remove quoted field codes like "%u", "%U", "%f", "%F", etc.
+    cmd=$(echo "$cmd" | sed -E 's/["'\'']%[a-zA-Z]["'\'']//g')
+    # Remove unquoted field codes like %u, %U, %f, %F, %i, %c, %k, etc.
+    cmd=$(echo "$cmd" | sed -E 's/%[a-zA-Z]//g')
+    # Collapse multiple spaces into one
+    cmd=$(echo "$cmd" | sed -E 's/[[:space:]]+/ /g')
+    # Trim leading and trailing whitespace
+    cmd=$(echo "$cmd" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
     echo "$cmd"
 }
 
@@ -226,41 +242,23 @@ launch_app() {
     local exec_cmd="$1"
     local terminal="$2"
     local filepath="${3:-}"
+    local workdir="${4:-}"
 
     # Synchronize system parameters so GUI apps inherit theme, wayland, and portal settings
     sync_system_environment
 
+    exec_cmd=$(clean_exec_command "$exec_cmd")
+    [[ -z "$exec_cmd" ]] && return 1
+
+    local cd_prefix=""
+    if [[ -n "$workdir" && -d "$workdir" ]]; then
+        cd_prefix="cd $(printf '%q' "$workdir") && "
+    fi
+
     if [[ "$terminal" == "true" ]]; then
-        exec_cmd=$(clean_exec_command "$exec_cmd")
-        exec kitty -e bash -c "$exec_cmd" &>/dev/null &
-        disown
-        return 0
-    fi
-
-    # For GUI desktop apps, prefer standard desktop launcher if desktop file exists
-    local launched=false
-    if [[ -n "$filepath" && -f "$filepath" ]]; then
-        local desktop_id
-        desktop_id=$(basename "$filepath")
-
-        if command -v gtk-launch >/dev/null 2>&1; then
-            if gtk-launch "$desktop_id" >/dev/null 2>&1; then
-                launched=true
-            fi
-        fi
-
-        if [[ "$launched" != "true" ]] && command -v gio >/dev/null 2>&1; then
-            if gio launch "$filepath" >/dev/null 2>&1; then
-                launched=true
-            fi
-        fi
-    fi
-
-    # Direct fallback execution with full system environment
-    if [[ "$launched" != "true" ]]; then
-        exec_cmd=$(clean_exec_command "$exec_cmd")
-        nohup bash -c "$exec_cmd" &>/dev/null &
-        disown
+        ( setsid kitty -e bash -c "${cd_prefix}${exec_cmd}" >/dev/null 2>&1 & )
+    else
+        ( setsid bash -c "${cd_prefix}${exec_cmd}" >/dev/null 2>&1 & )
     fi
 }
 
@@ -284,12 +282,12 @@ cmd_preview() {
     if [[ -z "$entry" ]]; then
         local app_name
         app_name=$(echo "$raw_line" | cut -f1 | awk '{$1=""; print substr($0,2)}' | sed 's/ *$//')
-        entry=$(collect_apps | grep "^${app_name}|" | head -1)
+        entry=$(collect_apps | grep "^${app_name}|" | head -1 || true)
     fi
 
     [[ -z "$entry" ]] && return
 
-    IFS='|' read -r name exec comment icon terminal resolved_path <<< "$entry"
+    IFS='|' read -r name exec comment icon terminal resolved_path workdir <<< "$entry"
 
     echo -e "${BOLD}${CYAN}Application:${RESET} $name"
     echo "─────────────────────────────────────────────────────────────────────────────"
@@ -340,7 +338,7 @@ cmd_interactive() {
         --reverse \
         --cycle \
         --bind="ctrl-r:reload($self_bin collect)" \
-        --bind="ctrl-q:abort")
+        --bind="ctrl-q:abort" || true)
 
     [[ -z "$selection" ]] && return 0
 
@@ -355,15 +353,15 @@ cmd_interactive() {
     if [[ -z "$entry" ]]; then
         local app_name
         app_name=$(echo "$selection" | cut -f1 | awk '{$1=""; print substr($0,2)}' | sed 's/ *$//')
-        entry=$(collect_apps | grep "^${app_name}|" | head -1)
+        entry=$(collect_apps | grep "^${app_name}|" | head -1 || true)
     fi
 
     [[ -z "$entry" ]] && return 1
 
-    IFS='|' read -r name exec comment icon terminal resolved_path <<< "$entry"
+    IFS='|' read -r name exec comment icon terminal resolved_path workdir <<< "$entry"
 
     echo -e "${GREEN}✓${RESET} Launching ${BOLD}$name${RESET}..."
-    launch_app "$exec" "$terminal" "$resolved_path"
+    launch_app "$exec" "$terminal" "$resolved_path" "${workdir:-}"
 }
 
 # ------------------------------------------------------------------------------
@@ -374,10 +372,10 @@ cmd_list() {
     echo -e "${BOLD}Installed Applications:${RESET}\n"
 
     local count=0
-    while IFS='|' read -r name exec comment icon terminal filepath; do
+    while IFS='|' read -r name exec comment icon terminal filepath workdir; do
         count=$((count + 1))
         local icon_display="󰀻"
-        [[ "$terminal" == "true" ]] && icon_display=""
+        [[ "$terminal" == "true" ]] && icon_display=" "
 
         echo -e "${icon_display} ${BOLD}${name}${RESET}"
         [[ -n "$comment" ]] && echo -e "  ${DIM}${comment}${RESET}"
@@ -404,6 +402,7 @@ ${BOLD}USAGE:${RESET}
     app                    Launch interactive fzf application browser
     app list               List all installed applications
     app count              Print count of discovered applications
+    app launch <name>      Launch application directly by name or path
     app preview <line>     Internal preview generator for fzf
     app collect            Internal data collector for fzf reload
     app help               Show this help message
@@ -443,6 +442,24 @@ case "${1:-interactive}" in
         ;;
     count)
         cmd_count
+        ;;
+    launch)
+        target="${2:-}"
+        [[ -z "$target" ]] && { echo -e "${RED}Usage: app launch <app-name-or-file>${RESET}"; exit 1; }
+        entry=""
+        if [[ -f "$target" ]]; then
+            entry=$(parse_desktop_file "$target")
+        else
+            entry=$(collect_apps | grep -i "^${target}|" | head -1 || true)
+            [[ -z "$entry" ]] && entry=$(collect_apps | grep -i "${target}" | head -1 || true)
+        fi
+        if [[ -z "$entry" ]]; then
+            echo -e "${RED}Application not found: $target${RESET}"
+            exit 1
+        fi
+        IFS='|' read -r name exec comment icon terminal resolved_path workdir <<< "$entry"
+        echo -e "${GREEN}✓${RESET} Launching ${BOLD}$name${RESET}..."
+        launch_app "$exec" "$terminal" "$resolved_path" "${workdir:-}"
         ;;
     help|-h|--help)
         cmd_help
