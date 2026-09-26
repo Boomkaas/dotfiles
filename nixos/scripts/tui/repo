@@ -34,6 +34,7 @@ export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,ma
 SEARCH_DIRS=(
     "$HOME/Code"
     "$HOME/Code/Vault"
+    "$HOME/Code/Uni"
 )
 
 notify() {
@@ -92,6 +93,16 @@ open_in_fm() {
     fi
 }
 
+open_in_lazygit() {
+    local target="$1"
+    [ -z "$target" ] && return 1
+    if command -v lazygit >/dev/null 2>&1; then
+        ( cd "$target" && lazygit )
+    else
+        notify "critical" "dialog-error" "LazyGit" "lazygit is not installed"
+    fi
+}
+
 # ------------------------------------------------------------------------------
 # Discovery & Parsers
 # ------------------------------------------------------------------------------
@@ -109,7 +120,7 @@ find_git_repos() {
                 SEEN["$repodir"]=1
                 found+=("$repodir")
             fi
-        done < <(find "$base" -maxdepth 3 -name ".git" -type d 2>/dev/null)
+        done < <(find "$base" -maxdepth 4 -name ".git" -type d 2>/dev/null)
     done
 
     # Always ensure Dotfiles is included
@@ -291,44 +302,46 @@ show_action_menu() {
     name=$(basename "$target")
 
     local acts=()
-    acts+=("1.   Open in Terminal Editor ($EDITOR / Neovim)")
-    acts+=("2.   Open in Graphical IDE (Antigravity IDE / Codex)")
-    acts+=("3. 󰇥  Browse Repository in Yazi")
-    acts+=("4. 󱁤  Open in GUI File Manager (Thunar)")
-    acts+=("5.   Pull Latest Changes (git pull --rebase)")
-    acts+=("6.   Push Commits to Remote (git push)")
-    acts+=("7. 📝 Stage and Commit Changes")
-    acts+=("8.   Show Full Git Diff")
-    acts+=("9. 📜 Show Commit Log Graph")
-    acts+=("10. 📋 Copy Path to Clipboard")
-    acts+=("11. ✘  Cancel")
+    acts+=("1. 󰊢  Open in LazyGit (lazygit)")
+    acts+=("2.   Open in Terminal Editor ($EDITOR / Neovim)")
+    acts+=("3.   Open in Graphical IDE (Antigravity IDE / Codex)")
+    acts+=("4. 󰇥  Browse Repository in Yazi")
+    acts+=("5. 󱁤  Open in GUI File Manager (Thunar)")
+    acts+=("6.   Pull Latest Changes (git pull --rebase)")
+    acts+=("7.   Push Commits to Remote (git push)")
+    acts+=("8. 📝 Stage and Commit Changes")
+    acts+=("9.   Show Full Git Diff")
+    acts+=("10. 📜 Show Commit Log Graph")
+    acts+=("11. 📋 Copy Path to Clipboard")
+    acts+=("12. ✘  Cancel")
 
     local choice
-    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Repo [$name] > " --height=45% --reverse --border=rounded) || return 0
+    choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Repo [$name] > " --height=50% --reverse --border=rounded) || return 0
 
     case "$choice" in
-        1*) open_in_editor "$target" ;;
-        2*) open_in_ide "$target" ;;
-        3*) open_in_fm "$target" ;;
-        4*) thunar "$target" >/dev/null 2>&1 & ;;
-        5*) cmd_pull "$target" ;;
-        6*) cmd_push "$target" ;;
-        7*) cmd_commit "$target" ;;
-        8*)
+        1*) open_in_lazygit "$target" ;;
+        2*) open_in_editor "$target" ;;
+        3*) open_in_ide "$target" ;;
+        4*) open_in_fm "$target" ;;
+        5*) thunar "$target" >/dev/null 2>&1 & ;;
+        6*) cmd_pull "$target" ;;
+        7*) cmd_push "$target" ;;
+        8*) cmd_commit "$target" ;;
+        9*)
             clear
             git -C "$target" diff HEAD | (command -v bat >/dev/null 2>&1 && bat --color=always -p -l diff || cat)
             echo ""
             echo -ne "${BOLD}Press Enter to return...${RESET}"
             read -r
             ;;
-        9*)
+        10*)
             clear
             git -C "$target" log -n 30 --graph --pretty=format:'%C(yellow)%h%Creset %C(green)%ar%Creset %C(blue)%an%Creset %s%C(auto)%d%Creset' --color=always
             echo ""
             echo -ne "${BOLD}Press Enter to return...${RESET}"
             read -r
             ;;
-        10*)
+        11*)
             if command -v wl-copy >/dev/null 2>&1; then
                 echo -n "$target" | wl-copy
                 notify "normal" "edit-copy" "Clipboard" "Copied repository path to clipboard"
@@ -427,13 +440,13 @@ cmd_interactive() {
         # Invoke fzf
         local res key choice
         res=$(printf "%s\n" "${menu[@]}" | fzf \
-            --expect=ctrl-e,ctrl-p,ctrl-u,ctrl-f,ctrl-d,ctrl-s,ctrl-l,ctrl-r,ctrl-a,tab \
+            --expect=ctrl-g,ctrl-e,ctrl-p,ctrl-u,ctrl-f,ctrl-d,ctrl-s,ctrl-l,ctrl-r,ctrl-a,tab \
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:52%:wrap \
             --prompt="  Repo ($current_scope) > " \
-            --header="[$header_info] (Enter: Open $EDITOR | Ctrl-E: IDE | Ctrl-P: Pull | Ctrl-U: Push | Ctrl-D: Diff | Ctrl-F: Yazi | Tab: Filter | Esc: Exit)" \
+            --header="[$header_info] (Enter: Menu | Ctrl-G: LazyGit | Ctrl-E: IDE | Ctrl-P: Pull | Ctrl-U: Push | Tab: Filter)" \
             --reverse \
             --height=100% \
             --border=rounded \
@@ -468,6 +481,7 @@ cmd_interactive() {
         fi
 
         case "$key" in
+            ctrl-g) open_in_lazygit "$target_payload"; continue ;;
             ctrl-e) open_in_ide "$target_payload"; continue ;;
             ctrl-p) cmd_pull "$target_payload"; continue ;;
             ctrl-u) cmd_push "$target_payload"; continue ;;
@@ -503,6 +517,7 @@ ${BOLD}repo${RESET} - Multi-Repository Git Workspace & Status Dashboard (CLI & f
 
 ${BOLD}USAGE:${RESET}
     repo                            Launch interactive fzf repository dashboard
+    repo lazy [target]              Choose and open repository in LazyGit
     repo list                       Print overview table of all detected git repositories
     repo pull <target>              Pull latest remote changes for repository
     repo push <target>              Push commits to remote
@@ -510,7 +525,8 @@ ${BOLD}USAGE:${RESET}
     repo help                       Show this help message
 
 ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
-    ${CYAN}Enter${RESET}       Open contextual action menu (Neovim, IDE, Commit, Logs)
+    ${CYAN}Enter${RESET}       Open contextual action menu (LazyGit, Neovim, IDE, Commit, Logs)
+    ${CYAN}Ctrl-G${RESET}      Open repository in LazyGit
     ${CYAN}Ctrl-E${RESET}      Open repository in graphical IDE (Antigravity IDE / Codex)
     ${CYAN}Ctrl-P${RESET}      Pull latest changes (git pull --rebase)
     ${CYAN}Ctrl-U${RESET}      Push local commits to remote (git push)
@@ -523,6 +539,69 @@ ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
     ${CYAN}Esc / Ctrl-C${RESET} Exit dashboard
 
 EOF
+}
+
+cmd_lazy() {
+    local target="$1"
+    if [ -n "$target" ]; then
+        local match
+        match=$(find_git_repos | grep -i "$target" | head -n 1)
+        if [ -n "$match" ] && [ -d "$match" ]; then
+            ( cd "$match" && lazygit )
+            return $?
+        else
+            echo -e "${RED}✘ No repository matching '$target' found.${RESET}" >&2
+            return 1
+        fi
+    fi
+
+    local repo_dirs=()
+    while IFS= read -r r; do
+        [ -n "$r" ] && repo_dirs+=("$r")
+    done < <(find_git_repos)
+
+    local menu=()
+    for r in "${repo_dirs[@]}"; do
+        local st
+        st=$(parse_repo_status "$r") || continue
+        local name path branch is_dirty mod_cnt ahead behind stash_cnt
+        IFS=$'\t' read -r name path branch is_dirty mod_cnt ahead behind stash_cnt <<< "$st"
+
+        local badges=""
+        if [ "$is_dirty" -eq 1 ]; then
+            badges+="[M:${mod_cnt}] "
+        else
+            badges+="[✔] "
+        fi
+        if [ "$ahead" -gt 0 ]; then
+            badges+="[↑${ahead}] "
+        fi
+        if [ "$behind" -gt 0 ]; then
+            badges+="[↓${behind}] "
+        fi
+
+        local label
+        label=$(printf "  %-26s %-16s %s" "$name" "($branch)" "$badges")
+        menu+=("${label}"$'\t'"$path")
+    done
+
+    local choice
+    choice=$(printf "%s\n" "${menu[@]}" | fzf \
+        --delimiter=$'\t' \
+        --with-nth=1 \
+        --preview="$(readlink -f "$0") preview {2}" \
+        --preview-window=right:52%:wrap \
+        --prompt="󰊢  LazyGit Project > " \
+        --header="(Enter: Open in LazyGit | Esc: Cancel)" \
+        --reverse \
+        --height=55% \
+        --border=rounded) || return 0
+
+    local sel_path
+    sel_path=$(echo "$choice" | cut -f2)
+    if [ -n "$sel_path" ] && [ -d "$sel_path" ]; then
+        ( cd "$sel_path" && lazygit )
+    fi
 }
 
 cmd_list() {
@@ -544,6 +623,7 @@ cmd_list() {
 # ------------------------------------------------------------------------------
 
 case "${1:-}" in
+    lazy|lg) cmd_lazy "$2" ;;
     list|ls) cmd_list ;;
     pull) cmd_pull "$2" ;;
     push) cmd_push "$2" ;;

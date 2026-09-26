@@ -101,4 +101,24 @@ if status is-interactive
         end
     end
     alias antigravity='agy'
+
+    # Smart LazyGit: opens current repo directly, or presents project selector if in $HOME / outside git
+    function lazygit --description "Smart LazyGit: opens current repo, or presents project selector"
+        if test (count $argv) -gt 0
+            command lazygit $argv
+            return
+        end
+
+        set -l inside_git (command git rev-parse --is-inside-work-tree 2>/dev/null)
+        if test "$inside_git" = "true" -a "$PWD" != "$HOME"
+            command lazygit
+            return
+        end
+
+        if command -v repo >/dev/null 2>&1
+            repo lazy
+        else
+            command lazygit
+        end
+    end
 end
