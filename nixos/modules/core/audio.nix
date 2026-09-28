@@ -9,6 +9,27 @@
     pulse.enable = true;
     audio.enable = true;
     jack.enable = true;
+
+    # Real-time WebRTC noise cancellation, echo suppression, and high-pass DC filtering
+    extraConfig.pipewire."99-echo-cancel" = {
+      "context.modules" = [
+        {
+          name = "libpipewire-module-echo-cancel";
+          args = {
+            "library.name" = "aec/libspa-aec-webrtc";
+            "monitor.mode" = true;
+            "capture.props" = {
+              "node.name" = "echo_cancel_capture";
+              "node.description" = "Echo-Cancellation Capture";
+            };
+            "source.props" = {
+              "node.name" = "echo_cancel_source";
+              "node.description" = "Noise-Suppressed Microphone";
+            };
+          };
+        }
+      ];
+    };
   };
 
   # Fix for Realtek ALC256 internal microphone on ASUS VivoBook laptops
