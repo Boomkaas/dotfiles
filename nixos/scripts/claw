@@ -1,0 +1,272 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# claw - OpenClaw Gateway Service Controller & Memory Optimizer
+#
+# Fast, ergonomic CLI to manage the OpenClaw AI gateway user service.
+# Allows on-demand starting, stopping, toggling, and memory inspection
+# without leaving a 440+ MiB resident memory footprint running 24/7.
+# ==============================================================================
+
+set -euo pipefail
+
+UNIT="openclaw-gateway.service"
+GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
+
+# ------------------------------------------------------------------------------
+# Colors
+# ------------------------------------------------------------------------------
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m'
+    DIM=$'\033[2m'
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    CYAN=$'\033[0;36m'
+    RESET=$'\033[0m'
+else
+    BOLD=''
+    DIM=''
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    CYAN=''
+    RESET=''
+fi
+
+# ------------------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------------------
+
+notify() {
+    local urgency="${1:-normal}"
+    local title="$2"
+    local msg="$3"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -i "system-run" -a "OpenClaw" "$title" "$msg" -t 3500
+    fi
+}
+
+get_ram_used_mb() {
+    free -m | awk '/^Mem:/ {print $3}'
+}
+
+format_mb() {
+    local mb="$1"
+    if [ "$mb" -ge 1024 ]; then
+        awk -v m="$mb" 'BEGIN {printf "%.2f GiB", m / 1024}'
+    else
+        echo "${mb} MiB"
+    fi
+}
+
+get_service_memory_mb() {
+    local pids
+    pids=$(pgrep -f "openclaw" 2>/dev/null || true)
+    if [ -z "$pids" ]; then
+        echo 0
+        return
+    fi
+    local total_rss_kb=0
+    for pid in $pids; do
+        if [ -r "/proc/$pid/status" ]; then
+            local rss
+            rss=$(awk '/^VmRSS:/ {print $2}' "/proc/$pid/status" 2>/dev/null || echo 0)
+            total_rss_kb=$(( total_rss_kb + rss ))
+        fi
+    done
+    echo $(( total_rss_kb / 1024 ))
+}
+
+is_active() {
+    systemctl --user is-active --quiet "$UNIT" 2>/dev/null
+}
+
+is_enabled() {
+    systemctl --user is-enabled --quiet "$UNIT" 2>/dev/null
+}
+
+# ------------------------------------------------------------------------------
+# Actions
+# ------------------------------------------------------------------------------
+
+cmd_status() {
+    echo -e "${BOLD}${CYAN}=== OpenClaw Gateway Status ===${RESET}"
+    if is_active; then
+        local mem_mb
+        mem_mb=$(get_service_memory_mb)
+        local main_pid
+        main_pid=$(systemctl --user show "$UNIT" --property=MainPID --value 2>/dev/null || echo "?")
+        echo -e "  ${BOLD}State:${RESET}            ${GREEN}● Active (Running)${RESET}"
+        echo -e "  ${BOLD}Main PID:${RESET}         ${main_pid}"
+        echo -e "  ${BOLD}Port:${RESET}             ${GATEWAY_PORT} (ws://127.0.0.1:${GATEWAY_PORT})"
+        echo -e "  ${BOLD}Memory Usage:${RESET}     ${YELLOW}$(format_mb "$mem_mb")${RESET}"
+    else
+        echo -e "  ${BOLD}State:${RESET}            ${RED}○ Inactive (Stopped)${RESET}"
+        echo -e "  ${BOLD}Memory Usage:${RESET}     ${GREEN}0 MiB (Freed)${RESET}"
+    fi
+
+    if is_enabled; then
+        echo -e "  ${BOLD}Boot Autostart:${RESET}   ${YELLOW}Enabled${RESET}"
+    else
+        echo -e "  ${BOLD}Boot Autostart:${RESET}   ${GREEN}Disabled (On-Demand only)${RESET}"
+    fi
+    echo -e "  ${BOLD}Service Unit:${RESET}     ${UNIT}"
+    echo ""
+}
+
+cmd_start() {
+    if is_active; then
+        echo -e "${YELLOW}OpenClaw Gateway is already active.${RESET}"
+        cmd_status
+        return 0
+    fi
+
+    echo -e "${CYAN}Starting OpenClaw Gateway...${RESET}"
+    systemctl --user start "$UNIT"
+
+    # Wait up to 5 seconds for service to become active
+    local ready=0
+    for _ in {1..10}; do
+        if is_active; then
+            ready=1
+            break
+        fi
+        sleep 0.5
+    done
+
+    if [ "$ready" -eq 1 ]; then
+        local mem_mb
+        mem_mb=$(get_service_memory_mb)
+        echo -e "${GREEN}✓ OpenClaw Gateway started successfully.${RESET}"
+        echo -e "  Listening on: ${BOLD}http://127.0.0.1:${GATEWAY_PORT}${RESET}"
+        echo -e "  Current RSS:  ${YELLOW}$(format_mb "$mem_mb")${RESET}"
+        notify normal "OpenClaw Gateway Started" "Active on port ${GATEWAY_PORT} ($(format_mb "$mem_mb"))"
+    else
+        echo -e "${RED}✗ Failed to start OpenClaw Gateway. Check logs with 'claw logs'.${RESET}"
+        return 1
+    fi
+}
+
+cmd_stop() {
+    if ! is_active; then
+        echo -e "${YELLOW}OpenClaw Gateway is already stopped.${RESET}"
+        return 0
+    fi
+
+    local mem_before
+    mem_before=$(get_service_memory_mb)
+    local ram_before
+    ram_before=$(get_ram_used_mb)
+
+    echo -e "${CYAN}Stopping OpenClaw Gateway (${mem_before} MiB)...${RESET}"
+    systemctl --user stop "$UNIT"
+
+    # Ensure any stray worker processes are cleaned up
+    pkill -f 'openclaw/dist' 2>/dev/null || true
+    sync
+
+    local ram_after
+    ram_after=$(get_ram_used_mb)
+    local freed=$(( ram_before > ram_after ? ram_before - ram_after : mem_before ))
+
+    echo -e "${GREEN}✓ OpenClaw Gateway stopped.${RESET}"
+    echo -e "  Reclaimed Memory: ${BOLD}${CYAN}$(format_mb "$freed")${RESET}"
+    echo -e "  Current RAM Used: ${YELLOW}$(format_mb "$ram_after")${RESET}"
+    notify normal "OpenClaw Gateway Stopped" "Freed ~$(format_mb "$freed") RAM"
+}
+
+cmd_toggle() {
+    if is_active; then
+        cmd_stop
+    else
+        cmd_start
+    fi
+}
+
+cmd_restart() {
+    echo -e "${CYAN}Restarting OpenClaw Gateway...${RESET}"
+    cmd_stop
+    sleep 0.5
+    cmd_start
+}
+
+cmd_logs() {
+    journalctl --user -u "$UNIT" -f -n 50
+}
+
+cmd_enable() {
+    systemctl --user enable "$UNIT"
+    echo -e "${GREEN}✓ OpenClaw Gateway enabled for autostart on boot.${RESET}"
+}
+
+cmd_disable() {
+    systemctl --user disable "$UNIT"
+    echo -e "${GREEN}✓ OpenClaw Gateway autostart on boot disabled (runs on-demand).${RESET}"
+}
+
+show_help() {
+    cat << EOF
+${BOLD}claw${RESET} - OpenClaw Gateway Service Controller & Memory Optimizer
+
+${BOLD}USAGE:${RESET}
+    claw [COMMAND]
+
+${BOLD}COMMANDS:${RESET}
+    (none), toggle     Toggle OpenClaw Gateway on or off
+    start, on          Start the Gateway service
+    stop, off          Stop the Gateway service and reclaim RAM (~440 MiB)
+    status             Show running status, PID, port, and memory usage
+    restart            Restart the Gateway service
+    logs, log          Tail live service logs
+    enable             Enable automatic startup on boot
+    disable            Disable automatic startup on boot (on-demand only)
+    help, -h, --help   Show this help message
+
+${BOLD}EXAMPLES:${RESET}
+    claw               # Toggle on/off
+    claw start         # Spin up OpenClaw
+    claw stop          # Shut down and free ~440 MiB RAM
+    claw status        # Check if running and how much RAM it uses
+EOF
+}
+
+# ------------------------------------------------------------------------------
+# Main Dispatch
+# ------------------------------------------------------------------------------
+
+case "${1:-toggle}" in
+    start|on|up)
+        cmd_start
+        ;;
+    stop|off|down)
+        cmd_stop
+        ;;
+    toggle)
+        cmd_toggle
+        ;;
+    status|stat|info)
+        cmd_status
+        ;;
+    restart|reload)
+        cmd_restart
+        ;;
+    logs|log)
+        cmd_logs
+        ;;
+    enable)
+        cmd_enable
+        ;;
+    disable)
+        cmd_disable
+        ;;
+    help|-h|--help)
+        show_help
+        ;;
+    *)
+        echo "Unknown command: $1" >&2
+        show_help
+        exit 1
+        ;;
+esac
