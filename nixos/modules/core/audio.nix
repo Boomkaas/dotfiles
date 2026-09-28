@@ -26,6 +26,6 @@
   ];
 
   boot.extraModprobeConfig = ''
-    options snd-hda-intel patch=alc256-vivobook.fw
+    options snd-hda-intel patch=alc256-vivobook.fw power_save=0
   '';
 }
