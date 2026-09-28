@@ -223,7 +223,7 @@ The NixOS configuration is built on flakes with a modular separation of concerns
   - **Session Flags**: `NIXOS_OZONE_WL = "1"` and `QT_QPA_PLATFORM = "wayland"` for native Wayland execution across Electron and Qt apps.
 - **`audio.nix`**:
   - **Sound Server**: PipeWire with ALSA (including 32-bit support), PulseAudio replacement, and JACK.
-  - **ASUS ALC256 Audio Fix**: Injects kernel module option `snd-hda-intel model=alc256-asus-mic` to resolve internal and headset microphone pin routing on ASUS VivoBook laptops (e.g. X409FA).
+  - **ASUS ALC256 Audio Fix**: Injects kernel module option `snd-hda-intel patch=alc256-vivobook.fw` with pin routing firmware (`alc256-vivobook.fw`) to resolve internal and headset microphone pin routing on ASUS VivoBook laptops (e.g. X409FA / X509JP).
 - **`connections.nix`**:
   - **Networking & Firewall**: NetworkManager enabled with open TCP firewall port `8080` (web dev). PostgreSQL port 5432 is strictly bound to localhost for security.
   - **Trusted Interfaces**: `ham0` (LogMeIn Hamachi VPN adapter) added to `networking.firewall.trustedInterfaces` for seamless LAN gaming and file transfers.

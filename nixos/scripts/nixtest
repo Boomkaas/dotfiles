@@ -311,7 +311,7 @@ mod_audio() {
   has  "PipeWire: PulseAudio compat enabled"  "$NIXOS_DIR/modules/core/audio.nix" 'pulse\.enable\s*=\s*true'
   has  "PipeWire: JACK support enabled"       "$NIXOS_DIR/modules/core/audio.nix" 'jack\.enable\s*=\s*true'
   has  "PulseAudio standalone: disabled"      "$NIXOS_DIR/modules/core/audio.nix" 'pulseaudio\.enable\s*=\s*false'
-  has  "ALC256 mic quirk: alc256-asus-mic"    "$NIXOS_DIR/modules/core/audio.nix" 'alc256-asus-mic'
+  has  "ALC256 mic quirk: alc256-vivobook.fw" "$NIXOS_DIR/modules/core/audio.nix" 'alc256-vivobook\.fw'
 
   svc_active "Live: pipewire.service"       "pipewire"       "--user"
   svc_active "Live: wireplumber.service"    "wireplumber"    "--user"
