@@ -25,10 +25,24 @@
             "source.props" = {
               "node.name" = "echo_cancel_source";
               "node.description" = "Noise-Suppressed Microphone";
+              "priority.driver" = 3000;
+              "priority.session" = 3000;
             };
           };
         }
       ];
+    };
+  };
+
+  # Ensure ALC256 internal microphone hardware boost stays at 0 dB on startup to prevent saturation
+  systemd.user.services.calibrate-mic = {
+    description = "Calibrate ALC256 microphone boost gain";
+    wantedBy = [ "pipewire.service" ];
+    after = [ "pipewire.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.alsa-utils}/bin/amixer -c 0 cset numid=13 0";
+      RemainAfterExit = true;
     };
   };
 
