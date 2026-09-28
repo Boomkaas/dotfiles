@@ -116,6 +116,37 @@
     };
   };
 
+  # Memory Optimization: zRAM fast compressed in-memory swap for idle/cold background pages
+  zramSwap = {
+    enable = true;
+    algorithm = "zstd";
+    memoryPercent = 50;
+    priority = 100;
+  };
+
+  # Journald RAM & disk usage caps to prevent log cache bloat
+  services.journald.extraConfig = ''
+    SystemMaxUse=100M
+    RuntimeMaxUse=32M
+  '';
+
+  # Passwordless permission for dropping clean kernel page caches via `ram drop-caches`
+  security.sudo.extraRules = [
+    {
+      users = [ "peng" ];
+      commands = [
+        {
+          command = "/run/current-system/sw/bin/sysctl -w vm.drop_caches=3";
+          options = [ "NOPASSWD" ];
+        }
+        {
+          command = "${pkgs.procps}/bin/sysctl -w vm.drop_caches=3";
+          options = [ "NOPASSWD" ];
+        }
+      ];
+    }
+  ];
+
   # Standard Linux FHS compatibility for shell shebangs (e.g. #!/usr/bin/env bash, #!/bin/bash)
   system.activationScripts.binbash = {
     text = ''

@@ -163,21 +163,23 @@ declare -A WHITELIST_COMMS=(
     ["playerctld"]=1
 )
 
-declare -A WHITELIST_SYSTEMD_SERVICES
-while read -r svc_unit; do
-    [ -n "$svc_unit" ] && WHITELIST_SYSTEMD_SERVICES["$svc_unit"]=1
-done < <(systemctl --user list-units --type=service --state=running --no-legend 2>/dev/null | awk '{print $1}')
-
-WHITELIST_SYSTEMD_SERVICES["antigravity-cli-daemon.service"]=1
-WHITELIST_SYSTEMD_SERVICES["telegram-pc-bot.service"]=1
-WHITELIST_SYSTEMD_SERVICES["awww-daemon.service"]=1
-WHITELIST_SYSTEMD_SERVICES["hypridle.service"]=1
-WHITELIST_SYSTEMD_SERVICES["dbus.service"]=1
-WHITELIST_SYSTEMD_SERVICES["pipewire.service"]=1
-WHITELIST_SYSTEMD_SERVICES["wireplumber.service"]=1
-WHITELIST_SYSTEMD_SERVICES["pipewire-pulse.service"]=1
-WHITELIST_SYSTEMD_SERVICES["xdg-desktop-portal.service"]=1
-WHITELIST_SYSTEMD_SERVICES["gvfs-daemon.service"]=1
+declare -A WHITELIST_SYSTEMD_SERVICES=(
+    ["openclaw-gateway.service"]=1
+    ["telegram-pc-bot.service"]=1
+    ["antigravity-cli-daemon.service"]=1
+    ["awww-daemon.service"]=1
+    ["hypridle.service"]=1
+    ["dbus.service"]=1
+    ["pipewire.service"]=1
+    ["wireplumber.service"]=1
+    ["pipewire-pulse.service"]=1
+    ["xdg-desktop-portal.service"]=1
+    ["xdg-desktop-portal-gtk.service"]=1
+    ["xdg-desktop-portal-wlr.service"]=1
+    ["xdg-document-portal.service"]=1
+    ["xdg-permission-store.service"]=1
+    ["gvfs-daemon.service"]=1
+)
 
 is_whitelisted_proc() {
     local p="$1"
@@ -198,7 +200,7 @@ is_whitelisted_proc() {
     if [ -r "/proc/$p/cmdline" ]; then
         local pcmd
         pcmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)
-        if [[ "$pcmd" =~ (PcControlBot/venv/bin/python|remote-control\ serve|pinchtab\ server|pinchtab\ bridge) ]]; then
+        if [[ "$pcmd" =~ (PcControlBot/venv/bin/python|remote-control\ serve) ]]; then
             return 0
         fi
     fi
@@ -384,8 +386,7 @@ cmd_kill_processes() {
 # Flushes unwritten disk buffers and drops caches if allowed
 cmd_drop_caches() {
     sync
-    if sudo -n true 2>/dev/null; then
-        echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null 2>&1 || true
+    if sudo -n sysctl -w vm.drop_caches=3 >/dev/null 2>&1 || (sudo -n true 2>/dev/null && echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null 2>&1); then
         local swap_used
         swap_used=$(free -m | awk '/^Swap:/ {print $3}')
         if [ "${swap_used:-0}" -gt 0 ]; then
@@ -422,9 +423,14 @@ cmd_full_restore() {
     ram_before_human=$(get_ram_used_human)
 
     if [ "$dry_run" -eq 1 ]; then
+        local target_desc="~1.00 GiB"
+        if systemctl --user is-active --quiet openclaw-gateway.service 2>/dev/null; then
+            target_desc="~1.35 GiB (with OpenClaw Gateway)"
+        fi
+
         echo -e "${BOLD}${CYAN}=== DRY RUN: Restore Post-Boot State Simulation ===${RESET}"
         echo -e "Current RAM Used: ${YELLOW}${ram_before_human}${RESET} (${ram_before_mb} MiB)"
-        echo -e "Target Post-Boot RAM: ${GREEN}~1.00 GiB${RESET}\n"
+        echo -e "Target Post-Boot RAM: ${GREEN}${target_desc}${RESET}\n"
 
         cmd_close_windows 1
         echo ""
@@ -435,7 +441,7 @@ cmd_full_restore() {
         echo -e "  • Session:    mango (compositor), Xwayland, gdm-wayland-session"
         echo -e "  • UI Panel:   waybar, swaync, nm-applet, blueman-applet, polkit-mate, awww-daemon, hypridle"
         echo -e "  • Audio/IPC:  pipewire, wireplumber, xdg-desktop-portal*, dbus-daemon, systemd user daemons"
-        echo -e "  • Services:   telegram-pc-bot, antigravity-cli-daemon"
+        echo -e "  • Services:   openclaw-gateway, telegram-pc-bot, antigravity-cli-daemon"
         echo ""
         echo -e "${GREEN}Simulation complete. No processes or windows were modified.${RESET}"
         return 0
@@ -491,8 +497,8 @@ cmd_full_restore() {
     if [ "$clean_cache" -eq 1 ]; then
         rm -rf "$HOME/.cache/"* 2>/dev/null || true
     fi
-    if [ "$drop_caches" -eq 1 ] || sudo -n true 2>/dev/null; then
-        echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null 2>&1 || true
+    if [ "$drop_caches" -eq 1 ] || sudo -n sysctl -w vm.drop_caches=3 >/dev/null 2>&1 || sudo -n true 2>/dev/null; then
+        sudo -n sysctl -w vm.drop_caches=3 >/dev/null 2>&1 || echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null 2>&1 || true
     fi
 
     # 5. Calculate reclaimed RAM
@@ -556,14 +562,21 @@ cmd_status() {
     free_mb=$(get_ram_free_mb)
     avail_mb=$(get_ram_avail_mb)
 
+    local target_mb=1024
+    local target_desc="~1.00 GiB"
+    if systemctl --user is-active --quiet openclaw-gateway.service 2>/dev/null; then
+        target_mb=1380
+        target_desc="~1.35 GiB (with OpenClaw Gateway)"
+    fi
+
     local pct=$(( used_mb * 100 / total_mb ))
-    local reclaimable_est=$(( used_mb > 1024 ? used_mb - 1024 : 0 ))
+    local reclaimable_est=$(( used_mb > target_mb ? used_mb - target_mb : 0 ))
 
     echo -e "${BOLD}${CYAN}=== System Memory & Post-Boot Status ===${RESET}"
     echo -e "  ${BOLD}Total RAM:${RESET}          $(format_mb "$total_mb")"
     echo -e "  ${BOLD}Currently Used:${RESET}     ${YELLOW}$(format_mb "$used_mb")${RESET} (${pct}%)"
     echo -e "  ${BOLD}Available Memory:${RESET}   $(format_mb "$avail_mb")"
-    echo -e "  ${BOLD}Post-Boot Target:${RESET}   ${GREEN}~1.00 GiB${RESET}"
+    echo -e "  ${BOLD}Post-Boot Target:${RESET}   ${GREEN}${target_desc}${RESET}"
     echo -e "  ${BOLD}Est. Reclaimable:${RESET}   ${CYAN}$(format_mb "$reclaimable_est")${RESET}"
     echo ""
     echo -e "  ${BOLD}Active Windows:${RESET}     ${#CLIENT_WINDOW_WIDS[@]}"
@@ -590,13 +603,19 @@ cmd_preview() {
                     populate_targets
                     local used_mb avail_mb
                     used_mb=$(get_ram_used_mb)
-                    local rec_est=$(( used_mb > 1024 ? used_mb - 1024 : 0 ))
+                    local target_mb=1024
+                    local target_desc="~1.00 GiB"
+                    if systemctl --user is-active --quiet openclaw-gateway.service 2>/dev/null; then
+                        target_mb=1380
+                        target_desc="~1.35 GiB (with OpenClaw Gateway)"
+                    fi
+                    local rec_est=$(( used_mb > target_mb ? used_mb - target_mb : 0 ))
 
                     echo -e "${BOLD}${GREEN}=== Full Post-Boot State Restore ===${RESET}\n"
-                    echo -e "Returns the system to its fresh post-boot footprint (~1.0 GB RAM)."
+                    echo -e "Returns the system to its fresh post-boot footprint (${target_desc})."
                     echo -e "Closes all open graphical windows and terminates user tasks.\n"
                     echo -e "  ${BOLD}Current Used RAM:${RESET}    ${YELLOW}$(format_mb "$used_mb")${RESET}"
-                    echo -e "  ${BOLD}Target Boot RAM:${RESET}     ${GREEN}~1.00 GiB${RESET}"
+                    echo -e "  ${BOLD}Target Boot RAM:${RESET}     ${GREEN}${target_desc}${RESET}"
                     echo -e "  ${BOLD}Est. RAM Reclaimed:${RESET}  ${CYAN}$(format_mb "$rec_est")${RESET}"
                     echo -e "  ${BOLD}Windows to Close:${RESET}    ${#CLIENT_WINDOW_WIDS[@]}"
                     echo -e "  ${BOLD}Processes to Kill:${RESET}   ${#TARGET_PROCS[@]}\n"
@@ -605,7 +624,7 @@ cmd_preview() {
                     echo -e "  ✓ Waybar Status Bar & SwayNC Notifications"
                     echo -e "  ✓ NetworkManager & Bluetooth Applets"
                     echo -e "  ✓ PipeWire & WirePlumber Audio Stack"
-                    echo -e "  ✓ Telegram Bot & Antigravity Daemons"
+                    echo -e "  ✓ OpenClaw Gateway & Telegram Bot & Antigravity"
                     echo -e "  ✓ Polkit Agent & Wallpaper Daemon"
                     ;;
                 windows)
@@ -715,15 +734,21 @@ cmd_interactive() {
         total_mb=$(get_ram_total_mb)
         used_mb=$(get_ram_used_mb)
         avail_mb=$(get_ram_avail_mb)
+        local target_mb=1024
+        local target_desc="~1.00 GiB"
+        if systemctl --user is-active --quiet openclaw-gateway.service 2>/dev/null; then
+            target_mb=1380
+            target_desc="~1.35 GiB"
+        fi
         local pct=$(( used_mb * 100 / total_mb ))
-        local rec_est=$(( used_mb > 1024 ? used_mb - 1024 : 0 ))
+        local rec_est=$(( used_mb > target_mb ? used_mb - target_mb : 0 ))
 
-        local header="RAM: $(format_mb "$used_mb") / $(format_mb "$total_mb") (${pct}%) | Target: ~1.00 GiB | Freeable: $(format_mb "$rec_est")"
+        local header="RAM: $(format_mb "$used_mb") / $(format_mb "$total_mb") (${pct}%) | Target: ${target_desc} | Freeable: $(format_mb "$rec_est")"
 
         local menu=()
 
         # Primary Actions
-        menu+=("󰜉  [FULL RESTORE] Reset System to Fresh Post-Boot State (~1.0 GB RAM)"$'\t'"action:restore")
+        menu+=("󰜉  [FULL RESTORE] Reset System to Fresh Post-Boot State (${target_desc})"$'\t'"action:restore")
         menu+=("󰖲  [CLOSE WINDOWS] Gracefully Close All Open Graphical Applications (${#CLIENT_WINDOW_WIDS[@]})"$'\t'"action:windows")
         menu+=("󰍛  [KILL PROCESSES] Terminate Stray Background User Processes (${#TARGET_PROCS[@]})"$'\t'"action:procs")
         menu+=("󰚰  [DROP CACHES] Flush Disk Buffers & Drop Kernel Page Cache"$'\t'"action:drop_caches")
