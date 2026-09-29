@@ -274,6 +274,18 @@ cmd_flake_info() {
     fi
 }
 
+cmd_sync_boot() {
+    echo -e "${BOLD}${CYAN}=== Sync Bootloader Entries ===${RESET}"
+    echo -e "${YELLOW}Updating bootloader to match current NixOS generations...${RESET}\n"
+    if sudo "$PROFILES_DIR/system/bin/switch-to-configuration" boot; then
+        notify normal "nix-snowflake" "Bootloader Synced" "Bootloader entries synced with current generations"
+        echo -e "\n${GREEN}Bootloader successfully synced with current generations.${RESET}"
+    else
+        echo -e "\n${RED}Failed to sync bootloader entries.${RESET}" >&2
+        return 1
+    fi
+}
+
 cmd_clean_gc() {
     local keep="${1:-3}"
     echo -e "${BOLD}${CYAN}=== Nix Clean & Garbage Collection ===${RESET}"
@@ -282,8 +294,15 @@ cmd_clean_gc() {
     sudo nix-env --profile "$PROFILES_DIR/system" --delete-generations "+$keep"
     sudo nix-store --gc
 
-    notify normal "user-trash" "Nix Cleaned" "Kept latest $keep generations; garbage collected."
-    echo -e "\n${GREEN}NixOS generations cleaned and store garbage collected.${RESET}"
+    echo -e "\n${YELLOW}Syncing bootloader entries with remaining generations...${RESET}"
+    if sudo "$PROFILES_DIR/system/bin/switch-to-configuration" boot; then
+        echo -e "${GREEN}Bootloader entries pruned and updated.${RESET}"
+    else
+        echo -e "${RED}Warning: Failed to update bootloader entries.${RESET}" >&2
+    fi
+
+    notify normal "user-trash" "Nix Cleaned" "Kept latest $keep generations; bootloader updated."
+    echo -e "\n${GREEN}NixOS generations cleaned, store garbage collected, and bootloader synced.${RESET}"
 }
 
 cmd_optimise() {
@@ -431,6 +450,13 @@ cmd_preview() {
                     echo ""
                     echo -e "  ${BOLD}Hotkey:${RESET} ${CYAN}Ctrl-G${RESET}"
                     ;;
+                sync_boot)
+                    echo -e "${BOLD}${CYAN}=== Sync Bootloader Entries ===${RESET}"
+                    echo -e "Re-installs the bootloader configuration (systemd-boot)"
+                    echo -e "to prune deleted generations and sync entries with active profiles."
+                    echo ""
+                    echo -e "  ${BOLD}Command:${RESET}  sudo $PROFILES_DIR/system/bin/switch-to-configuration boot"
+                    ;;
                 optimise)
                     echo -e "${BOLD}${CYAN}=== Deduplicate Nix Store ===${RESET}"
                     echo -e "Runs 'nix-store --optimise' to scan for identical files"
@@ -492,6 +518,7 @@ cmd_interactive() {
         menu+=("󰑓  Dry-run Flake Rebuild (dry-build)"$'\t'"action:dry_build")
         menu+=("󰘳  Flake Metadata & Inputs Info"$'\t'"action:flake_info")
         menu+=("󰚰  Clean Old Generations & Run GC"$'\t'"action:clean_gc")
+        menu+=("󰌢  Sync Bootloader Entries"$'\t'"action:sync_boot")
         menu+=("󱂬  Optimise Nix Store (Deduplicate)"$'\t'"action:optimise")
 
         local res key choice
@@ -616,7 +643,13 @@ cmd_interactive() {
                         clear
                         echo -e "${YELLOW}Deleting Generation $item_id...${RESET}"
                         sudo nix-env --profile "$PROFILES_DIR/system" --delete-generations "$item_id"
-                        echo -e "${GREEN}Generation $item_id deleted.${RESET}"
+                        echo -e "${GREEN}Generation $item_id deleted from profiles.${RESET}"
+                        echo -e "\n${YELLOW}Syncing bootloader entries...${RESET}"
+                        if sudo "$PROFILES_DIR/system/bin/switch-to-configuration" boot; then
+                            echo -e "${GREEN}Bootloader entries updated.${RESET}"
+                        else
+                            echo -e "${RED}Warning: Failed to update bootloader entries.${RESET}" >&2
+                        fi
                         echo ""
                         echo -ne "${BOLD}Press Enter to return...${RESET}"
                         read -r
@@ -661,6 +694,13 @@ cmd_interactive() {
                         echo -ne "${BOLD}Press Enter to return...${RESET}"
                         read -r
                         ;;
+                    sync_boot)
+                        clear
+                        cmd_sync_boot
+                        echo ""
+                        echo -ne "${BOLD}Press Enter to return...${RESET}"
+                        read -r
+                        ;;
                     optimise)
                         clear
                         cmd_optimise
@@ -690,6 +730,7 @@ ${BOLD}USAGE:${RESET}
     nixos dry-build                 Evaluate flake dry-run without building
     nixos rebuild                   Rebuild system from dotfiles (calls nixreb)
     nixos gc [keep]                 Clean old generations (default keep: 3) and run GC
+    nixos sync-boot                 Sync bootloader entries with current generations (sudo)
     nixos optimise                  Deduplicate store paths using hard links
     nixos preview <target>          Internal preview generator for fzf
     nixos help                      Show this help message
@@ -722,6 +763,7 @@ case "${1:-}" in
     dry-build|dry) cmd_dry_build ;;
     rebuild) shift; cmd_rebuild "$@" ;;
     gc|clean) cmd_clean_gc "${2:-3}" ;;
+    sync-boot|boot-sync) cmd_sync_boot ;;
     optimise|optimize) cmd_optimise ;;
     preview) cmd_preview "$2" ;;
     help|--help|-h) cmd_help ;;
