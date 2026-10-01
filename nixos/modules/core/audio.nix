@@ -17,7 +17,7 @@
           name = "libpipewire-module-echo-cancel";
           args = {
             "library.name" = "aec/libspa-aec-webrtc";
-            "monitor.mode" = true;
+            "monitor.mode" = false;
             "capture.props" = {
               "node.name" = "echo_cancel_capture";
               "node.description" = "Echo-Cancellation Capture";
@@ -32,8 +32,11 @@
       ];
     };
 
-    # Prevent Bluetooth devices from suspending when idle to fix audio disappearance on pause/resume
+    # Prevent Bluetooth devices from suspending when idle and prevent autoswitching to low-quality headset profile
     wireplumber.extraConfig."10-bluez" = {
+      "wireplumber.settings" = {
+        "bluetooth.autoswitch-to-headset-profile" = false;
+      };
       "monitor.bluez.rules" = [
         {
           matches = [
