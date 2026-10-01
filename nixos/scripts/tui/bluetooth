@@ -123,6 +123,19 @@ get_device_name() {
     echo "${name:-$mac}"
 }
 
+get_battery_percentage() {
+    local mac="$1"
+    local raw
+    raw=$(bluetoothctl info "$mac" 2>/dev/null | grep -i "Battery Percentage" | head -n 1)
+    [ -z "$raw" ] && return
+    local pct
+    pct=$(echo "$raw" | sed -nE 's/.*\(([0-9]+)\).*/\1/p')
+    if [ -z "$pct" ]; then
+        pct=$(echo "$raw" | cut -d: -f2- | tr -dc '0-9')
+    fi
+    echo "$pct"
+}
+
 rssi_to_bar() {
     local rssi="${1:-}"
     local r_num
@@ -197,7 +210,7 @@ cmd_status() {
             local dname icon bat_info rssi_info
             dname=$(get_device_name "$mac")
             icon=$(get_device_icon "$mac" "$dname")
-            bat_info=$(bluetoothctl info "$mac" 2>/dev/null | grep -i "Battery Percentage" | awk -F'[:()]' '{print $2}' | xargs || true)
+            bat_info=$(get_battery_percentage "$mac")
             rssi_info=$(bluetoothctl info "$mac" 2>/dev/null | grep -E "^\s*RSSI:" | head -n 1 | awk '{print $2}' || true)
             
             local bat_str=""
@@ -245,9 +258,9 @@ cmd_list() {
 
         if [ "${CONNECTED_MAP["$mac"]}" = "1" ]; then
             local bat_info
-            bat_info=$(bluetoothctl info "$mac" 2>/dev/null | grep -i "Battery Percentage" | awk -F'[:()]' '{print $2}' | xargs || true)
+            bat_info=$(get_battery_percentage "$mac")
             local extra=""
-            [ -n "$bat_info" ] && extra=" [Battery: $bat_info%]"
+            [ -n "$bat_info" ] && extra=" (Battery: $bat_info%)"
             conn_list+=("$(printf "${GREEN}✓ %s %-26s${RESET} %-17s %s" "$icon" "$name" "$mac" "${GREEN}[Connected$extra]${RESET}")")
         elif [ "${PAIRED_MAP["$mac"]}" = "1" ]; then
             paired_list+=("$(printf "${YELLOW}★ %s %-26s${RESET} %-17s %s" "$icon" "$name" "$mac" "${YELLOW}[Paired]${RESET}")")
@@ -453,17 +466,25 @@ cmd_info() {
     bluetoothctl info "$mac" 2>/dev/null || echo -e "${RED}No info available for $mac${RESET}"
 }
 
+cmd_on() {
+    rfkill unblock bluetooth >/dev/null 2>&1 || true
+    bluetoothctl power on >/dev/null 2>&1 || true
+    echo -e "${GREEN}Bluetooth powered ON.${RESET}"
+}
+
+cmd_off() {
+    bluetoothctl scan off >/dev/null 2>&1 || true
+    bluetoothctl power off >/dev/null 2>&1 || true
+    echo -e "${YELLOW}Bluetooth powered OFF.${RESET}"
+}
+
 cmd_toggle() {
     local power
     power=$(get_power_status)
     if [ "$power" = "on" ]; then
-        bluetoothctl scan off >/dev/null 2>&1 || true
-        bluetoothctl power off
-        echo -e "${YELLOW}Bluetooth powered OFF.${RESET}"
+        cmd_off
     else
-        rfkill unblock bluetooth >/dev/null 2>&1 || true
-        bluetoothctl power on
-        echo -e "${GREEN}Bluetooth powered ON.${RESET}"
+        cmd_on
     fi
 }
 
@@ -516,7 +537,7 @@ cmd_preview() {
         connected=$(echo "$info" | grep -E "^\s*Connected:" | head -n 1 | awk '{print $2}')
         trusted=$(echo "$info" | grep -E "^\s*Trusted:" | head -n 1 | awk '{print $2}')
         blocked=$(echo "$info" | grep -E "^\s*Blocked:" | head -n 1 | awk '{print $2}')
-        battery=$(echo "$info" | grep -i "Battery Percentage" | head -n 1 | awk -F'[:()]' '{print $2}' | xargs)
+        battery=$(get_battery_percentage "$mac")
         rssi=$(echo "$info" | grep -E "^\s*RSSI:" | head -n 1 | awk '{print $2}')
         txpower=$(echo "$info" | grep -E "^\s*TxPower:" | head -n 1 | awk '{print $2}')
         icon_raw=$(echo "$info" | grep -E "^\s*Icon:" | head -n 1 | awk '{print $2}')
@@ -538,7 +559,7 @@ cmd_preview() {
         local uuids
         uuids=$(echo "$info" | grep -E "^\s*UUID:" | awk '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | sed 's/(.*)//g' | tr -s ' ' | head -n 3)
         if [ -n "$uuids" ]; then
-            echo -e "  ${BOLD}Services:${RESET}  $(echo "$uuids" | tr '\n' ',' | sed 's/,$//; s/,/, /g')"
+            echo -e "  ${BOLD}Services:${RESET}  $(echo "$uuids" | xargs | sed 's/ , /, /g; s/,$//')"
         fi
     fi
 
@@ -579,6 +600,7 @@ cmd_interactive() {
             header_info="Bluetooth: ON ($conn_count connected)"
         fi
 
+        unset CONNECTED_MAP PAIRED_MAP
         declare -A CONNECTED_MAP PAIRED_MAP
 
         while read -r _ mac _; do
@@ -798,7 +820,7 @@ ${BOLD}USAGE:${RESET}
     bluetooth trust <device|MAC>    Toggle trust on a device
     bluetooth remove <device|MAC>   Unpair / remove a device
     bluetooth info <device|MAC>     Show detailed info and battery
-    bluetooth on | off | toggle     Power Bluetooth controller ON or OFF
+    bluetooth on | off | toggle     Power Bluetooth controller ON or OFF (aliases: enable, disable, power [on|off])
     bluetooth ctl                   Open interactive bluetoothctl console
     bluetooth help | -h             Show this help message
 
@@ -863,18 +885,23 @@ case "${1:-}" in
         shift
         cmd_preview "$@"
         ;;
-    on)
-        rfkill unblock bluetooth >/dev/null 2>&1 || true
-        bluetoothctl power on
-        echo -e "${GREEN}Bluetooth powered ON.${RESET}"
+    on|enable|up|start)
+        cmd_on
         ;;
-    off)
-        bluetoothctl scan off >/dev/null 2>&1 || true
-        bluetoothctl power off
-        echo -e "${YELLOW}Bluetooth powered OFF.${RESET}"
+    off|disable|down|stop)
+        cmd_off
         ;;
     toggle)
         cmd_toggle
+        ;;
+    power)
+        shift
+        case "${1:-}" in
+            on|enable|up|start) cmd_on ;;
+            off|disable|down|stop) cmd_off ;;
+            toggle|"") cmd_toggle ;;
+            *) echo -e "${RED}Usage: bluetooth power [on|off|toggle]${RESET}" >&2 ;;
+        esac
         ;;
     ctl|console)
         bluetoothctl

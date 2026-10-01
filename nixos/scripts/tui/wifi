@@ -40,7 +40,15 @@ get_wifi_iface() {
 }
 
 get_wifi_status() {
-    nmcli -t -f WIFI g 2>/dev/null || echo "disabled"
+    if rfkill list wifi 2>/dev/null | grep -qi "Soft blocked: yes"; then
+        echo "disabled"
+    elif [ "$(nmcli radio wifi 2>/dev/null)" = "disabled" ]; then
+        echo "disabled"
+    else
+        local s
+        s=$(nmcli -t -f WIFI g 2>/dev/null || echo "disabled")
+        echo "$s"
+    fi
 }
 
 get_active_ssid() {
@@ -188,6 +196,12 @@ cmd_scan() {
         return 1
     fi
 
+    if [ "$(get_wifi_status)" = "disabled" ]; then
+        echo -e "${YELLOW}Wi-Fi is currently disabled. Enabling Wi-Fi radio...${RESET}"
+        cmd_on
+        sleep 1
+    fi
+
     echo -e "${CYAN}Scanning nearby Wi-Fi networks...${RESET}"
     nmcli dev wifi rescan >/dev/null 2>&1 || true
 
@@ -298,6 +312,12 @@ cmd_connect() {
         fi
     fi
 
+    if [ "$(get_wifi_status)" = "disabled" ]; then
+        echo -e "${YELLOW}Wi-Fi is currently OFF. Turning it ON...${RESET}"
+        cmd_on
+        sleep 1
+    fi
+
     if is_saved_ssid "$target_ssid"; then
         echo -e "${CYAN}Connecting to saved profile: ${BOLD}$target_ssid${RESET}..."
         if nmcli con up id "$target_ssid"; then
@@ -395,15 +415,25 @@ cmd_forget() {
     fi
 }
 
+cmd_on() {
+    rfkill unblock wifi >/dev/null 2>&1 || true
+    nmcli radio wifi on >/dev/null 2>&1 || true
+    echo -e "${GREEN}Wi-Fi turned ON.${RESET}"
+}
+
+cmd_off() {
+    nmcli radio wifi off >/dev/null 2>&1 || true
+    rfkill block wifi >/dev/null 2>&1 || true
+    echo -e "${YELLOW}Wi-Fi turned OFF.${RESET}"
+}
+
 cmd_toggle() {
     local status
     status=$(get_wifi_status)
     if [ "$status" = "enabled" ]; then
-        nmcli radio wifi off
-        echo -e "${YELLOW}Wi-Fi turned OFF.${RESET}"
+        cmd_off
     else
-        nmcli radio wifi on
-        echo -e "${GREEN}Wi-Fi turned ON.${RESET}"
+        cmd_on
     fi
 }
 
@@ -458,75 +488,84 @@ cmd_monitor() {
         printf "${BOLD}%-2s %-2s %-12s %-5s %-4s %-9s %-12s %-12s %s${RESET}\n" "ST" "" "SIGNAL" "QUAL" "CHAN" "BAND" "SECURITY" "MAX RATE" "SSID"
         echo -e "${DIM}------------------------------------------------------------------------------------------------${RESET}"
 
-        local raw_list
-        raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null || true)
-        
-        declare -A SEEN_MON_SIG SEEN_MON_CHAN SEEN_MON_BAND SEEN_MON_SEC SEEN_MON_RATE SEEN_MON_ACT
-        while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            local line_sub="${line//\\:/$'\001'}"
-            local m_in_use m_ssid m_bssid m_chan m_freq m_rate m_sig m_bars m_sec
-            IFS=':' read -r m_in_use m_ssid m_bssid m_chan m_freq m_rate m_sig m_bars m_sec <<< "$line_sub"
-            [ -z "$m_ssid" ] || [ "$m_ssid" = "--" ] && continue
-
-            local is_act=0
-            [ "$m_in_use" = "*" ] || [ "$m_ssid" = "$active_ssid" ] && is_act=1
-
-            local s_num
-            s_num=$(echo "$m_sig" | tr -dc '0-9')
-            [ -z "$s_num" ] && s_num=0
-
-            if [ -z "${SEEN_MON_SIG["$m_ssid"]+x}" ] || [ "$s_num" -gt "${SEEN_MON_SIG["$m_ssid"]}" ] || [ "$is_act" -eq 1 ]; then
-                SEEN_MON_SIG["$m_ssid"]="$s_num"
-                SEEN_MON_CHAN["$m_ssid"]="$m_chan"
-                SEEN_MON_BAND["$m_ssid"]="$(freq_to_band "$m_freq")"
-                SEEN_MON_SEC["$m_ssid"]="$m_sec"
-                SEEN_MON_RATE["$m_ssid"]="$m_rate"
-                SEEN_MON_ACT["$m_ssid"]="$is_act"
-            fi
-        done <<< "$raw_list"
-
         local out_lines=()
-        for s in "${!SEEN_MON_SIG[@]}"; do
-            local sig="${SEEN_MON_SIG["$s"]}"
-            local chan="${SEEN_MON_CHAN["$s"]}"
-            local band="${SEEN_MON_BAND["$s"]}"
-            local sec="${SEEN_MON_SEC["$s"]}"
-            local rate="${SEEN_MON_RATE["$s"]}"
-            local is_act="${SEEN_MON_ACT["$s"]}"
-            local is_saved=0
-            is_saved_ssid "$s" && is_saved=1
+        unset SEEN_MON_SIG SEEN_MON_CHAN SEEN_MON_BAND SEEN_MON_SEC SEEN_MON_RATE SEEN_MON_ACT
+        declare -A SEEN_MON_SIG SEEN_MON_CHAN SEEN_MON_BAND SEEN_MON_SEC SEEN_MON_RATE SEEN_MON_ACT
 
-            local st_tag="  "
-            if [ "$is_act" -eq 1 ]; then st_tag="${GREEN}✓ ${RESET}"
-            elif [ "$is_saved" -eq 1 ]; then st_tag="${YELLOW}★ ${RESET}"
-            fi
+        if [ "$status" != "disabled" ]; then
+            local raw_list
+            raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null || true)
+            
+            while IFS= read -r line; do
+                [ -z "$line" ] && continue
+                local line_sub="${line//\\:/$'\001'}"
+                local m_in_use m_ssid m_bssid m_chan m_freq m_rate m_sig m_bars m_sec
+                IFS=':' read -r m_in_use m_ssid m_bssid m_chan m_freq m_rate m_sig m_bars m_sec <<< "$line_sub"
+                [ -z "$m_ssid" ] || [ "$m_ssid" = "--" ] && continue
 
-            local icon
-            icon=$(sig_to_icon "$sig")
-            local bar
-            bar=$(sig_to_bar "$sig")
-            local sec_lbl="${sec:---}"
-            [ "$sec_lbl" = "--" ] && sec_lbl="Open"
+                local is_act=0
+                [ "$m_in_use" = "*" ] || [ "$m_ssid" = "$active_ssid" ] && is_act=1
 
-            out_lines+=("$(printf "%s %s %s %3d%%  %-4s %-9s %-12s %-12s %s" "$st_tag" "$icon" "$bar" "$sig" "$chan" "$band" "$sec_lbl" "$rate" "$s")")
-        done
+                local s_num
+                s_num=$(echo "$m_sig" | tr -dc '0-9')
+                [ -z "$s_num" ] && s_num=0
+
+                if [ -z "${SEEN_MON_SIG["$m_ssid"]+x}" ] || [ "$s_num" -gt "${SEEN_MON_SIG["$m_ssid"]}" ] || [ "$is_act" -eq 1 ]; then
+                    SEEN_MON_SIG["$m_ssid"]="$s_num"
+                    SEEN_MON_CHAN["$m_ssid"]="$m_chan"
+                    SEEN_MON_BAND["$m_ssid"]="$(freq_to_band "$m_freq")"
+                    SEEN_MON_SEC["$m_ssid"]="$m_sec"
+                    SEEN_MON_RATE["$m_ssid"]="$m_rate"
+                    SEEN_MON_ACT["$m_ssid"]="$is_act"
+                fi
+            done <<< "$raw_list"
+
+            for s in "${!SEEN_MON_SIG[@]}"; do
+                local sig="${SEEN_MON_SIG["$s"]}"
+                local chan="${SEEN_MON_CHAN["$s"]}"
+                local band="${SEEN_MON_BAND["$s"]}"
+                local sec="${SEEN_MON_SEC["$s"]}"
+                local rate="${SEEN_MON_RATE["$s"]}"
+                local is_act="${SEEN_MON_ACT["$s"]}"
+                local is_saved=0
+                is_saved_ssid "$s" && is_saved=1
+
+                local st_tag="  "
+                if [ "$is_act" -eq 1 ]; then st_tag="${GREEN}✓ ${RESET}"
+                elif [ "$is_saved" -eq 1 ]; then st_tag="${YELLOW}★ ${RESET}"
+                fi
+
+                local icon
+                icon=$(sig_to_icon "$sig")
+                local bar
+                bar=$(sig_to_bar "$sig")
+                local sec_lbl="${sec:---}"
+                [ "$sec_lbl" = "--" ] && sec_lbl="Open"
+
+                out_lines+=("$(printf "%s %s %s %3d%%  %-4s %-9s %-12s %-12s %s" "$st_tag" "$icon" "$bar" "$sig" "$chan" "$band" "$sec_lbl" "$rate" "$s")")
+            done
+        fi
 
         if [ ${#out_lines[@]} -gt 0 ]; then
             printf "%s\n" "${out_lines[@]}" | sort -k1,1r -k4,4nr | head -n 14
+        elif [ "$status" = "disabled" ]; then
+            echo -e "  ${YELLOW}Wi-Fi is powered OFF. Press 'w' to turn it ON.${RESET}"
         else
             echo -e "  ${DIM}No networks detected. Scanning...${RESET}"
         fi
 
         echo ""
-        echo -e "${DIM}Auto-refreshing every 3s | Press 'q' or 'Ctrl-C' to exit | 'r' to rescan immediately${RESET}"
+        echo -e "${DIM}Auto-refreshing every 3s | Press 'q' to exit | 'r' to rescan | 'w' to toggle radio${RESET}"
         
         local user_key=""
         read -t 3 -n 1 user_key 2>/dev/null || true
         if [[ "$user_key" == "q" ]] || [[ "$user_key" == "Q" ]]; then
             break
         elif [[ "$user_key" == "r" ]] || [[ "$user_key" == "R" ]]; then
-            nmcli dev wifi rescan >/dev/null 2>&1 || true
+            [ "$status" = "enabled" ] && nmcli dev wifi rescan >/dev/null 2>&1 || true
+        elif [[ "$user_key" == "w" ]] || [[ "$user_key" == "W" ]]; then
+            cmd_toggle
+            sleep 0.5
         fi
     done
     tput cnorm 2>/dev/null || true
@@ -644,42 +683,46 @@ cmd_interactive() {
             header_info="Wi-Fi: ON (Disconnected)"
         fi
 
-        # Fetch scanned networks
-        local raw_list
-        raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null || true)
-        if [ -z "$raw_list" ]; then
-            nmcli dev wifi rescan >/dev/null 2>&1 || true
-            sleep 1
-            raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null || true)
-        fi
-
+        # Reset associative arrays per iteration
+        unset SEEN_SIG SEEN_SEC SEEN_BAND SEEN_CHAN SEEN_RATE SEEN_ACT
         declare -A SEEN_SIG SEEN_SEC SEEN_BAND SEEN_CHAN SEEN_RATE SEEN_ACT
 
-        while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            local line_sub="${line//\\:/$'\001'}"
-            local in_use ssid bssid chan freq rate signal bars security
-            IFS=':' read -r in_use ssid bssid chan freq rate signal bars security <<< "$line_sub"
-
-            [ -z "$ssid" ] || [ "$ssid" = "--" ] && continue
-            local sig_num
-            sig_num=$(echo "$signal" | tr -dc '0-9')
-            [ -z "$sig_num" ] && sig_num=0
-
-            local is_act=0
-            if [ "$in_use" = "*" ] || [ "$ssid" = "$active_ssid" ]; then
-                is_act=1
+        if [ "$status" != "disabled" ]; then
+            # Fetch scanned networks
+            local raw_list
+            raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null || true)
+            if [ -z "$raw_list" ]; then
+                nmcli dev wifi rescan >/dev/null 2>&1 || true
+                sleep 0.5
+                raw_list=$(nmcli -t -f IN-USE,SSID,BSSID,CHAN,FREQ,RATE,SIGNAL,BARS,SECURITY dev wifi list --rescan no 2>/dev/null || true)
             fi
 
-            if [ -z "${SEEN_SIG["$ssid"]+x}" ] || [ "$sig_num" -gt "${SEEN_SIG["$ssid"]}" ] || [ "$is_act" -eq 1 ]; then
-                SEEN_SIG["$ssid"]="$sig_num"
-                SEEN_SEC["$ssid"]="$security"
-                SEEN_BAND["$ssid"]="$(freq_to_band "$freq")"
-                SEEN_CHAN["$ssid"]="$chan"
-                SEEN_RATE["$ssid"]="$rate"
-                SEEN_ACT["$ssid"]="$is_act"
-            fi
-        done <<< "$raw_list"
+            while IFS= read -r line; do
+                [ -z "$line" ] && continue
+                local line_sub="${line//\\:/$'\001'}"
+                local in_use ssid bssid chan freq rate signal bars security
+                IFS=':' read -r in_use ssid bssid chan freq rate signal bars security <<< "$line_sub"
+
+                [ -z "$ssid" ] || [ "$ssid" = "--" ] && continue
+                local sig_num
+                sig_num=$(echo "$signal" | tr -dc '0-9')
+                [ -z "$sig_num" ] && sig_num=0
+
+                local is_act=0
+                if [ "$in_use" = "*" ] || [ "$ssid" = "$active_ssid" ]; then
+                    is_act=1
+                fi
+
+                if [ -z "${SEEN_SIG["$ssid"]+x}" ] || [ "$sig_num" -gt "${SEEN_SIG["$ssid"]}" ] || [ "$is_act" -eq 1 ]; then
+                    SEEN_SIG["$ssid"]="$sig_num"
+                    SEEN_SEC["$ssid"]="$security"
+                    SEEN_BAND["$ssid"]="$(freq_to_band "$freq")"
+                    SEEN_CHAN["$ssid"]="$chan"
+                    SEEN_RATE["$ssid"]="$rate"
+                    SEEN_ACT["$ssid"]="$is_act"
+                fi
+            done <<< "$raw_list"
+        fi
 
         # Build menu items (with tab delimiters for preview and hotkey mapping)
         local menu=()
@@ -727,7 +770,9 @@ cmd_interactive() {
             net_lines+=("${disp}"$'\t'"${s}")
         done
 
-        if [ ${#net_lines[@]} -gt 0 ]; then
+        if [ "$status" = "disabled" ]; then
+            menu+=("󰖪  Wi-Fi is currently OFF (Select 'Turn Wi-Fi ON' above to scan)"$'\t'"__none__")
+        elif [ ${#net_lines[@]} -gt 0 ]; then
             while IFS= read -r sorted_line; do
                 [ -n "$sorted_line" ] && menu+=("$sorted_line")
             done < <(printf "%s\n" "${net_lines[@]}" | sort -k1,1r -k4,4nr)
@@ -883,7 +928,8 @@ ${BOLD}USAGE:${RESET}
     wifi saved                   List saved Wi-Fi profiles
     wifi forget [SSID]           Delete a saved Wi-Fi profile
     wifi hidden                  Connect to a hidden Wi-Fi network
-    wifi on | off | toggle       Turn Wi-Fi radio ON or OFF
+    wifi on | off | toggle       Turn Wi-Fi radio ON or OFF (aliases: enable, disable)
+    wifi power [on|off|toggle]   Manage Wi-Fi radio power state
     wifi tui                     Open NetworkManager TUI (nmtui)
     wifi help | -h               Show this help message
 
@@ -922,7 +968,7 @@ case "${1:-}" in
         shift
         cmd_connect "$@"
         ;;
-    disconnect|d|down)
+    disconnect|d)
         cmd_disconnect
         ;;
     saved|profiles)
@@ -935,16 +981,23 @@ case "${1:-}" in
     hidden)
         cmd_hidden
         ;;
-    on)
-        nmcli radio wifi on
-        echo -e "${GREEN}Wi-Fi turned ON.${RESET}"
+    on|enable|up|start)
+        cmd_on
         ;;
-    off)
-        nmcli radio wifi off
-        echo -e "${YELLOW}Wi-Fi turned OFF.${RESET}"
+    off|disable|down|stop)
+        cmd_off
         ;;
     toggle)
         cmd_toggle
+        ;;
+    power|radio)
+        shift
+        case "${1:-}" in
+            on|enable|up|start) cmd_on ;;
+            off|disable|down|stop) cmd_off ;;
+            toggle|"") cmd_toggle ;;
+            *) echo -e "${RED}Usage: wifi power [on|off|toggle]${RESET}" >&2 ;;
+        esac
         ;;
     tui)
         nmtui

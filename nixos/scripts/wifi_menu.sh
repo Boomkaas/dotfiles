@@ -25,7 +25,13 @@ get_active_ssid() {
 }
 
 get_wifi_status() {
-    nmcli -t -f WIFI g 2>/dev/null || echo "disabled"
+    if rfkill list wifi 2>/dev/null | grep -qi "Soft blocked: yes"; then
+        echo "disabled"
+    elif [ "$(nmcli radio wifi 2>/dev/null)" = "disabled" ]; then
+        echo "disabled"
+    else
+        nmcli -t -f WIFI g 2>/dev/null || echo "disabled"
+    fi
 }
 
 connect_to_ssid() {
@@ -151,6 +157,7 @@ main_menu() {
         choice=$(echo -e "$off_options" | rofi -dmenu -i -p "󰖪 Wi-Fi Disabled" -theme-str 'window { width: 35%; height: 30%; } listview { lines: 3; }')
         case "$choice" in
             *"Turn Wi-Fi ON"*)
+                rfkill unblock wifi >/dev/null 2>&1 || true
                 nmcli radio wifi on
                 notify normal network-wireless "Wi-Fi" "Wi-Fi enabled"
                 sleep 0.5
@@ -322,6 +329,7 @@ main_menu() {
             ;;
         *"Turn Wi-Fi OFF"*)
             nmcli radio wifi off
+            rfkill block wifi >/dev/null 2>&1 || true
             notify normal network-wireless-disconnected "Wi-Fi" "Wi-Fi disabled"
             ;;
         *"Network Connections Editor"*)
