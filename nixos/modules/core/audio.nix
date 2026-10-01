@@ -10,28 +10,6 @@
     audio.enable = true;
     jack.enable = true;
 
-    # Real-time WebRTC noise cancellation, echo suppression, and high-pass DC filtering
-    extraConfig.pipewire."99-echo-cancel" = {
-      "context.modules" = [
-        {
-          name = "libpipewire-module-echo-cancel";
-          args = {
-            "library.name" = "aec/libspa-aec-webrtc";
-            "monitor.mode" = false;
-            "capture.props" = {
-              "node.name" = "echo_cancel_capture";
-              "node.description" = "Echo-Cancellation Capture";
-            };
-            "source.props" = {
-              "node.name" = "echo_cancel_source";
-              "node.description" = "Noise-Suppressed Microphone";
-              "priority.session" = 3000;
-            };
-          };
-        }
-      ];
-    };
-
     # Prevent Bluetooth devices from suspending when idle and prevent autoswitching to low-quality headset profile
     wireplumber.extraConfig."10-bluez" = {
       "wireplumber.settings" = {
