@@ -25,8 +25,25 @@
             "source.props" = {
               "node.name" = "echo_cancel_source";
               "node.description" = "Noise-Suppressed Microphone";
-              "priority.driver" = 3000;
               "priority.session" = 3000;
+            };
+          };
+        }
+      ];
+    };
+
+    # Prevent Bluetooth devices from suspending when idle to fix audio disappearance on pause/resume
+    wireplumber.extraConfig."10-bluez" = {
+      "monitor.bluez.rules" = [
+        {
+          matches = [
+            {
+              "node.name" = "~bluez_.*";
+            }
+          ];
+          actions = {
+            update-props = {
+              "session.suspend-timeout-seconds" = 0;
             };
           };
         }

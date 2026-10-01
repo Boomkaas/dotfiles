@@ -312,6 +312,7 @@ mod_audio() {
   has  "PipeWire: JACK support enabled"       "$NIXOS_DIR/modules/core/audio.nix" 'jack\.enable\s*=\s*true'
   has  "PulseAudio standalone: disabled"      "$NIXOS_DIR/modules/core/audio.nix" 'pulseaudio\.enable\s*=\s*false'
   has  "ALC256 mic quirk: alc256-vivobook.fw" "$NIXOS_DIR/modules/core/audio.nix" 'alc256-vivobook\.fw'
+  has  "WirePlumber: BT keepalive (no suspend)" "$NIXOS_DIR/modules/core/audio.nix" '"?session\.suspend-timeout-seconds"?\s*=\s*0'
 
   svc_active "Live: pipewire.service"       "pipewire"       "--user"
   svc_active "Live: wireplumber.service"    "wireplumber"    "--user"
