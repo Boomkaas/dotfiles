@@ -148,6 +148,12 @@ cmd_preview() {
     fi
 
     case "$target" in
+        action:toggle_scope)
+            echo -e "${BOLD}${CYAN}Switch View Scope${RESET}\n"
+            echo "Cycles the list filter to the next scope (shown in the item label)."
+            echo "Shortcut: press Tab anywhere in the menu."
+            return 0
+            ;;
         action:prune_docker)
             cat <<EOF
 ${BOLD}${CYAN}Prune Dangling Docker Objects${RESET}
@@ -228,8 +234,20 @@ show_action_menu() {
             local choice
             choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Container [$payload] > " --height=48% --reverse --border=rounded) || return 0
             case "$choice" in
-                1*) [ "$is_running" = "true" ] && cmd_stop "docker" "$payload" || cmd_start "docker" "$payload" ;;
-                2*) [ "$is_running" = "true" ] && cmd_restart "docker" "$payload" || docker rm "$payload" ;;
+                1*)
+                    if [ "$is_running" = "true" ]; then
+                        cmd_stop "docker" "$payload"
+                    else
+                        cmd_start "docker" "$payload"
+                    fi
+                    ;;
+                2*)
+                    if [ "$is_running" = "true" ]; then
+                        cmd_restart "docker" "$payload"
+                    else
+                        docker rm "$payload"
+                    fi
+                    ;;
                 3*) cmd_logs "$payload" ;;
                 4*) cmd_shell "$payload" ;;
                 5*) command -v wl-copy >/dev/null 2>&1 && echo -n "$payload" | wl-copy && notify "normal" "edit-copy" "Copied" "Copied ID" ;;

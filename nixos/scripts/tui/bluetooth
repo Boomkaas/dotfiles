@@ -861,7 +861,7 @@ case "${1:-}" in
         shift
         cmd_connect "$@"
         ;;
-    disconnect|d|down)
+    disconnect|d)
         shift
         cmd_disconnect "$@"
         ;;

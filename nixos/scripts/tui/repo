@@ -319,29 +319,29 @@ show_action_menu() {
     choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="Repo [$name] > " --height=50% --reverse --border=rounded) || return 0
 
     case "$choice" in
-        1*) open_in_lazygit "$target" ;;
-        2*) open_in_editor "$target" ;;
-        3*) open_in_ide "$target" ;;
-        4*) open_in_fm "$target" ;;
-        5*) thunar "$target" >/dev/null 2>&1 & ;;
-        6*) cmd_pull "$target" ;;
-        7*) cmd_push "$target" ;;
-        8*) cmd_commit "$target" ;;
-        9*)
+        1.*) open_in_lazygit "$target" ;;
+        2.*) open_in_editor "$target" ;;
+        3.*) open_in_ide "$target" ;;
+        4.*) open_in_fm "$target" ;;
+        5.*) thunar "$target" >/dev/null 2>&1 & ;;
+        6.*) cmd_pull "$target" ;;
+        7.*) cmd_push "$target" ;;
+        8.*) cmd_commit "$target" ;;
+        9.*)
             clear
             git -C "$target" diff HEAD | (command -v bat >/dev/null 2>&1 && bat --color=always -p -l diff || cat)
             echo ""
             echo -ne "${BOLD}Press Enter to return...${RESET}"
             read -r
             ;;
-        10*)
+        10.*)
             clear
             git -C "$target" log -n 30 --graph --pretty=format:'%C(yellow)%h%Creset %C(green)%ar%Creset %C(blue)%an%Creset %s%C(auto)%d%Creset' --color=always
             echo ""
             echo -ne "${BOLD}Press Enter to return...${RESET}"
             read -r
             ;;
-        11*)
+        11.*)
             if command -v wl-copy >/dev/null 2>&1; then
                 echo -n "$target" | wl-copy
                 notify "normal" "edit-copy" "Clipboard" "Copied repository path to clipboard"
@@ -433,7 +433,7 @@ cmd_interactive() {
             fi
 
             local label
-            label=$(printf "%s  %-26s %-16s %s" "$icon" "$name" "($branch)" "$badges")
+            label=$(printf "%s  %-26.25s %-16s %s" "$icon" "$name" "($branch)" "$badges")
             menu+=("${label}"$'\t'"$path")
         done
 
@@ -581,7 +581,7 @@ cmd_lazy() {
         fi
 
         local label
-        label=$(printf "  %-26s %-16s %s" "$name" "($branch)" "$badges")
+        label=$(printf "  %-26.25s %-16s %s" "$name" "($branch)" "$badges")
         menu+=("${label}"$'\t'"$path")
     done
 
@@ -614,7 +614,7 @@ cmd_list() {
         local st="Clean"
         [ "$is_dirty" -eq 1 ] && st="Mod:${mod_cnt}"
         [ "$ahead" -gt 0 ] && st+="/↑${ahead}"
-        printf "%-26s %-16s %-12s %s\n" "$name" "$branch" "$st" "$path"
+        printf "%-26.25s %-16s %-12s %s\n" "$name" "$branch" "$st" "$path"
     done < <(find_git_repos)
 }
 

@@ -88,14 +88,27 @@ get_dnd_status() {
 # High-speed cached power profile query
 get_power_profile() {
     local cache="/tmp/.setting_power_profile"
+    local ttl=60
     if [ -s "$cache" ]; then
-        cat "$cache" 2>/dev/null
-        return
+        local now mtime cached
+        printf -v now '%(%s)T' -1
+        mtime=$(stat -c %Y "$cache" 2>/dev/null || echo 0)
+        cached=$(tail -n1 "$cache" 2>/dev/null)
+        # Trust cache only while fresh and holding a valid profile name
+        if [ $(( now - mtime )) -lt "$ttl" ]; then
+            case "$cached" in
+                balanced|performance|power-saver) echo "$cached"; return ;;
+            esac
+        fi
     fi
 
     local p="balanced"
     if command -v powerprofilesctl &>/dev/null; then
-        p=$(powerprofilesctl get 2>/dev/null || echo "balanced")
+        p=$(powerprofilesctl get 2>/dev/null | tail -n1)
+        case "$p" in
+            balanced|performance|power-saver) ;;
+            *) p="balanced" ;;
+        esac
     fi
     echo "$p" > "$cache" 2>/dev/null || true
     echo "$p"
@@ -215,7 +228,7 @@ cmd_brightness_menu() {
         "󰃝  Set 20%"$'\t'"20%"
         "󰃝  Set 10% (Minimum Brightness)"$'\t'"10%"
         "󰃠  Increase +10%"$'\t'"+10%"
-        "󰃞  Decrease -10%"$'\t'"-10%"
+        "󰃞  Decrease -10%"$'\t'"10%-"
     )
 
     local res

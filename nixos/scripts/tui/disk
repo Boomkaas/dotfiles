@@ -156,6 +156,12 @@ cmd_preview() {
     fi
 
     case "$target" in
+        action:toggle_scope)
+            echo -e "${BOLD}${CYAN}Switch View Scope${RESET}\n"
+            echo "Cycles the list filter to the next scope (shown in the item label)."
+            echo "Shortcut: press Tab anywhere in the menu."
+            return 0
+            ;;
         action:clean_nix)
             echo -e "${BOLD}${CYAN}Nix Store Garbage Collection${RESET}\n"
             echo "Deletes old unreferenced Nix store generations, build outputs,"
