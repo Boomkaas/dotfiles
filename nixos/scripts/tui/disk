@@ -376,13 +376,13 @@ cmd_interactive() {
         # Invoke fzf
         local res key choice
         res=$(printf "%s\n" "${menu[@]}" | fzf \
-            --expect=ctrl-c,ctrl-o,ctrl-h,ctrl-m,ctrl-e,ctrl-f,tab \
+            --expect=ctrl-c,ctrl-o,ctrl-h,alt-m,ctrl-e,ctrl-f,tab \
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:52%:wrap \
             --prompt="󰋊  Disk ($current_scope) > " \
-            --header="[$header_info] (Enter: Actions | Ctrl-C: Clean Nix | Ctrl-O: Optimise | Ctrl-M: Mount | Ctrl-F: Yazi | Tab: Filter | Esc: Exit)" \
+            --header="[$header_info] (Enter: Actions | Ctrl-C: Clean Nix | Ctrl-O: Optimise | Alt-M: Mount | Ctrl-F: Yazi | Tab: Filter | Esc: Exit)" \
             --reverse \
             --height=100% \
             --border=rounded \
@@ -413,7 +413,7 @@ cmd_interactive() {
                 read -r
                 continue
                 ;;
-            ctrl-m)
+            alt-m)
                 if [[ "$target_payload" == dev:* ]]; then
                     local dev="/dev/${target_payload#dev:}"
                     local mp
@@ -472,7 +472,7 @@ ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
     ${CYAN}Ctrl-C${RESET}      Reclaim Nix store space (nh clean all)
     ${CYAN}Ctrl-O${RESET}      Deduplicate Nix store hardlinks (nix-store --optimise)
     ${CYAN}Ctrl-H${RESET}      Analyze Home folder storage breakdown
-    ${CYAN}Ctrl-M${RESET}      Quick Mount / Unmount device
+    ${CYAN}Alt-M${RESET}       Quick Mount / Unmount device
     ${CYAN}Ctrl-E${RESET}      Safely Eject / Power-off USB device
     ${CYAN}Ctrl-F${RESET}      Open partition mountpoint in Yazi file manager
     ${CYAN}Tab${RESET}         Cycle scope filter (all -> partitions -> usb -> nix)

@@ -497,7 +497,7 @@ cmd_preview() {
             echo -e "${BOLD}${WHITE}Actions:${RESET}"
             echo -e "  ${CYAN}Enter${RESET}   Open device controls (Volume, Mute, Set Default)"
             echo -e "  ${CYAN}+ / -${RESET}   Adjust volume on this sink (+5% / -5%)"
-            echo -e "  ${CYAN}Ctrl-M${RESET}  Toggle mute on this sink"
+            echo -e "  ${CYAN}Alt-M${RESET}   Toggle mute on this sink"
             echo -e "  ${CYAN}Ctrl-D${RESET}  Set as active default sink"
             ;;
 
@@ -534,7 +534,7 @@ cmd_preview() {
             echo -e "${BOLD}${WHITE}Actions:${RESET}"
             echo -e "  ${CYAN}Enter${RESET}   Open mic controls (Gain, Mute, Set Default)"
             echo -e "  ${CYAN}+ / -${RESET}   Adjust microphone gain"
-            echo -e "  ${CYAN}Ctrl-M${RESET}  Toggle microphone mute"
+            echo -e "  ${CYAN}Alt-M${RESET}   Toggle microphone mute"
             echo -e "  ${CYAN}Ctrl-D${RESET}  Set as active default microphone"
             ;;
 
@@ -567,7 +567,7 @@ cmd_preview() {
             echo -e "${BOLD}${WHITE}Actions:${RESET}"
             echo -e "  ${CYAN}Enter${RESET}   Adjust app volume, mute, or reroute"
             echo -e "  ${CYAN}+ / -${RESET}   Increase/decrease application volume"
-            echo -e "  ${CYAN}Ctrl-M${RESET}  Mute/unmute this application"
+            echo -e "  ${CYAN}Alt-M${RESET}   Mute/unmute this application"
             ;;
 
         action)
@@ -600,7 +600,7 @@ cmd_preview() {
                     s_info=$(get_vol_and_mute "@DEFAULT_AUDIO_SINK@")
                     IFS=':' read -r v_pct v_muted <<< "$s_info"
                     echo -e "  ${BOLD}Current Status:${RESET} $([ "$v_muted" -eq 1 ] && echo -e "${RED}MUTED${RESET}" || echo -e "${GREEN}UNMUTED (${v_pct}%)${RESET}")"
-                    echo -e "  ${BOLD}Hotkey:${RESET}         ${CYAN}Ctrl-M${RESET}"
+                    echo -e "  ${BOLD}Hotkey:${RESET}         ${CYAN}Alt-M${RESET}"
                     ;;
                 mic_mute)
                     echo -e "${BOLD}${CYAN}=== Toggle Microphone Mute ===${RESET}"
@@ -812,13 +812,13 @@ cmd_interactive() {
 
         local res key choice
         res=$(printf "%s\n" "${menu[@]}" | fzf \
-            --expect=ctrl-r,ctrl-m,+,=,-,ctrl-t,ctrl-d \
+            --expect=ctrl-r,alt-m,+,=,-,ctrl-t,ctrl-d \
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:52%:wrap \
             --prompt="󰕾  Audio > " \
-            --header="[$header_info] (Enter: Select | +/-: Vol | Ctrl-M: Mute | Ctrl-T: Test | Ctrl-R: Refresh | Esc: Exit)" \
+            --header="[$header_info] (Enter: Select | +/-: Vol | Alt-M: Mute | Ctrl-T: Test | Ctrl-R: Refresh | Esc: Exit)" \
             --reverse \
             --height=100% \
             --border=rounded \
@@ -843,7 +843,7 @@ cmd_interactive() {
                 play_test_chime
                 continue
                 ;;
-            ctrl-m)
+            alt-m)
                 if [ "$item_type" = "sink" ]; then
                     wpctl set-mute "$item_id" toggle
                 elif [ "$item_type" = "source" ]; then
@@ -1006,7 +1006,7 @@ ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
     ${CYAN}Enter${RESET}       Select item / open contextual action submenu
     ${CYAN}+ / =${RESET}       Increase volume (+5%) on selected item
     ${CYAN}-${RESET}           Decrease volume (-5%) on selected item
-    ${CYAN}Ctrl-M${RESET}      Toggle mute on selected device or stream
+    ${CYAN}Alt-M${RESET}       Toggle mute on selected device or stream
     ${CYAN}Ctrl-D${RESET}      Set selected sink or source as default
     ${CYAN}Ctrl-T${RESET}      Play stereo test chime
     ${CYAN}Ctrl-R${RESET}      Refresh devices and audio streams

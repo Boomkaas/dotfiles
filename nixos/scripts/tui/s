@@ -127,7 +127,7 @@ EOF
         audio)
             cat <<'EOF'
   Enter   Select sink / source / stream action
-  Ctrl-M  Toggle mute on default sink
+  Alt-M   Toggle mute on default sink
   Ctrl-U  Raise volume +5%
   Ctrl-D  Lower volume -5%
 EOF
@@ -137,7 +137,6 @@ EOF
   Enter   Select item / Toggle setting / Open tool
   Ctrl-R  Refresh settings status
   Ctrl-C  Clear all SwayNC notifications
-  Ctrl-M  Toggle Master Audio Mute
 EOF
             ;;
         clip)

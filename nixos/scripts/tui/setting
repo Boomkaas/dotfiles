@@ -796,7 +796,6 @@ ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
     ${CYAN}Enter${RESET}   Select item / Toggle setting / Open tool
     ${CYAN}Ctrl-R${RESET}  Refresh settings status
     ${CYAN}Ctrl-C${RESET}  Clear all SwayNC notifications
-    ${CYAN}Ctrl-M${RESET}  Toggle Master Audio Mute
     ${CYAN}Esc${RESET}     Exit
 
 EOF

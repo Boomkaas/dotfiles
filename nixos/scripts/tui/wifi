@@ -590,7 +590,7 @@ cmd_preview() {
         echo -e "  ${CYAN}Ctrl-D${RESET}  Disconnect from active Wi-Fi"
         echo -e "  ${CYAN}Ctrl-S${RESET}  Open Saved Networks Manager"
         echo -e "  ${CYAN}Ctrl-W${RESET}  Toggle Wi-Fi Radio ON / OFF"
-        echo -e "  ${CYAN}Ctrl-M${RESET}  Launch Live Monitor Dashboard"
+        echo -e "  ${CYAN}Alt-M${RESET}   Launch Live Monitor Dashboard"
         echo -e "  ${CYAN}Esc${RESET}     Exit menu"
         return 0
     fi
@@ -782,13 +782,13 @@ cmd_interactive() {
 
         local res key choice
         res=$(printf "%s\n" "${menu[@]}" | fzf \
-            --expect=ctrl-r,ctrl-c,ctrl-d,ctrl-s,ctrl-w,ctrl-m \
+            --expect=ctrl-r,ctrl-c,ctrl-d,ctrl-s,ctrl-w,alt-m \
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:52%:wrap \
             --prompt="󰖩  Wi-Fi > " \
-            --header="[$header_info] (Enter: Select | Ctrl-R: Rescan | Ctrl-C: Connect | Ctrl-D: Discon | Ctrl-W: Radio | Ctrl-M: Monitor)" \
+            --header="[$header_info] (Enter: Select | Ctrl-R: Rescan | Ctrl-C: Connect | Ctrl-D: Discon | Ctrl-W: Radio | Alt-M: Monitor)" \
             --reverse \
             --height=100% \
             --border=rounded \
@@ -823,7 +823,7 @@ cmd_interactive() {
             ctrl-s)
                 sel_arg="__action_saved__"
                 ;;
-            ctrl-m)
+            alt-m)
                 cmd_monitor
                 continue
                 ;;
@@ -940,7 +940,7 @@ ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
     ${CYAN}Ctrl-D${RESET}  Disconnect from active network
     ${CYAN}Ctrl-S${RESET}  Open Saved Networks Manager
     ${CYAN}Ctrl-W${RESET}  Toggle Wi-Fi radio ON / OFF
-    ${CYAN}Ctrl-M${RESET}  Open Live Wi-Fi Monitor Dashboard
+    ${CYAN}Alt-M${RESET}   Open Live Wi-Fi Monitor Dashboard
     ${CYAN}Esc${RESET}     Exit
 
 EOF
