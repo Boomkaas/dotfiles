@@ -16,6 +16,11 @@
 
   system.stateVersion = "25.05";
 
+  # CMOS RTC battery is dead: hardware clock resets to 2021 on every power-up.
+  # Load rtc_cmos in initrd so systemd's "advance to last-known timestamp"
+  # (/var/lib/systemd/timesync/clock) runs AFTER the RTC sets the clock, not before.
+  boot.initrd.kernelModules = [ "rtc_cmos" ];
+
   time.timeZone = "Europe/Kyiv";
   i18n.defaultLocale = "en_US.UTF-8";
 
