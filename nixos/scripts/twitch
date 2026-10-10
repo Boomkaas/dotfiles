@@ -1,57 +1,59 @@
 #!/usr/bin/env bash
-# twitch — Launch or manage Twitch Drops auto-claimer in native Firefox
+# twitch — Start/stop the Don't Starve Together Twitch Drops farmer
+# (Violentmonkey userscript twitch-drops-claimer.user.js running in Firefox)
 set -euo pipefail
 
-TWITCH_DROPS_URL="https://www.twitch.tv/drops/campaigns"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+USERSCRIPT="$SCRIPT_DIR/twitch-drops-claimer.user.js"
+INVENTORY_URL="https://www.twitch.tv/drops/inventory"
 
 show_help() {
   cat <<'EOF'
-Usage: twitch [COMMAND] (or: tdrops [COMMAND])
+Usage: twitch [COMMAND]   (fish abbr: tdrops)
 
 Commands:
-  start (default)    Open Twitch Drops Hub in Firefox & start auto-claimer
-  stop               Halt active claimers / streams
-  status             Show status and controls
-  help, -h, --help   Display this help message
+  start (default)    Open a Firefox tab that farms DST drops until all are claimed
+  stop               Tell the farming tab to stop (opens a short-lived Twitch tab)
+  install            Install/update the userscript in Violentmonkey
+  help, -h, --help   Show this help
 
-In-Browser Controls:
-  The auto-claimer displays a floating HUD in the bottom-right of Firefox.
-  You can click "⏹ Stop" at ANY step to instantly halt the countdown watchdog,
-  embedded mini-stream player, auto-claiming, and scheduled auto-reloads.
+The farming tab shows a HUD in the bottom-right corner with live drop
+progress and a Start/Stop button. You must be logged in to Twitch in Firefox
+and have your Klei account linked on twitch.tv/drops/campaigns.
 EOF
+}
+
+install_userscript() {
+  # Violentmonkey intercepts *.user.js URLs served over http, so serve a copy briefly on localhost
+  local tmpdir port pid
+  tmpdir="$(mktemp -d)"
+  cp "$USERSCRIPT" "$tmpdir/"
+  port=$(( 20000 + RANDOM % 20000 ))
+  python3 -m http.server --bind 127.0.0.1 --directory "$tmpdir" "$port" >/dev/null 2>&1 &
+  pid=$!
+  trap 'kill "$pid" 2>/dev/null; rm -rf "$tmpdir"' EXIT
+  sleep 0.5
+  firefox --new-tab "http://127.0.0.1:$port/$(basename "$USERSCRIPT")" >/dev/null 2>&1 &
+  echo "📥 Confirm the install in the Violentmonkey tab, then press Enter here."
+  read -r
 }
 
 cmd="${1:-start}"
 
 case "$cmd" in
   start|--start)
-    trap 'echo -e "\n⏹ Script interrupted."; exit 130' INT TERM
-    echo "🎮 Launching Twitch Drops Campaign Hub in your native Firefox..."
-    firefox "$TWITCH_DROPS_URL" >/dev/null 2>&1 &
-
-    if command -v hyprctl >/dev/null 2>&1; then
-      sleep 0.4
-      hyprctl dispatch focuswindow class:firefox 2>/dev/null || true
-    fi
-
-    echo "✨ Native Firefox opened. The Twitch Drops Auto-Claimer is active!"
-    echo "💡 Tip: Click '⏹ Stop' in the bottom-right HUD at any step to freeze countdown & claims."
+    firefox --new-tab "$INVENTORY_URL#dst-drops" >/dev/null 2>&1 &
+    echo "🎮 DST drops farmer started in Firefox — watch the HUD in the bottom-right."
+    echo "   (Nothing happens? Run 'twitch install' to install the userscript first.)"
     ;;
 
   stop|--stop)
-    echo "⏹ Halting Twitch Drops Claimer..."
-    if command -v hyprctl >/dev/null 2>&1; then
-      if hyprctl clients | grep -q "class: firefox"; then
-        echo "💡 Click '⏹ Stop' in the Firefox bottom-right HUD to remove overlay player and stop watchdog."
-      fi
-    fi
-    echo "✅ Twitch Drops stop command issued."
+    firefox --new-tab "$INVENTORY_URL#dst-drops-stop" >/dev/null 2>&1 &
+    echo "⏹ Stop signal sent to the farming tab."
     ;;
 
-  status|--status)
-    echo "🟣 Twitch Drops Claimer Status:"
-    echo " - Target URL: $TWITCH_DROPS_URL"
-    echo " - Controlled via floating HUD inside Firefox with instant Stop/Resume & Watchdog timer."
+  install|--install)
+    install_userscript
     ;;
 
   help|-h|--help)
@@ -59,7 +61,7 @@ case "$cmd" in
     ;;
 
   *)
-    echo "Unknown command: $cmd"
+    echo "Unknown command: $cmd" >&2
     show_help
     exit 1
     ;;

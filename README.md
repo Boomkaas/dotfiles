@@ -185,7 +185,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── screenshot.sh               # Region and fullscreen screenshot utility
 │   │   ├── share_menu.sh               # Interactive menu wrapper for network sharing (`share-menu`)
 │   │   ├── twitch                      # CLI launcher for Twitch Drops claimer (`twitch` / `tdrops`)
-│   │   ├── twitch-drops-claimer.user.js# Userscript for DST Twitch Drops (160p eco, auto-claim)
+│   │   ├── twitch-drops-claimer.user.js# Violentmonkey userscript: API-driven DST drops farmer
 │   │   ├── unlock_screen.sh            # Reliable screen unlocker (DPMS wake, wtype auth)
 │   │   ├── waybar_manager.sh           # Waybar theme switcher, cycle manager, and daemon controller
 │   │   └── wifi_menu.sh                # Rofi interactive Wi-Fi selector menu (`wifi-menu`)
@@ -475,7 +475,7 @@ Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
 | **File Manager**| `y` / `Ctrl + O` | Launch Yazi with auto-`cd` on exit |
 | **Menus** | `menu` | Launch Rofi application menu (`rofi -show drun`) |
 | **Automation** | `epic` | Launch or manage Epic Games freebies claimer (`start`/`stop`/`install`/`status`) |
-| **Automation** | `twitch` / `tdrops` | Launch or manage DST Twitch Drops claimer (`start`/`stop`/`status`) |
+| **Automation** | `twitch` / `tdrops` | Farm DST Twitch Drops in Firefox (`start`/`stop`/`install`) |
 | **AI / Tokens** | `tokens` / `agy tokens` | Run live Antigravity token quota and reset timer report |
 | **Power** | `awake on` / `awake off` | Inhibit or resume screen lock, display sleep, and poweroff |
 | **Gaming** | `gfn` / `roblox` | Launch GeForce NOW / Roblox (Sober) Flatpaks |
@@ -550,10 +550,11 @@ An in-browser weekly auto-claimer (Violentmonkey userscript) that runs inside na
 - **CLI Commands:** `epic start`, `epic stop` (halts a run from any terminal), `epic install` (installs/replaces the userscript in Violentmonkey), `epic status`.
 
 ### 5. `twitch` & `twitch-drops-claimer.user.js` (Twitch Drops Auto-Claimer)
-An in-browser auto-claimer tailored for **Don't Starve Together** (DST) Twitch Drops:
-- **Ultra-Eco Mode:** Automatically locks stream quality to 160p, mutes audio, and disables low-latency mode.
-- **Channel Routing:** Filters out Russian-tagged channels, connects to the highest-viewed valid streamer, tracks progress timers, claims tier rewards, and closes the tab when all DST campaigns are completed.
-- **CLI Commands:** `twitch start`, `twitch stop`, `twitch status` (also aliased as `tdrops`).
+A Violentmonkey userscript that farms **Don't Starve Together** (DST) Twitch Drops in a Firefox tab:
+- **API-driven:** Reads campaigns and watched minutes from Twitch's GQL API (using the browser's login) instead of scraping the page.
+- **Channel Routing:** Watches the highest-viewed live, drops-enabled DST stream (skipping Russian-language streams and channels outside a campaign's allow-list), muted at 160p, and switches channels when a stream ends or progress stalls.
+- **Claiming:** Claims finished drops through the inventory page and stops once every watchable DST drop is claimed.
+- **CLI Commands:** `twitch start`, `twitch stop`, `twitch install` (also aliased as `tdrops`).
 
 ### 6. `agy-tokens.py` (Antigravity Token & Quota Reporter)
 Displays real-time token quotas, tier usage progress bars, and countdown timers across AI model families (Gemini, Claude, GPT):
