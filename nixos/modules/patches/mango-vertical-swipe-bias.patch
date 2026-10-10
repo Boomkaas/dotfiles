@@ -1,0 +1,15 @@
+diff --git a/src/input/pointer.h b/src/input/pointer.h
+index f3f26c9a..943f1078 100644
+--- a/src/input/pointer.h
++++ b/src/input/pointer.h
+@@ -174,7 +174,9 @@ int32_t ongesture(struct wlr_pointer_swipe_end_event *event) {
+ 		return handled;
+ 	}
+ 
+-	if (adx > ady) {
++	// Touchpads are wider than tall and horizontal drift during a vertical
++	// swipe is common, so only treat a swipe as horizontal when it clearly is.
++	if (adx > 2 * ady) {
+ 		motion = swipe_dx < 0 ? SWIPE_LEFT : SWIPE_RIGHT;
+ 	} else {
+ 		motion = swipe_dy < 0 ? SWIPE_UP : SWIPE_DOWN;

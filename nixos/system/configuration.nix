@@ -8,6 +8,11 @@
     ];
 
   programs.mango.enable = true;
+  programs.mango.package = inputs.mangowm.packages.${pkgs.stdenv.hostPlatform.system}.mango.overrideAttrs (old: {
+    patches = (old.patches or []) ++ [
+      ../modules/patches/mango-vertical-swipe-bias.patch
+    ];
+  });
 
   nixpkgs.overlays = [
     (final: prev: {
