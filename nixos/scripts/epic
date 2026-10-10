@@ -1,58 +1,116 @@
 #!/usr/bin/env bash
-# epic — Launch or manage Epic Games Store auto-claimer in native Firefox
+# epic — run the Epic Games Store free-games claimer (Violentmonkey userscript) in Firefox
 set -euo pipefail
 
 FREE_GAMES_URL="https://store.epicgames.com/en-US/free-games"
+USERSCRIPT="/home/peng/Code/Dotfiles/nixos/scripts/epic-games-claimer.user.js"
 
 show_help() {
   cat <<'EOF'
 Usage: epic [COMMAND]
 
 Commands:
-  start (default)    Open Epic Games Store in Firefox & start auto-claimer
-  stop               Close or halt Epic Games tab/window
-  status             Show status and controls
+  start (default)    Open the free-games page in Firefox and claim every free game
+  stop               Halt a running claim (works from any terminal)
+  install            Install/replace the userscript in Violentmonkey
+  status             Show the userscript location and version
   help, -h, --help   Display this help message
 
-In-Browser Controls:
-  The auto-claimer displays a floating HUD in the bottom-right of Firefox.
-  You can click "⏹ Stop" at ANY step to instantly halt claiming, checkout,
-  and page navigation, or "▶ Resume" to continue where you left off.
+The claiming itself is done by epic-games-claimer.user.js, which must be
+installed in Violentmonkey. A HUD in the bottom-right of the store page shows
+progress and has Stop / Resume buttons. If a captcha shows up, solve it in the
+page and the claimer carries on. The tab closes by itself when everything worked.
 EOF
+}
+
+open_in_firefox() {
+  if ! command -v firefox >/dev/null 2>&1; then
+    echo "❌ firefox not found in PATH" >&2
+    exit 1
+  fi
+  setsid -f firefox --new-tab "$1" >/dev/null 2>&1
+}
+
+script_version() {
+  sed -n 's|^// @version[[:space:]]*||p' "$USERSCRIPT" | head -n1
+}
+
+# Globals (not locals) so the EXIT trap can still see them after install_userscript returns.
+SERVE_DIR=""
+SERVER_PID=""
+
+stop_server() {
+  [[ -n "$SERVER_PID" ]] && kill "$SERVER_PID" 2>/dev/null
+  [[ -n "$SERVE_DIR" ]] && rm -rf "$SERVE_DIR"
+  SERVER_PID=""
+  SERVE_DIR=""
+}
+
+install_userscript() {
+  # Violentmonkey intercepts *.user.js URLs and opens its install page, which replaces the
+  # script with the same @name/@namespace. Firefox won't let it read file:// URLs, so serve
+  # a copy on localhost until the install is confirmed.
+  local port url
+  trap stop_server EXIT
+  SERVE_DIR="$(mktemp -d)"
+  cp "$USERSCRIPT" "$SERVE_DIR/"
+
+  for _ in 1 2 3 4 5; do
+    port=$(( 20000 + RANDOM % 20000 ))
+    url="http://127.0.0.1:$port/$(basename "$USERSCRIPT")"
+    python3 -m http.server --bind 127.0.0.1 --directory "$SERVE_DIR" "$port" >/dev/null 2>&1 &
+    SERVER_PID=$!
+    for _ in $(seq 30); do
+      curl -sf -o /dev/null "$url" && break 2
+      kill -0 "$SERVER_PID" 2>/dev/null || break
+      sleep 0.1
+    done
+    kill "$SERVER_PID" 2>/dev/null || true
+    SERVER_PID=""
+  done
+  if [[ -z "$SERVER_PID" ]]; then
+    echo "❌ Could not start a local web server for the userscript" >&2
+    exit 1
+  fi
+
+  echo "📥 Installing userscript v$(script_version) — Violentmonkey opens its install page in Firefox."
+  echo "   Click \"Reinstall\" (or \"Confirm installation\") there; it replaces the old version."
+  open_in_firefox "$url"
+  if [[ -t 0 ]]; then
+    read -r -t 300 -p "   Press Enter once it's confirmed… " || true
+    echo
+  else
+    sleep 60
+  fi
+  stop_server
+  echo "✅ Done. Run 'epic' to claim this week's free games."
 }
 
 cmd="${1:-start}"
 
 case "$cmd" in
   start|--start)
-    trap 'echo -e "\n⏹ Script interrupted."; exit 130' INT TERM
-    echo "🎮 Launching Epic Games Store in your native Firefox..."
-    firefox "$FREE_GAMES_URL" >/dev/null 2>&1 &
-
-    if command -v hyprctl >/dev/null 2>&1; then
-      sleep 0.4
-      hyprctl dispatch focuswindow class:firefox 2>/dev/null || true
-    fi
-
-    echo "✨ Native Firefox opened. The Epic Games Auto-Claimer is active!"
-    echo "💡 Tip: Click '⏹ Stop' in the bottom-right HUD at any step to halt."
+    echo "🎮 Opening the Epic free-games page in Firefox…"
+    open_in_firefox "${FREE_GAMES_URL}#epic-claim"
+    echo "✨ Claimer started — follow progress in the HUD (bottom-right of the page)."
     ;;
 
   stop|--stop)
-    echo "⏹ Halting Epic Games Claimer..."
-    if command -v hyprctl >/dev/null 2>&1; then
-      # Check if any Firefox window exists
-      if hyprctl clients | grep -q "class: firefox"; then
-        echo "💡 Click '⏹ Stop' in the Firefox bottom-right HUD to freeze active steps."
-      fi
-    fi
-    echo "✅ Epic Games claimer stop command issued."
+    # The userscript sees #epic-stop, flags the shared run state as stopped and closes this helper tab.
+    open_in_firefox "${FREE_GAMES_URL}#epic-stop"
+    echo "⏹ Stop signal sent. Press Resume in the HUD to continue later."
+    ;;
+
+  install|--install)
+    install_userscript
     ;;
 
   status|--status)
-    echo "🎮 Epic Games Claimer Status:"
-    echo " - Target URL: $FREE_GAMES_URL"
-    echo " - Controlled via floating HUD inside Firefox with instant Stop/Resume."
+    echo "🎮 Epic Games free-games claimer"
+    echo " - Page:       $FREE_GAMES_URL"
+    echo " - Userscript: $USERSCRIPT (v$(script_version))"
+    echo " - Progress, Stop and Resume live in the HUD on the store page."
+    echo " - If the HUD never appears, run 'epic install' to (re)install the userscript."
     ;;
 
   help|-h|--help)
@@ -60,7 +118,7 @@ case "$cmd" in
     ;;
 
   *)
-    echo "Unknown command: $cmd"
+    echo "Unknown command: $cmd" >&2
     show_help
     exit 1
     ;;

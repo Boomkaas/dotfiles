@@ -474,7 +474,7 @@ Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
 | **Tmux** | `t` / `ta` / `tls` / `tn` / `tk` | `tmux`, attach, list sessions, new session, kill session |
 | **File Manager**| `y` / `Ctrl + O` | Launch Yazi with auto-`cd` on exit |
 | **Menus** | `menu` | Launch Rofi application menu (`rofi -show drun`) |
-| **Automation** | `epic` | Launch or manage Epic Games freebies claimer (`start`/`stop`/`status`) |
+| **Automation** | `epic` | Launch or manage Epic Games freebies claimer (`start`/`stop`/`install`/`status`) |
 | **Automation** | `twitch` / `tdrops` | Launch or manage DST Twitch Drops claimer (`start`/`stop`/`status`) |
 | **AI / Tokens** | `tokens` / `agy tokens` | Run live Antigravity token quota and reset timer report |
 | **Power** | `awake on` / `awake off` | Inhibit or resume screen lock, display sleep, and poweroff |
@@ -542,11 +542,12 @@ awake status # Inspect active caffeine state
 ```
 
 ### 4. `epic` & `epic-games-claimer.user.js` (Epic Games Freebies Claimer)
-An in-browser weekly auto-claimer that runs inside native logged-in Firefox:
-- **Zero Captchas:** Utilizes the authenticated browser session directly.
-- **Calm Paced Checkout:** Navigates store free games, handles mature content prompts, and clicks "Place Order" without aggressive bot patterns.
-- **Floating HUD:** Features in-browser `⏹ Stop` and `▶ Resume` buttons to instantly pause or resume checkout.
-- **CLI Commands:** `epic start`, `epic stop`, `epic status`.
+An in-browser weekly auto-claimer (Violentmonkey userscript) that runs inside native logged-in Firefox:
+- **Layout-proof Discovery:** Reads the current free games from Epic's promotions API, falling back to the "Free Now" cards on the free-games page.
+- **Current Checkout Flow:** Handles the "This is free → Add to library" checkout (and the older zero-total "Place Order" one), EULA / "I Accept" prompts, mature-content gates, and verifies every claim via "In Library".
+- **Safe by Design:** The checkout frame only acts during a run it was armed for, so manual purchases are never touched; captchas pause the run until solved.
+- **Floating HUD:** Per-game results plus `⏹ Stop` / `▶ Resume`; the tab closes itself after a clean run.
+- **CLI Commands:** `epic start`, `epic stop` (halts a run from any terminal), `epic install` (installs/replaces the userscript in Violentmonkey), `epic status`.
 
 ### 5. `twitch` & `twitch-drops-claimer.user.js` (Twitch Drops Auto-Claimer)
 An in-browser auto-claimer tailored for **Don't Starve Together** (DST) Twitch Drops:
