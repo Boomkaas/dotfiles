@@ -185,7 +185,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   │   ├── screenshot.sh               # Region and fullscreen screenshot utility
 │   │   ├── share_menu.sh               # Interactive menu wrapper for network sharing (`share-menu`)
 │   │   ├── twitch                      # CLI launcher for Twitch Drops claimer (`twitch` / `tdrops`)
-│   │   ├── twitch-drops-claimer.user.js# Violentmonkey userscript: API-driven DST drops farmer
+│   │   ├── twitch-drops-claimer.user.js# Violentmonkey userscript: DST drops farmer
 │   │   ├── unlock_screen.sh            # Reliable screen unlocker (DPMS wake, wtype auth)
 │   │   ├── waybar_manager.sh           # Waybar theme switcher, cycle manager, and daemon controller
 │   │   └── wifi_menu.sh                # Rofi interactive Wi-Fi selector menu (`wifi-menu`)
@@ -551,9 +551,9 @@ An in-browser weekly auto-claimer (Violentmonkey userscript) that runs inside na
 
 ### 5. `twitch` & `twitch-drops-claimer.user.js` (Twitch Drops Auto-Claimer)
 A Violentmonkey userscript that farms **Don't Starve Together** (DST) Twitch Drops in a Firefox tab:
-- **API-driven:** Reads campaigns and watched minutes from Twitch's GQL API (using the browser's login) instead of scraping the page.
+- **Real-page driven:** Reads campaigns and watched minutes from the data Twitch's own Drops Campaigns/Inventory pages load (so Twitch's integrity checks are handled by Twitch itself), and claims with the page's own "Claim Now" button.
 - **Channel Routing:** Watches the highest-viewed live, drops-enabled DST stream (skipping Russian-language streams and channels outside a campaign's allow-list), muted at 160p, and switches channels when a stream ends or progress stalls.
-- **Claiming:** Claims finished drops through the inventory page and stops once every watchable DST drop is claimed.
+- **Progress Checks:** Returns to the inventory page when the next drop should be done (at most every 15 min), claims it, and stops once every watchable DST drop is claimed.
 - **CLI Commands:** `twitch start`, `twitch stop`, `twitch install` (also aliased as `tdrops`).
 
 ### 6. `agy-tokens.py` (Antigravity Token & Quota Reporter)

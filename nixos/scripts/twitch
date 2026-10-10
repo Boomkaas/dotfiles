@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USERSCRIPT="$SCRIPT_DIR/twitch-drops-claimer.user.js"
-INVENTORY_URL="https://www.twitch.tv/drops/inventory"
+DROPS_URL="https://www.twitch.tv/drops/campaigns"
 
 show_help() {
   cat <<'EOF'
@@ -31,24 +31,26 @@ install_userscript() {
   port=$(( 20000 + RANDOM % 20000 ))
   python3 -m http.server --bind 127.0.0.1 --directory "$tmpdir" "$port" >/dev/null 2>&1 &
   pid=$!
-  trap 'kill "$pid" 2>/dev/null; rm -rf "$tmpdir"' EXIT
+  # Expand now: the locals are out of scope by the time an EXIT trap would run
+  trap "kill $pid 2>/dev/null; rm -rf '$tmpdir'" EXIT
   sleep 0.5
   firefox --new-tab "http://127.0.0.1:$port/$(basename "$USERSCRIPT")" >/dev/null 2>&1 &
   echo "📥 Confirm the install in the Violentmonkey tab, then press Enter here."
   read -r
+  echo "✅ Done. Make sure only one 'Twitch Drops Auto-Claimer' script is enabled in Violentmonkey."
 }
 
 cmd="${1:-start}"
 
 case "$cmd" in
   start|--start)
-    firefox --new-tab "$INVENTORY_URL#dst-drops" >/dev/null 2>&1 &
+    firefox --new-tab "$DROPS_URL#dst-drops" >/dev/null 2>&1 &
     echo "🎮 DST drops farmer started in Firefox — watch the HUD in the bottom-right."
     echo "   (Nothing happens? Run 'twitch install' to install the userscript first.)"
     ;;
 
   stop|--stop)
-    firefox --new-tab "$INVENTORY_URL#dst-drops-stop" >/dev/null 2>&1 &
+    firefox --new-tab "$DROPS_URL#dst-drops-stop" >/dev/null 2>&1 &
     echo "⏹ Stop signal sent to the farming tab."
     ;;
 
