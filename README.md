@@ -382,13 +382,15 @@ The system integrates official TunnelBear OpenVPN profiles directly with Network
   ```bash
   tb run claude                     # Run Claude Desktop/browser exclusively over TunnelBear VPN
   tb run curl https://ipinfo.io/ip  # Verify public VPN egress IP
+  tb run -c japan claude            # Pick the server (default: active one, else last used)
+  tb japan                          # Shorthand for `tb connect japan` (also ISO codes: jp, de, us-west)
   tb app add claude                 # Configure application to always route via VPN
   tb mode split                     # Toggle split-tunneling proxy mode (127.0.0.1:10808)
   ```
 - **Cloud Quota Tracking & Live Sync**:
   - `tb account` / `tb quota`: Displays remaining monthly GB allowance and active plan details.
   - `tb sync`: Queries TunnelBear API to synchronize live quota usage.
-  - Automatic bandwidth tracking updates local usage metrics upon disconnection.
+  - While connected, the meter subtracts live tunnel traffic (TunnelBear only books a session ~1 min after disconnect); right after disconnect a local estimate is shown until the cloud catches up.
 - **Boot Safety**: All NetworkManager TunnelBear VPN profiles have `autoconnect=false` enforced to prevent unexpected routing or data leakage during system startup.
 
 ---

@@ -649,6 +649,7 @@ CONFIG_DIR = os.path.expanduser('~/.config/tunnelbear')
 USAGE_FILE = os.path.join(CONFIG_DIR, 'usage.json')
 AUTH_FILE = os.path.join(CONFIG_DIR, 'auth.txt')
 OVPN_DIR = os.path.join(CONFIG_DIR, 'ovpn')
+SESSION_FILE = f'/tmp/tunnelbear_session_{os.getuid()}.json'
 
 def load_data():
     data = {
@@ -684,7 +685,10 @@ def sync_live(data, force=False):
 
     now_ts = datetime.now().timestamp()
     last_sync_ts = data.get('last_sync_ts', 0)
-    if not force and (now_ts - last_sync_ts < 900) and 'remaining_bytes' in data:
+    # The cloud only books a session ~1 min after disconnect; while a local
+    # estimate is pending, re-check every minute instead of every 15.
+    ttl = 60 if 'est_left' in data else 900
+    if not force and (now_ts - last_sync_ts < ttl) and 'remaining_bytes' in data:
         return data, True, 'Cached'
 
     try:
@@ -762,20 +766,40 @@ def sync_live(data, force=False):
         bear_type = user_data.get('bearType', 'Little TunnelBear')
         full_ver = str(user_data.get('fullVersion', '0')) == '1'
 
+        # Drop keys left behind by older versions of this script
+        for k in ('live_data_left', 'live_data_cap', 'next_data_reset', 'last_sync'):
+            data.pop(k, None)
+
+        # Local post-disconnect estimate: keep the lower of (cloud, estimate) until
+        # the cloud has caught up, the quota reset, or the estimate is a day old.
+        prev_reset = data.get('next_reset', '')
+        est = data.get('est_left')
+        if est is not None and (
+            data_left <= est
+            or (next_reset and prev_reset and next_reset != prev_reset)
+            or now_ts - data.get('est_ts', 0) > 86400
+        ):
+            data.pop('est_left', None)
+            data.pop('est_ts', None)
+            est = None
+        remaining = min(data_left, est) if est is not None else data_left
+
         data['email'] = user
         data['cloud_verified'] = True
         data['last_sync_ts'] = now_ts
         data['last_sync_str'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         data['bear_type'] = bear_type
         data['full_version'] = full_ver
-        data['next_reset'] = next_reset
+        if next_reset:
+            data['next_reset'] = next_reset
         if full_ver:
             data['plan'] = 'unlimited'
         elif data_cap > 0:
             data['plan'] = bear_type
             data['monthly_quota_bytes'] = data_cap
-            data['remaining_bytes'] = data_left
-            data['used_bytes'] = max(0, data_cap - data_left)
+            data['cloud_left'] = data_left
+            data['remaining_bytes'] = remaining
+            data['used_bytes'] = max(0, data_cap - remaining)
 
         save_data(data)
         return data, True, 'Success'
@@ -824,6 +848,23 @@ elif action == 'get_quota_info':
         used_b = d.get('used_bytes', 0)
         rem_b = max(0, quota_b - used_b)
 
+    # The cloud figure excludes the session in progress (it is booked on
+    # disconnect), so subtract live tunnel traffic for an up-to-date meter.
+    live_b = 0
+    try:
+        with open(SESSION_FILE) as f:
+            s = json.load(f)
+        dev = s.get('dev', 'tun0')
+        with open(f'/sys/class/net/{dev}/statistics/rx_bytes') as f:
+            rx = int(f.read())
+        with open(f'/sys/class/net/{dev}/statistics/tx_bytes') as f:
+            tx = int(f.read())
+        live_b = max(0, rx - int(s.get('start_rx', 0))) + max(0, tx - int(s.get('start_tx', 0)))
+    except Exception:
+        pass
+    rem_b = max(0, rem_b - live_b)
+    used_b += live_b
+
     if plan == 'unlimited':
         rem_str = 'Unlimited'
         used_str = f'{used_b / (1024**2):.1f} MB' if used_b < 1024**3 else f'{used_b / (1024**3):.2f} GB'
@@ -852,6 +893,9 @@ elif action == 'get_quota_info':
         'quota_bytes': quota_b,
         'rem_bytes': rem_b,
         'used_bytes': used_b,
+        'live_session_bytes': live_b,
+        'quota_str': f'{quota_b / (1024**3):.2f} GB',
+        'estimated': 'est_left' in d,
         'used_str': used_str,
         'rem_str': rem_str,
         'pct_left': pct_left,
@@ -877,6 +921,9 @@ elif action == 'record_disconnect':
         d['used_bytes'] = d.get('used_bytes', 0) + session_bytes
         if 'remaining_bytes' in d:
             d['remaining_bytes'] = max(0, d['remaining_bytes'] - session_bytes)
+            # Hold this estimate until the cloud books the session (see sync_live)
+            d['est_left'] = d['remaining_bytes']
+            d['est_ts'] = datetime.now().timestamp()
         c_info = d['countries'].setdefault(country, {'connections': 0, 'bytes': 0, 'last_used': ''})
         c_info['bytes'] = c_info.get('bytes', 0) + session_bytes
         save_data(d)
@@ -976,6 +1023,10 @@ cmd_account() {
     bar=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('bar', ''))" "$q_json")
     next_reset=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('next_reset', ''))" "$q_json")
     last_sync=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('last_sync', ''))" "$q_json")
+    local quota_str live_mb estimated
+    quota_str=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('quota_str', ''))" "$q_json")
+    live_mb=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(f\"{d.get('live_session_bytes', 0) / 1024**2:.1f}\")" "$q_json")
+    estimated=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get('estimated', False))" "$q_json")
 
     echo -e "${BOLD}${CYAN}=== TunnelBear Account & Quota ===${RESET}"
     if [ "$logged_in" = "True" ]; then
@@ -1002,12 +1053,17 @@ cmd_account() {
         if [ "$p_num" -lt 20 ]; then color="$RED"; elif [ "$p_num" -lt 50 ]; then color="$YELLOW"; fi
 
         local tier_title="${bear_type:-Free Tier}"
-        if [ "$tier_title" = "Little TunnelBear" ]; then
-            tier_title="Little TunnelBear (100 GB Humanitarian Tier)"
-        fi
+        [ -n "$quota_str" ] && tier_title="$tier_title ($quota_str / month)"
         echo -e "  ${BOLD}Subscription:${RESET}   ${CYAN}${tier_title}${RESET}"
         echo -e "  ${BOLD}Data Used:${RESET}      $used_str (this billing cycle)"
-        echo -e "  ${BOLD}Data Remaining:${RESET} ${color}${BOLD}$rem_str${RESET}"
+        if [ "$live_mb" != "0.0" ]; then
+            echo -e "  ${BOLD}Live Session:${RESET}   ${CYAN}${live_mb} MB${RESET} ${DIM}(included above; TunnelBear books it on disconnect)${RESET}"
+        fi
+        if [ "$estimated" = "True" ]; then
+            echo -e "  ${BOLD}Data Remaining:${RESET} ${color}${BOLD}$rem_str${RESET} ${DIM}(estimate — cloud still booking last session)${RESET}"
+        else
+            echo -e "  ${BOLD}Data Remaining:${RESET} ${color}${BOLD}$rem_str${RESET}"
+        fi
         echo -e "  ${BOLD}Quota Meter:${RESET}    ${color}$bar${RESET}"
         [ -n "$next_reset" ] && echo -e "  ${BOLD}Quota Resets:${RESET}   ${YELLOW}$next_reset${RESET}"
     fi
@@ -1159,16 +1215,32 @@ cmd_list() {
 
 find_ovpn() {
     local query="$1"
+    # Trim surrounding whitespace and collapse inner runs ("  south   korea " -> "south korea")
+    query=$(echo "$query" | xargs)
+    [ -z "$query" ] && return 1
     ensure_configs
 
-    # Common aliases
+    # Common aliases (country names + the ISO codes used in the server hostnames)
     case "${query,,}" in
-        us|usa|"united states") query="United States East" ;;
-        "us central") query="United States Central" ;;
-        "us west") query="United States West" ;;
-        "us east") query="United States East" ;;
-        uk|"great britain"|britain) query="United Kingdom" ;;
+        us|usa|"united states"|us-east|"us east") query="United States East" ;;
+        us-central|"us central") query="United States Central" ;;
+        us-west|"us west") query="United States West" ;;
+        uk|gb|"great britain"|britain|england) query="United Kingdom" ;;
         korea|kr) query="South Korea" ;;
+        czechia|cz) query="Czech Republic" ;;
+        nz) query="New Zealand" ;;
+        za) query="South Africa" ;;
+        *)
+            # Two-letter code -> match against the "remote <cc>.lazerpenguin.com" line
+            if [[ "${query,,}" =~ ^[a-z]{2}$ ]]; then
+                local by_code
+                by_code=$(grep -lE "^remote ${query,,}\.lazerpenguin\.com " "$OVPN_DIR"/*.ovpn 2>/dev/null | head -n 1)
+                if [ -n "$by_code" ]; then
+                    echo "$by_code"
+                    return 0
+                fi
+            fi
+            ;;
     esac
 
     # 1. Exact country match
@@ -1327,11 +1399,17 @@ cmd_connect() {
 EOF
 
         local new_ip
-        new_ip=$(get_public_ip)
         echo ""
         echo -e "${GREEN}${BOLD}✓ TunnelBear Connected!${RESET}"
         echo -e "  ${BOLD}Location:${RESET}       $flag $country"
-        echo -e "  ${BOLD}Public IP:${RESET}      ${CYAN}$new_ip${RESET}"
+        if [ "$cur_mode" = "split" ]; then
+            # System traffic stays direct in split mode; show the IP VPN apps get
+            new_ip=$(curl -s --max-time 4 -x "http://127.0.0.1:$PROXY_PORT" https://ipinfo.io/ip 2>/dev/null || echo "Unknown")
+            echo -e "  ${BOLD}VPN App IP:${RESET}     ${CYAN}$new_ip${RESET} ${DIM}(split mode: only 'tb run' / managed apps use it)${RESET}"
+        else
+            new_ip=$(get_public_ip)
+            echo -e "  ${BOLD}Public IP:${RESET}      ${CYAN}$new_ip${RESET}"
+        fi
 
         # Show remaining data info
         local q_info
@@ -1583,17 +1661,52 @@ for filepath in glob.glob(os.path.join(ovpn_dir, '*.ovpn')):
 # ------------------------------------------------------------------------------
 
 cmd_run() {
+    # Optional server selection: tb run -c japan <cmd>  (or TB_COUNTRY=japan tb run <cmd>)
+    local want_country="${TB_COUNTRY:-}"
+    case "${1:-}" in
+        -c|--country)
+            want_country="${2:-}"
+            shift 2 2>/dev/null || shift $#
+            ;;
+        --country=*)
+            want_country="${1#--country=}"
+            shift
+            ;;
+    esac
+
     if [ $# -eq 0 ]; then
         echo -e "${RED}Error: No command specified to run through VPN.${RESET}" >&2
-        echo -e "${YELLOW}Usage:${RESET} tb run <command> [args...]"
+        echo -e "${YELLOW}Usage:${RESET} tb run [-c <country>] <command> [args...]"
         echo -e "       tb run curl https://ipinfo.io/ip"
-        echo -e "       tb run claude"
+        echo -e "       tb run -c japan claude"
         return 1
     fi
 
-    # Check if TunnelBear is active
     local active_con
     active_con=$(get_active_con)
+
+    # Explicit country requested: (re)connect there if not already on it
+    if [ -n "$want_country" ]; then
+        local want_ovpn want_con
+        want_ovpn=$(find_ovpn "$want_country") || {
+            echo -e "${RED}Error: No TunnelBear server location matching '$want_country' found.${RESET}" >&2
+            return 1
+        }
+        want_con="$(basename "$want_ovpn" .ovpn)"
+        if [ "$active_con" != "$want_con" ]; then
+            if [ -z "$active_con" ]; then
+                mkdir -p "$CONFIG_DIR"
+                echo "split" > "$MODE_FILE"
+            fi
+            if ! cmd_connect "${want_con#TunnelBear }" >&2; then
+                echo -e "${RED}Error: Failed to connect to VPN. Aborting command to prevent traffic leakage.${RESET}" >&2
+                return 1
+            fi
+            active_con=$(get_active_con)
+        fi
+    fi
+
+    # Check if TunnelBear is active
     if [ -z "$active_con" ]; then
         # Find last used country or default to Poland
         local last_country
@@ -1612,7 +1725,7 @@ except Exception:
         echo -e "${CYAN}Establishing secure tunnel to $last_country (Split Tunneling)...${RESET}"
         mkdir -p "$CONFIG_DIR"
         echo "split" > "$MODE_FILE"
-        if ! cmd_connect "$last_country"; then
+        if ! cmd_connect "$last_country" >&2; then
             echo -e "${RED}Error: Failed to connect to VPN. Aborting command to prevent traffic leakage.${RESET}" >&2
             return 1
         fi
@@ -2162,7 +2275,14 @@ cmd_interactive() {
                 read -rp "Press Enter to return..."
                 continue
                 ;;
-            ctrl-a|ctrl-l)
+            ctrl-l)
+                clear
+                cmd_login
+                echo ""
+                read -rp "Press Enter to return..."
+                continue
+                ;;
+            ctrl-a)
                 clear
                 cmd_account
                 echo ""
@@ -2292,10 +2412,12 @@ ${BOLD}USAGE:${RESET}
 
 ${BOLD}COMMANDS:${RESET}
     ${CYAN}(none)${RESET}                       Launch interactive fzf menu (sorted by usage)
-    ${CYAN}run${RESET} <cmd> [args...]          Run any program/script exclusively through VPN
+    ${CYAN}run${RESET} [-c <country>] <cmd>     Run any program/script exclusively through VPN
+                                 (default server: active one, else last used)
     ${CYAN}app${RESET} [list|add|remove]        Manage applications configured to use VPN
     ${CYAN}mode${RESET} [split|full]            Toggle Split Tunneling (per-app) vs Full System VPN
-    ${CYAN}connect${RESET} <country>           Connect to a server (e.g. 'poland', 'us', 'japan')
+    ${CYAN}connect${RESET} <country>           Connect to a server (e.g. 'poland', 'us west', 'jp', 'de')
+    ${CYAN}<country>${RESET}                    Shorthand for connect (e.g. 'tb japan')
     ${CYAN}disconnect${RESET}, ${CYAN}down${RESET}, ${CYAN}off${RESET}        Disconnect active VPN & record transferred data
     ${CYAN}status${RESET}                       Show connection state, routing mode, IPs, and quota
     ${CYAN}account${RESET}, ${CYAN}quota${RESET}, ${CYAN}info${RESET}         Display login status and remaining GB allowance
@@ -2322,6 +2444,7 @@ ${BOLD}EXAMPLES:${RESET}
     tb status
     tb run claude
     tb run curl https://ipinfo.io/ip
+    tb run -c japan claude
     tb app add claude
     tb app list
     tb mode split
@@ -2396,7 +2519,8 @@ case "$ACTION" in
         ;;
     *)
         if [ -n "$ACTION" ]; then
-            cmd_connect "$ACTION $*"
+            set -- "$ACTION" "$@"
+            cmd_connect "$*"
         else
             cmd_help
         fi
