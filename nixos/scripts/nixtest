@@ -605,7 +605,7 @@ mod_services() {
   module_start "⚙️  services — systemd units, timers, and service health"
 
   # System services
-  for svc in NetworkManager bluetooth postgresql upower udisks2 samba-wsdd; do
+  for svc in NetworkManager bluetooth upower udisks2 samba-wsdd; do
     svc_active "System: $svc" "$svc"
   done
 

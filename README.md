@@ -230,8 +230,8 @@ The NixOS configuration is built on flakes with a modular separation of concerns
   - **Bluetooth**: Auto-powered on boot, Dual Controller Mode, FastConnectable, `EnableAdvMonInterleaveScan = 1` integer type, `blueman` integration, and a systemd service running `rfkill unblock bluetooth`.
   - **Wireshark**: `programs.wireshark` enabled with full package (`pkgs.wireshark`) and packet capture capabilities for user `peng`.
 - **`services.nix`**:
-  - **Virtualization**: Docker daemon and Libvirt / KVM with SPICE USB redirection and `virt-manager`.
-  - **Database Hardening**: PostgreSQL 16 server pre-configured with `mydatabase`, enforced `peer` authentication for local sockets, and `scram-sha-256` for TCP connections.
+  - **Virtualization**: Docker daemon and Libvirt / KVM with SPICE USB redirection and `virt-manager`. Neither starts on boot: `docker.socket` and `libvirtd.socket` start the daemons on first use (`libvirt-guests` is not enabled either).
+  - **Database Hardening**: PostgreSQL 16 server pre-configured with `mydatabase`, enforced `peer` authentication for local sockets, and `scram-sha-256` for TCP connections. Autostart on boot disabled (`wantedBy = []`); start on demand with `sudo systemctl start postgresql`.
   - **Samba LAN Sharing**: Dedicated `[Shared]` folder restricted exclusively to `/home/peng/Shared` (`valid users = peng`, `guest ok = no`). Autostart on boot is disabled (`wantedBy = []`) for zero idle resource drain; invoked on-demand via `share`.
   - **Hamachi VPN**: LogMeIn Hamachi daemon (`logmein-hamachi`) with IPC user `peng`. Autostart on boot disabled (`wantedBy = []`) for on-demand launch via `share` or Haguichi GUI.
   - **Polkit**: Scoped permissions for specific desktop actions (udisks2, login1, networkmanager, flatpak).
