@@ -443,6 +443,14 @@ in
       aiofiles
       colorthief
       pygobject3
+      # TgGifts (GUI + QR login)
+      customtkinter
+      qrcode
+      # Web frameworks, ORM & migrations (Django / FastAPI / SQLAlchemy / Alembic)
+      django
+      fastapi
+      uvicorn
+      alembic
     ]))
     nodejs
     dotnet-sdk_9
