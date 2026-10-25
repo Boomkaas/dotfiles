@@ -49,8 +49,8 @@ open_in_editor() {
     if [ -z "$target" ]; then return 1; fi
     if [ -n "${EDITOR:-}" ]; then
         "$EDITOR" "$target"
-    elif command -v nvim >/dev/null 2>&1; then
-        nvim "$target"
+    elif command -v zeditor >/dev/null 2>&1; then
+        zeditor --wait "$target"
     elif command -v nano >/dev/null 2>&1; then
         nano "$target"
     elif command -v vi >/dev/null 2>&1; then
@@ -63,12 +63,9 @@ open_in_editor() {
 open_in_ide() {
     local target="$1"
     if [ -z "$target" ]; then return 1; fi
-    if [ "${IDE:-nvim}" = "nvim" ] && command -v nvim >/dev/null 2>&1; then
-        kitty -e nvim "$target" >/dev/null 2>&1 &
-        notify "normal" "nvim" "Config IDE" "Opened in Neovim: $(basename "$target")"
-    elif command -v antigravity-ide >/dev/null 2>&1; then
-        antigravity-ide "$target" >/dev/null 2>&1 &
-        notify "normal" "antigravity" "Config IDE" "Opened in Antigravity IDE: $(basename "$target")"
+    if command -v zeditor >/dev/null 2>&1; then
+        zeditor "$target" >/dev/null 2>&1 &
+        notify "normal" "zed" "Config IDE" "Opened in Zed: $(basename "$target")"
     elif command -v codex >/dev/null 2>&1; then
         codex "$target" >/dev/null 2>&1 &
         notify "normal" "codex" "Config IDE" "Opened in Codex: $(basename "$target")"
@@ -165,8 +162,6 @@ shell| |Tmux Config Directory|$DOTFILES_DIR/config/tmux
 shell|󰇥 |Yazi Main Config (yazi.toml)|$DOTFILES_DIR/config/yazi/yazi.toml
 shell|󰇥 |Yazi Keybindings (keymap.toml)|$DOTFILES_DIR/config/yazi/keymap.toml
 shell|󰇥 |Yazi Config Directory|$DOTFILES_DIR/config/yazi
-shell| |Neovim Init (init.lua)|$DOTFILES_DIR/config/nvim/init.lua
-shell| |Neovim Config Directory|$DOTFILES_DIR/config/nvim
 shell|󰖟 |PinchTab Automation Config|$DOTFILES_DIR/config/pinchtab/config.json
 shell|󰖟 |PinchTab Directory|$DOTFILES_DIR/config/pinchtab
 custom|󰒓 |Hakuspace Main Setting Script|$HAKUSPACE_DIR/main_setting.sh
@@ -319,7 +314,7 @@ Cycle through configuration categories:
   • ${BOLD}all${RESET}      - All registered configuration files & directories
   • ${BOLD}nixos${RESET}    - NixOS Flake, system modules, scripts & nixtest
   • ${BOLD}desktop${RESET}  - Waybar, Mango, Hyprland, SwayNC, Kitty, Rofi
-  • ${BOLD}shell${RESET}    - Fish shell, Starship, Tmux, Yazi, Neovim
+  • ${BOLD}shell${RESET}    - Fish shell, Starship, Tmux, Yazi
   • ${BOLD}custom${RESET}   - Hakuspace custom scripts & desktop controllers
   • ${BOLD}modified${RESET} - Files with uncommitted changes in git repository
 
@@ -357,7 +352,7 @@ EOF
             echo -e "${BOLD}${CYAN}IDE Project Workspace${RESET}"
             echo -e "${DIM}Open entire dotfiles repo in graphical IDE.${RESET}\n"
             echo "Available IDEs on system:"
-            command -v antigravity-ide >/dev/null 2>&1 && echo "  ✔ Antigravity IDE (/run/current-system/sw/bin/antigravity-ide)"
+            command -v zeditor >/dev/null 2>&1 && echo "  ✔ Zed (/run/current-system/sw/bin/zeditor)"
             command -v codex >/dev/null 2>&1 && echo "  ✔ Codex IDE (/run/current-system/sw/bin/codex)"
             command -v code >/dev/null 2>&1 && echo "  ✔ VS Code (/run/current-system/sw/bin/code)"
             return 0
@@ -483,8 +478,8 @@ show_action_menu() {
     local title="$2"
 
     local acts=()
-    acts+=("1.   Open in Terminal Editor ($EDITOR / Neovim)")
-    acts+=("2.   Open in Graphical IDE (Antigravity IDE / Codex)")
+    acts+=("1.   Open in Terminal Editor ($EDITOR / Zed)")
+    acts+=("2.   Open in Graphical IDE (Zed / Codex / VS Code)")
     acts+=("3. 󰇥  Open in Terminal File Manager (Yazi)")
     acts+=("4. 󱁤  Open in GUI File Manager (Thunar)")
     acts+=("5. 📋 Copy Target Path to Clipboard")
@@ -748,8 +743,8 @@ ${BOLD}USAGE:${RESET}
     conf help                       Show this help message
 
 ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
-    ${CYAN}Enter${RESET}       Open target in terminal editor (\$EDITOR / Neovim)
-    ${CYAN}Ctrl-E${RESET}      Open target in graphical IDE (Antigravity IDE / Codex)
+    ${CYAN}Enter${RESET}       Open target in terminal editor (\$EDITOR / Zed)
+    ${CYAN}Ctrl-E${RESET}      Open target in graphical IDE (Zed / Codex / VS Code)
     ${CYAN}Ctrl-D${RESET}      View git diff for target
     ${CYAN}Ctrl-F${RESET}      Browse folder in terminal file manager (Yazi)
     ${CYAN}Ctrl-T${RESET}      Browse folder in desktop file manager (Thunar)

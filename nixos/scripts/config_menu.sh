@@ -11,10 +11,8 @@ ROFI_THEME_STR='window { width: 44%; height: 55%; } listview { lines: 10; }'
 
 open_target() {
     local target="$1"
-    if [ "${IDE:-nvim}" = "nvim" ] && command -v nvim >/dev/null 2>&1; then
-        kitty -e nvim "$target" &
-    elif command -v antigravity-ide >/dev/null 2>&1; then
-        antigravity-ide "$target" &
+    if command -v zeditor >/dev/null 2>&1; then
+        zeditor "$target" &
     elif command -v codex >/dev/null 2>&1; then
         codex "$target" &
     elif command -v code >/dev/null 2>&1; then
@@ -73,11 +71,7 @@ main_menu() {
             for p in "$HOME/.config/waybar" "$HOME/.config/mango" "$HOME/.config/swaync" "$HOME/.config/kitty" "$HOME/.config/rofi" "$HOME/.config/fish" "$HOME/hakuspace-control" "$HOME/Code/Dotfiles/nixos"; do
                 [ -e "$p" ] && existing+=("$p")
             done
-            if command -v antigravity-ide >/dev/null 2>&1; then
-                antigravity-ide -n "${existing[@]}" &
-            else
-                code -n "${existing[@]}" &
-            fi
+            code -n "${existing[@]}" &
             ;;
         *)
             local target_path="${TARGET_MAP["$selected"]}"

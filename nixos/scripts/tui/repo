@@ -52,8 +52,8 @@ open_in_editor() {
     [ -z "$target" ] && return 1
     if [ -n "${EDITOR:-}" ]; then
         "$EDITOR" "$target"
-    elif command -v nvim >/dev/null 2>&1; then
-        nvim "$target"
+    elif command -v zeditor >/dev/null 2>&1; then
+        zeditor --wait "$target"
     elif command -v nano >/dev/null 2>&1; then
         nano "$target"
     else
@@ -64,12 +64,9 @@ open_in_editor() {
 open_in_ide() {
     local target="$1"
     [ -z "$target" ] && return 1
-    if [ "${IDE:-nvim}" = "nvim" ] && command -v nvim >/dev/null 2>&1; then
-        kitty -e nvim "$target" >/dev/null 2>&1 &
-        notify "normal" "nvim" "Git Workspace" "Opened in Neovim: $(basename "$target")"
-    elif command -v antigravity-ide >/dev/null 2>&1; then
-        antigravity-ide "$target" >/dev/null 2>&1 &
-        notify "normal" "antigravity" "Git Workspace" "Opened in Antigravity IDE: $(basename "$target")"
+    if command -v zeditor >/dev/null 2>&1; then
+        zeditor "$target" >/dev/null 2>&1 &
+        notify "normal" "zed" "Git Workspace" "Opened in Zed: $(basename "$target")"
     elif command -v codex >/dev/null 2>&1; then
         codex "$target" >/dev/null 2>&1 &
         notify "normal" "codex" "Git Workspace" "Opened in Codex: $(basename "$target")"
@@ -303,8 +300,8 @@ show_action_menu() {
 
     local acts=()
     acts+=("1. 󰊢  Open in LazyGit (lazygit)")
-    acts+=("2.   Open in Terminal Editor ($EDITOR / Neovim)")
-    acts+=("3.   Open in Graphical IDE (Antigravity IDE / Codex)")
+    acts+=("2.   Open in Terminal Editor ($EDITOR / Zed)")
+    acts+=("3.   Open in Graphical IDE (Zed / Codex / VS Code)")
     acts+=("4. 󰇥  Browse Repository in Yazi")
     acts+=("5. 󱁤  Open in GUI File Manager (Thunar)")
     acts+=("6.   Pull Latest Changes (git pull --rebase)")
@@ -525,9 +522,9 @@ ${BOLD}USAGE:${RESET}
     repo help                       Show this help message
 
 ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
-    ${CYAN}Enter${RESET}       Open contextual action menu (LazyGit, Neovim, IDE, Commit, Logs)
+    ${CYAN}Enter${RESET}       Open contextual action menu (LazyGit, Editor, IDE, Commit, Logs)
     ${CYAN}Ctrl-G${RESET}      Open repository in LazyGit
-    ${CYAN}Ctrl-E${RESET}      Open repository in graphical IDE (Antigravity IDE / Codex)
+    ${CYAN}Ctrl-E${RESET}      Open repository in graphical IDE (Zed / Codex / VS Code)
     ${CYAN}Ctrl-P${RESET}      Pull latest changes (git pull --rebase)
     ${CYAN}Ctrl-U${RESET}      Push local commits to remote (git push)
     ${CYAN}Ctrl-S${RESET}      Quick stage and commit dialog

@@ -17,7 +17,7 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 | **App Launcher & Menus**| [Rofi](https://github.com/davatorium/rofi) (Wayland) | Multi-mode launcher + interactive submenus (Wi-Fi, Bluetooth, Audio, Processes, Disk, Clean, Config) |
 | **Terminal & Multiplexer**| [Kitty](https://sw.kovidgoyal.net/kitty/) + [Tmux](https://github.com/tmux/tmux) | GPU-accelerated terminal (Gruvbox Dark) + Tmux patched for 100MB buffer limit |
 | **TUI Control Center** | [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) + 21 TUI Suite | Master CLI/FZF launcher & 21 unified interactive TUIs for system, network, dev & desktop |
-| **Code Editor** | [Neovim](https://neovim.io/) | LazyVim IDE with OLED #000000 theme, full VS Code key parity, & Antigravity AI |
+| **Code Editor** | [Zed](https://zed.dev/) | Native Rust editor from nixpkgs unstable; default `$EDITOR` (`zed-wait`) and handler for text/code files |
 | **File Managers** | [Yazi](https://github.com/sxyazi/yazi) + [Thunar](https://docs.xfce.org/xfce/thunar/start) | Lightning-fast TUI file manager with Ueberzug++ previews & shell cd integration + GUI fallback |
 | **Shell** | [Fish](https://fishshell.com/) + [Starship](https://starship.rs/) | Interactive shell with Zoxide, Direnv, Eza, Yazi `Ctrl+O` hotkey, and smart `agy` token wrapper |
 | **Audio Stack** | [PipeWire](https://pipewire.org/) + WireMix | PipeWire + ALSA + Pulse + JACK + WireMix TUI + Realtek ALC256 ASUS mic pin routing |
@@ -58,20 +58,13 @@ A fully declarative, high-performance, and aesthetically refined **NixOS (25.05)
 │   ├── mango/                          # MangoWM Wayland Compositor configuration suite
 │   │   ├── config.conf                 # Master entrypoint sourcing sub-configs and user overrides
 │   │   ├── autostart.conf              # Startup daemons (awww, swaync, hypridle, cliphist, waybar, dockbar, polkit)
-│   │   ├── bind.conf                   # Keybindings (WASD navigation, Kitty+Tmux, Antigravity IDE, Rofi menus, media)
+│   │   ├── bind.conf                   # Keybindings (WASD navigation, Kitty+Tmux, Rofi menus, media)
 │   │   ├── layout.conf                 # Scroller layout engine rules, master-stack, and dwindle settings
 │   │   ├── effect.conf                 # Visual effects: 2-pass blur, noise, brightness/saturation, 24px drop-shadows
 │   │   ├── animation.conf              # Cubic-bezier zoom, slide, and fade window transitions
 │   │   ├── rule.conf                   # Tag/workspace layout bindings and layer animation exceptions
 │   │   ├── settings.conf               # Hot corners, cursor theme (Bibata-Modern-Ice), and XWayland persistence
 │   │   └── pkg-mango.txt               # Package dependencies list (mangowm-git, gammastep, xdg-desktop-portal-wlr)
-│   ├── nvim/                           # Neovim configuration powered by LazyVim starter
-│   │   ├── init.lua                    # Neovim entrypoint
-│   │   ├── lazy-lock.json              # Locked plugin dependencies
-│   │   ├── lazyvim.json                # LazyVim extra configuration and settings
-│   │   └── lua/
-│   │       ├── config/                 # LazyVim options, keymaps, autocmds, and lazy.nvim bootstrap
-│   │       └── plugins/                # Antigravity AI, OLED black theme, VS Code keys, glance, undotree
 │   ├── rofi/                           # Rofi application launcher and menu themes
 │   │   ├── config.rasi                 # Master configuration (drun & Processes modes, keyboard navigation bindings)
 │   │   ├── horizontal.rasi             # Horizontal card layout theme variant
@@ -243,10 +236,10 @@ The NixOS configuration is built on flakes with a modular separation of concerns
 - **Tmux Buffer Patch**: Overrides `tmux` input buffer size from 1MB to 100MB (`#define INPUT_BUF_LIMIT 104857600`) in `input.c`, eliminating scrollback truncations during large build or log outputs.
 - **Yazi Terminal Reset Patch**: Applies `yazi-disable-trt.patch` onto `yazi-unwrapped` to prevent spurious terminal state clears when transitioning between preview filters.
 - **Wayland-VPet Fullscreen Patch**: Applies `wayland-vpet-fullscreen.patch` to allow the desktop pet overlay to persist during full-screen applications without auto-hiding.
-- **Default Applications**: Default text and code MIME associations (text/plain, markdown, python, C/C++, Rust, shell, lua, yaml, json, js) mapped to [Neovim](https://neovim.io/) (`nvim.desktop`); default images mapped to lightweight [Viewnior](https://github.com/hellnest/viewnior) with [Swappy](https://github.com/jtheoof/swappy) for annotations.
+- **Default Applications**: Default text and code MIME associations (text/plain, markdown, python, C/C++, Rust, shell, lua, yaml, json, js) mapped to [Zed](https://zed.dev/) (`dev.zed.Zed.desktop`); default images mapped to lightweight [Viewnior](https://github.com/hellnest/viewnior) with [Swappy](https://github.com/jtheoof/swappy) for annotations.
 
 ### 3. Package Management & System Menu Wrappers (`nixos/modules/pkgs.nix`)
-- Declares development toolchains (`gh`, `lazygit`, `lazydocker`, `lazysql`, `git`, `neovim`), networking & VPN utilities (`openvpn`, `haguichi`, `cifs-utils`), audio tools (`pkgs_unstable.wiremix`), desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), and custom binary wrappers:
+- Declares development toolchains (`gh`, `lazygit`, `lazydocker`, `lazysql`, `git`, `pkgs_unstable.zed-editor` + the `zed-wait` wrapper used as `$EDITOR`), networking & VPN utilities (`openvpn`, `haguichi`, `cifs-utils`), audio tools (`pkgs_unstable.wiremix`), desktop applications, Wayland utilities (`wtype` typing tool, `wl-clipboard`), and custom binary wrappers:
   - **Master TUI Launcher**: `s` (interactive CLI & fzf command center unifying all 21 system tools).
   - **21 Interactive TUI Tools**: `wifi`, `bluetooth` (`bt`), `tb` (`tunnelbear`), `ports` (`port`), `share`, `nixos` (`gens`), `service` (`services`), `disk` (`storage`), `task` (`tasks`), `ram` (`restore`, `restore-ram`), `log` (`logs`, `journal`), `app` (`apps`, `launch`), `repo` (`repos`, `gitui`), `tm` (`project`), `pkg` (`pkgs`), `container` (`containers`, `vm`), `conf` (`config`, `configs`), `audio`, `setting` (`settings`), `theme`, `clip` (`clips`).
   - **System Test Suite**: `nixtest` (modular 14-subsystem verification suite).
@@ -270,8 +263,7 @@ MangoWM is a dynamic tiling Wayland compositor built on the **Scroller layout** 
 | :--- | :--- |
 | `Super + Q` | Open standalone clean Kitty terminal |
 | `Super + Shift + Q` | Open Kitty terminal running **Tmux** in fullscreen |
-| `Super + R` | Launch **Neovim** in Kitty (`kitty -e nvim`) |
-| `Super + Shift + R` | Launch **Antigravity IDE** (`antigravity-ide`) |
+| `Super + R` | Launch **Zed** (`zeditor`) |
 | `Super + Escape` | Open Master TUI Command Center modal (`tui-popup s`) |
 | `Super + ,` | Open Quick Settings modal (`tui-popup setting`) |
 | `Super + TAB` | Open Application launcher modal (`tui-popup app`) |
@@ -369,7 +361,7 @@ tui-popup <cmd> # Summon any TUI tool in a floating, centered Wayland modal wind
 | [`tm`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/tm) | `project` | **Dev** | **Tmux Sessions & Projects**: Interactive session switcher, window/pane preview, kill/detach sessions, and new project session bootstrap. |
 | [`pkg`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/pkg) | `pkgs` | **Dev** | **Nix Package Explorer**: Search systemPackages, view derivation details, copy package names, or spawn instant `nix-shell -p <pkg>`. |
 | [`container`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/container) | `containers`, `vm` | **Dev** | **Docker & Libvirt VM Manager**: Inspect running/stopped containers, start/stop/restart, follow container logs, and attach `/bin/sh`. |
-| [`conf`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/conf) | `config`, `configs` | **Dev** | **Dotfiles & Config Picker**: Syntax-highlighted `bat` previews, Git diff indicators, and instant jump into Neovim for any dotfile. |
+| [`conf`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/conf) | `config`, `configs` | **Dev** | **Dotfiles & Config Picker**: Syntax-highlighted `bat` previews, Git diff indicators, and instant jump into Zed for any dotfile. |
 | [`audio`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/audio) | `audio` | **Desktop** | **PipeWire & WirePlumber Mixer**: Terminal volume faders, sink/source routing, mute toggles, WireMix integration, ALC256 mic testing. |
 | [`setting`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/setting) | `settings` | **Desktop** | **Quick Settings**: Backlight brightness faders (`brightnessctl`), volume sliders, power governor, screen idle inhibit, SwayNC DND toggle. |
 | [`theme`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/theme) | `theme` | **Desktop** | **Themes & Wallpapers**: Wallpaper transitions, fonts, and cava audio visualizer styles. |
@@ -403,37 +395,16 @@ The system integrates official TunnelBear OpenVPN profiles directly with Network
 - **Cursor**: Beam cursor with dynamic trailing decay (`cursor_trail 2`, `cursor_trail_decay 0.1 0.4`).
 - **Features**: Unix control socket (`unix:/tmp/kitty`) enabled for programmatic tab and script control.
 
-### ⚡ Neovim & LazyVim (`config/nvim/`)
-- **Starter Architecture**: Powered by the official [LazyVim](https://www.lazyvim.org/) starter configuration for ultra-fast startup, robust LSP diagnostics, syntax highlighting, and modular plugin management.
-- **Visual Design & OLED Theme (`lua/plugins/colorscheme.lua`)**:
-  - **Total Black OLED Theme**: Pure pitch-black (`#000000`) background across all normal windows, floating dialogues, statuslines, sidebars, telescope pickers, and gutter columns.
-  - Transparent floating borders and subtle contrast highlights tuned for high-contrast readability.
-- **VS Code Key Parity (`lua/plugins/vscode.lua`)**:
-  - Full IDE keymap parity matching VS Code muscle memory seamlessly across Normal, Insert, Visual, and Select modes:
-    - **Editing & Deletion**: True `Backspace` and `Delete` behavior in all modes (deleting character left/right, joining lines, clearing selections without register pollution), `Ctrl+Backspace` / `Ctrl+Delete` (word deletion).
-    - **Navigation & Selection**: `Shift + Arrows` (visual selection), `Ctrl + Arrows` (subword/word jump), `Home` / `End`, `Shift + Home` / `Shift + End`.
-    - **Clipboard & History**: `Ctrl+S` (save file), `Ctrl+Z` (undo), `Ctrl+Y` / `Ctrl+Shift+Z` (redo), `Ctrl+C` / `Ctrl+X` / `Ctrl+V` (system clipboard sync).
-    - **Search & Replace**: `Ctrl+F` (buffer find), `Ctrl+H` (find & replace modal), `Ctrl+P` (fast file finder), `Ctrl+Shift+P` (command palette).
-    - **Lines & Comments**: `Alt+Up/Down` (move lines), `Shift+Alt+Up/Down` (duplicate lines), `Ctrl+/` (toggle comment).
-    - **LSP & Modals**: `F2` (live symbol rename), `F1` (interactive full keymap picker across all modes), `Ctrl+B` (toggle Neo-tree), `Ctrl+~` (toggle terminal).
-- **Antigravity AI Copilot (`lua/plugins/antigravity.lua`, `completion.lua`)**:
-  - Integrated with local `antigravity-cli` for context-aware inline code suggestions and ghost text generation.
-  - Dedicated keybindings: `Ctrl + Alt + A` to trigger completions, `<Tab>` to accept, and `<Esc><Esc>` to dismiss without compositor or terminal interference.
-- **Enhanced Productivity & Git Plugins**:
-  - **Glance (`glance.nvim`)**: VS Code-style peek windows for definitions (`gpd`), references (`gpr`), implementations (`gpi`), and type definitions (`gpt`).
-  - **Undotree (`undotree.lua`)**: Visual interactive undo-history tree view (`<leader>u`).
-  - **Smart Open (`smart-open.nvim`)**: Advanced frecency algorithm combining recency, frequency, and Git status for lightning-fast file jumping.
-  - **Highlight Undo (`highlight-undo.nvim`)**: Visual flashes highlighting modified lines during undo/redo operations.
-  - **Hlslens (`nvim-hlslens`)**: Search lens showing total matches, current match index, and offscreen indicators.
-  - **Spider (`nvim-spider`)**: CamelCase and snake_case subword motions replacing standard `w`/`e`/`b`.
-  - **Flash (`flash.nvim`)**: Two-character bidirectional jump navigation for fast hopping across open buffers.
-  - **Git Suite & Lazygit (`lua/plugins/gitsigns.lua`, `pkgs.nix`)**: `<leader>gg` opens Lazygit in a floating terminal, alongside `<leader>g` hunks staging, resets, inline diffs, and blame previews.
+### ⚡ Zed (default editor)
+- Installed as `pkgs_unstable.zed-editor` (stable 25.05 ships 0.189). The command is `zeditor`; `Super + R` launches it, and it owns the text/code MIME types.
+- `EDITOR` / `VISUAL` are `zed-wait` (a `pkgs.nix` wrapper for `zeditor --wait`), so `git commit`, `conf`, `clip` and other `$EDITOR` callers block until the tab closes. `IDE` is `zeditor`, used by `config-menu`, `conf` and `repo` for their "open in IDE" actions.
+- Zed stores credentials (sign-in, AI provider keys) in GNOME Keyring (`services.gnome.gnome-keyring` in `services.nix`, which GDM unlocks when you log in).
 
 ### 🪟 Tmux Multiplexer (`config/tmux/`)
 - **Configuration (`tmux.conf`)**:
   - Vi-mode copy/paste keybindings, custom statusbar formatting with clean window lists, active window highlight, and clock.
   - Seamless pane splitting (`|` and `-`), navigation, and window resizing.
-  - **Extended Keys (`extended-keys on`)**: `terminal-features 'xterm*:extkeys'` enabled to forward complex key combinations (e.g. `Ctrl+Alt+A`) to Neovim and shell processes reliably.
+  - **Extended Keys (`extended-keys on`)**: `terminal-features 'xterm*:extkeys'` enabled to forward complex key combinations (e.g. `Ctrl+Alt+A`) to TUI apps and shell processes reliably.
 - **Cheat Sheet (`cheatsheet.sh`)**:
   - Interactive popup cheat sheet summarizing essential Tmux shortcuts for session, window, and pane manipulation.
 
@@ -469,7 +440,7 @@ Includes fast shell initialization, tool hooks, and rich workflow abbreviations:
 | **Dev** | `repo` / `repos` / `gitui` | Multi-repository Git radar across `~/Code` |
 | **Dev** | `tm` / `project` | Interactive Tmux sessions & project workspaces manager |
 | **Dev** | `pkg` / `pkgs` | Search declared packages and test in temporary `nix-shell` |
-| **Dev** | `conf` / `config` | Dotfiles & config picker with syntax preview & Neovim jump |
+| **Dev** | `conf` / `config` | Dotfiles & config picker with syntax preview & Zed jump |
 | **Dev** | `container` / `vm` | Docker container and Libvirt VM controller |
 | **Desktop** | `audio` / `setting` / `theme` / `clip` | Volume mixer, quick settings, Waybar/wallpapers, and clipboard history |
 | **Testing** | `nixtest` | Run modular NixOS verification test suite (`all`, `modules`, or `<module>`) |

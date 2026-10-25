@@ -7,6 +7,8 @@
   services.power-profiles-daemon.enable = true;
   services.udisks2.enable = true;
   services.gvfs.enable = true;
+  # Secret Service for Zed's credentials (sign-in, AI provider keys); GDM's PAM unlocks it at login.
+  services.gnome.gnome-keyring.enable = true;
   services.udev.packages = [ pkgs.android-udev-rules ];
   services.udev.extraRules = ''
     KERNEL=="event*", SUBSYSTEM=="input", TAG+="uaccess"

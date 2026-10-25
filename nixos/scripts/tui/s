@@ -66,7 +66,7 @@ repo|dev| |Multi-Repository Git Dashboard|repos, gitui|Radar across all git p
 tm|dev| |Tmux Sessions & Git Projects Dashboard|project|Manage tmux sessions, jump to projects, panes
 pkg|dev|📦|Nix Package Explorer & Ephemeral Shells|pkgs|Inspect declared pkgs, test in nix-shell, copy
 container|dev|🐳|Docker Containers & Libvirt VM Manager|containers, vm|Start, stop, restart, follow logs, shell
-conf|dev|󰒓 |Dotfiles & Config Picker with Preview|config, configs|Bat preview, git diff, jump to configs in nvim
+conf|dev|󰒓 |Dotfiles & Config Picker with Preview|config, configs|Bat preview, git diff, jump to configs in Zed
 audio|desktop|󰕾 |PipeWire & WirePlumber Audio Mixer|audio|Volume slider, mute, node routing, ALC256 test
 setting|desktop|󰒓 |System Settings & Wayland Controls|settings|Brightness, volume, power profile, idle, DND
 theme|desktop|󰏘 |Themes, Wallpapers & Waybar Customizer|theme|Switch Waybar layouts, wallpapers, fonts, cava
@@ -173,7 +173,7 @@ EOF
         *)
             cat <<'EOF'
   Enter   Launch tool interactive session
-  Ctrl-O  Open script source in Neovim
+  Ctrl-O  Open script source in Zed
   Ctrl-H  View CLI help manual
 EOF
             ;;
@@ -348,7 +348,7 @@ EOF
             cat <<EOF
 ${BOLD}${CYAN}TUI Hub Shortcuts${RESET}
   • ${BOLD}Enter${RESET}   - Launch the highlighted tool immediately
-  • ${BOLD}Ctrl-O${RESET}  - Open script source code in Neovim (\$EDITOR)
+  • ${BOLD}Ctrl-O${RESET}  - Open script source code in Zed (\$EDITOR)
   • ${BOLD}Ctrl-H${RESET}  - View the command-line help manual for the tool
   • ${BOLD}Ctrl-C${RESET}  - Copy tool command name to clipboard
   • ${BOLD}Tab${RESET}     - Filter tools by category (network/system/dev/desktop)
@@ -475,7 +475,7 @@ cmd_interactive() {
 
         case "$key" in
             ctrl-o)
-                [ -f "$script_path" ] && "${EDITOR:-nvim}" "$script_path"
+                [ -f "$script_path" ] && "${EDITOR:-zed-wait}" "$script_path"
                 continue
                 ;;
             ctrl-h)
@@ -547,7 +547,7 @@ ${BOLD}SUPPORTED TOOLS & ALIASES:${RESET}
 
 ${BOLD}INTERACTIVE HOTKEYS (inside fzf hub):${RESET}
     ${CYAN}Enter${RESET}       Launch selected tool directly
-    ${CYAN}Ctrl-O${RESET}      Open tool script code in \$EDITOR (Neovim)
+    ${CYAN}Ctrl-O${RESET}      Open tool script code in \$EDITOR (Zed)
     ${CYAN}Ctrl-H${RESET}      View full manual / help for selected tool
     ${CYAN}Ctrl-C${RESET}      Copy tool command name to clipboard
     ${CYAN}Tab${RESET}         Cycle category filter (all -> network -> system -> dev -> desktop)

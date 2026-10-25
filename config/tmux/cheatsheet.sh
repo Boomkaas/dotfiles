@@ -46,7 +46,7 @@ ${Y}╚════════════════════════�
     ${G}Enter / l${R}           Open file or enter folder
     ${G}h${R}                   Go up to parent folder
     ${G}.${R}                   Toggle hidden files
-    ${G}e / o${R}               Edit in Neovim / Open with system app
+    ${G}e / o${R}               Edit in Zed / Open with system app
     ${G}Space / v${R}           Select item / Visual multi-select
     ${G}a / r / d / D${R}       Create / Rename / Trash / Delete permanent
     ${G}yy / x / p${R}          Copy / Cut / Paste files

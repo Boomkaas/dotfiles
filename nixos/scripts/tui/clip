@@ -187,7 +187,7 @@ show_action_menu() {
     local raw_entry="$1"
     local acts=()
     acts+=("1. 📋 Copy to Active Clipboard (wl-copy)")
-    acts+=("2. 📝 Edit in Editor before Copying ($EDITOR / Neovim)")
+    acts+=("2. 📝 Edit in Editor before Copying ($EDITOR / Zed)")
     acts+=("3. 📌 Pin to Saved Snippets ($SNIPPETS_FILE)")
     acts+=("4. 🗑️  Delete this Item from History")
     acts+=("5. 🧹 Wipe Entire History (Clear All)")
@@ -202,7 +202,7 @@ show_action_menu() {
             local tmpf
             tmpf=$(mktemp --suffix=.txt)
             decode_clip "$raw_entry" > "$tmpf"
-            "${EDITOR:-nvim}" "$tmpf"
+            "${EDITOR:-zed-wait}" "$tmpf"
             wl-copy < "$tmpf" >/dev/null 2>&1
             wl-copy --primary < "$tmpf" >/dev/null 2>&1 || true
             rm -f "$tmpf"
@@ -309,7 +309,7 @@ cmd_interactive() {
                 local tmpf
                 tmpf=$(mktemp --suffix=.txt)
                 decode_clip "$target_payload" > "$tmpf"
-                "${EDITOR:-nvim}" "$tmpf"
+                "${EDITOR:-zed-wait}" "$tmpf"
                 wl-copy < "$tmpf" >/dev/null 2>&1
                 wl-copy --primary < "$tmpf" >/dev/null 2>&1 || true
                 rm -f "$tmpf"
@@ -343,7 +343,7 @@ ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
     ${CYAN}Enter${RESET}       Copy selected item to active clipboard (wl-copy) and close window
     ${CYAN}Ctrl-D${RESET}      Delete item from clipboard history
     ${CYAN}Ctrl-P${RESET}      Pin item to saved snippets file (~/.config/snippets.txt)
-    ${CYAN}Ctrl-E${RESET}      Edit snippet in Neovim before copying
+    ${CYAN}Ctrl-E${RESET}      Edit snippet in Zed before copying
     ${CYAN}Ctrl-X${RESET}      Wipe entire clipboard history
     ${CYAN}Ctrl-R${RESET}      Refresh clipboard items
     ${CYAN}Esc / Ctrl-C${RESET} Exit picker

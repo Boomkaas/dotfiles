@@ -372,7 +372,7 @@ cmd_preview() {
             echo -e "${BOLD}${WHITE}Actions:${RESET}"
             echo -e "  ${CYAN}Enter${RESET}   Open / create tmux session in this project"
             echo -e "  ${CYAN}Ctrl-L${RESET}  Open lazygit in this directory"
-            echo -e "  ${CYAN}Ctrl-O${RESET}  Open folder in \$EDITOR (${EDITOR:-nvim})"
+            echo -e "  ${CYAN}Ctrl-O${RESET}  Open folder in \$EDITOR (${EDITOR:-zed-wait})"
             echo -e "  ${CYAN}Ctrl-D${RESET}  Show git diff"
             ;;
 
@@ -523,7 +523,7 @@ cmd_interactive() {
                 [ "$item_type" = "session" ] && open_dir=$(tmux list-sessions -F "#{session_path}" -f "#{==:#{session_name},$item_val}" 2>/dev/null || echo "$HOME")
                 if [ -d "$open_dir" ]; then
                     clear
-                    ${EDITOR:-nvim} "$open_dir"
+                    ${EDITOR:-zed-wait} "$open_dir"
                 fi
                 continue
                 ;;
@@ -594,7 +594,7 @@ ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
     ${CYAN}Ctrl-K${RESET}      Kill selected tmux session
     ${CYAN}Ctrl-N${RESET}      Create new session
     ${CYAN}Ctrl-L${RESET}      Open lazygit in selected project
-    ${CYAN}Ctrl-O${RESET}      Open project directory in \$EDITOR (${EDITOR:-nvim})
+    ${CYAN}Ctrl-O${RESET}      Open project directory in \$EDITOR (${EDITOR:-zed-wait})
     ${CYAN}Ctrl-D${RESET}      View git diff for selected project
     ${CYAN}Ctrl-R${RESET}      Refresh sessions and project list
     ${CYAN}Esc / Ctrl-C${RESET} Exit menu

@@ -354,8 +354,14 @@ EOF
 in
 {
   environment.systemPackages = with pkgs; [
-    # Antigravity from unstable (both IDE and CLI)
-    pkgs_unstable.antigravity-ide
+    # Zed IDE (default editor); unstable because stable is far behind.
+    # zed-wait blocks until the tab closes, for $EDITOR/$VISUAL (git commit etc.).
+    pkgs_unstable.zed-editor
+    (pkgs.writeShellScriptBin "zed-wait" ''
+      exec ${pkgs_unstable.zed-editor}/bin/zeditor --wait "$@"
+    '')
+
+    # Antigravity CLI from unstable
     pkgs_unstable.antigravity-cli
     (pkgs.writeShellScriptBin "antigravity" ''
       exec ${pkgs_unstable.antigravity-cli}/bin/agy "$@"
@@ -404,7 +410,6 @@ in
     lazydocker
     lazysql
     gh
-    neovim
     codex
     go
     gcc

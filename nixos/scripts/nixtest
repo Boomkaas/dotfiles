@@ -496,7 +496,7 @@ mod_shell() {
     "$CONFIG_DIR/fish/config.fish" 'function agy'
 
   # Key tools available in PATH
-  for tool in fish starship zoxide eza fzf rg fd bat tmux yazi nvim git; do
+  for tool in fish starship zoxide eza fzf rg fd bat tmux yazi zeditor zed-wait git; do
     if command -v "$tool" &>/dev/null; then _pass "PATH: $tool available"
     else _warn "PATH: $tool not found"; fi
   done
@@ -852,9 +852,8 @@ json.loads(c)
   # mango
   file_exists "Config dir exists: mango/" "$CONFIG_DIR/mango"
 
-  # Neovim
-  file_exists "Config exists: nvim/init.lua" "$CONFIG_DIR/nvim/init.lua"
-  check       "Neovim config: syntax & startup check" nvim --headless -c "qa!"
+  # Zed is the default editor
+  has "fish: EDITOR is zed-wait" "$CONFIG_DIR/fish/config.fish" "EDITOR zed-wait"
 
   module_end
 }
@@ -893,7 +892,7 @@ mod_packages() {
   fi
 
   # Key packages declared
-  for pkg in firefox neovim fish tmux git kitty; do
+  for pkg in firefox pkgs_unstable.zed-editor fish tmux git kitty; do
     if grep -qP "^\s+${pkg}$" "$NIXOS_DIR/modules/pkgs.nix" 2>/dev/null; then
       _pass "Package: $pkg declared in pkgs.nix"
     else

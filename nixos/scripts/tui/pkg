@@ -98,8 +98,8 @@ cmd_open_manifest() {
     if [ -f "$PKGS_FILE" ]; then
         local line_num
         line_num=$(grep -n -E "^\s*${pkg}\s*$" "$PKGS_FILE" | cut -d: -f1 | head -n 1)
-        if [ -n "$line_num" ] && command -v nvim >/dev/null 2>&1; then
-            nvim "+${line_num}" "$PKGS_FILE"
+        if [ -n "$line_num" ] && command -v zeditor >/dev/null 2>&1; then
+            zeditor --wait "${PKGS_FILE}:${line_num}"
         else
             "${EDITOR:-nano}" "$PKGS_FILE"
         fi

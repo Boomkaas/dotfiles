@@ -115,26 +115,26 @@
       defaultApplications = {
         "inode/directory" = [ "thunar.desktop" ];
 
-        # Text & Code Files (Neovim)
-        "text/plain" = [ "nvim.desktop" ];
-        "text/markdown" = [ "nvim.desktop" ];
-        "text/x-c" = [ "nvim.desktop" ];
-        "text/x-csrc" = [ "nvim.desktop" ];
-        "text/x-chdr" = [ "nvim.desktop" ];
-        "text/x-c++" = [ "nvim.desktop" ];
-        "text/x-c++src" = [ "nvim.desktop" ];
-        "text/x-c++hdr" = [ "nvim.desktop" ];
-        "text/x-python" = [ "nvim.desktop" ];
-        "text/x-shellscript" = [ "nvim.desktop" ];
-        "text/x-lua" = [ "nvim.desktop" ];
-        "text/x-rust" = [ "nvim.desktop" ];
-        "text/x-diff" = [ "nvim.desktop" ];
-        "application/json" = [ "nvim.desktop" ];
-        "application/xml" = [ "nvim.desktop" ];
-        "application/x-yaml" = [ "nvim.desktop" ];
-        "text/yaml" = [ "nvim.desktop" ];
-        "text/javascript" = [ "nvim.desktop" ];
-        "application/javascript" = [ "nvim.desktop" ];
+        # Text & Code Files (Zed)
+        "text/plain" = [ "dev.zed.Zed.desktop" ];
+        "text/markdown" = [ "dev.zed.Zed.desktop" ];
+        "text/x-c" = [ "dev.zed.Zed.desktop" ];
+        "text/x-csrc" = [ "dev.zed.Zed.desktop" ];
+        "text/x-chdr" = [ "dev.zed.Zed.desktop" ];
+        "text/x-c++" = [ "dev.zed.Zed.desktop" ];
+        "text/x-c++src" = [ "dev.zed.Zed.desktop" ];
+        "text/x-c++hdr" = [ "dev.zed.Zed.desktop" ];
+        "text/x-python" = [ "dev.zed.Zed.desktop" ];
+        "text/x-shellscript" = [ "dev.zed.Zed.desktop" ];
+        "text/x-lua" = [ "dev.zed.Zed.desktop" ];
+        "text/x-rust" = [ "dev.zed.Zed.desktop" ];
+        "text/x-diff" = [ "dev.zed.Zed.desktop" ];
+        "application/json" = [ "dev.zed.Zed.desktop" ];
+        "application/xml" = [ "dev.zed.Zed.desktop" ];
+        "application/x-yaml" = [ "dev.zed.Zed.desktop" ];
+        "text/yaml" = [ "dev.zed.Zed.desktop" ];
+        "text/javascript" = [ "dev.zed.Zed.desktop" ];
+        "application/javascript" = [ "dev.zed.Zed.desktop" ];
 
         # Web / Browsers
         "text/html" = [ "firefox.desktop" ];
