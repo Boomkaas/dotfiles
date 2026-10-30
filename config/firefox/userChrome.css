@@ -1,0 +1,101 @@
+/* ==========================================
+   FIREFOX CHROME — PURE BLACK
+   Black toolbars, tabs and panels with white
+   accents, to match niri, kitty and gtk.css.
+   Needs toolkit.legacyUserProfileCustomizations.stylesheets (user.js).
+   ========================================== */
+
+:root {
+    --toolbox-bgcolor: #000000 !important;
+    --toolbox-bgcolor-inactive: #000000 !important;
+    --toolbox-textcolor: #ffffff !important;
+    --toolbox-textcolor-inactive: rgba(255, 255, 255, 0.6) !important;
+    --toolbar-bgcolor: #000000 !important;
+    --toolbar-color: #ffffff !important;
+    --toolbar-field-background-color: rgba(255, 255, 255, 0.05) !important;
+    --toolbar-field-focus-background-color: #0a0a0a !important;
+    --toolbar-field-color: #ffffff !important;
+    --toolbar-field-focus-color: #ffffff !important;
+    --toolbar-field-border-color: transparent !important;
+    --toolbar-field-focus-border-color: rgba(255, 255, 255, 0.3) !important;
+    --toolbarbutton-hover-background: rgba(255, 255, 255, 0.1) !important;
+    --toolbarbutton-active-background: rgba(255, 255, 255, 0.2) !important;
+    --tab-selected-bgcolor: rgba(255, 255, 255, 0.1) !important;
+    --tab-selected-textcolor: #ffffff !important;
+    --tab-hover-background-color: rgba(255, 255, 255, 0.05) !important;
+    --tabpanel-background-color: #000000 !important;
+    --sidebar-background-color: #000000 !important;
+    --sidebar-text-color: #ffffff !important;
+    --chrome-content-separator-color: transparent !important;
+    --focus-outline-color: #ffffff !important;
+    --arrowpanel-background: #0a0a0a !important;
+    --arrowpanel-color: #ffffff !important;
+    --arrowpanel-border-color: rgba(255, 255, 255, 0.1) !important;
+    --panel-background: #0a0a0a !important;
+    --menu-background-color: #0a0a0a !important;
+    --menu-color: #ffffff !important;
+    --urlbarView-highlight-background: rgba(255, 255, 255, 0.1) !important;
+    --urlbarView-highlight-color: #ffffff !important;
+    --button-primary-bgcolor: #ffffff !important;
+    --button-primary-color: #000000 !important;
+}
+
+#navigator-toolbox,
+#TabsToolbar,
+#nav-bar,
+#PersonalToolbar,
+#titlebar,
+#sidebar-box,
+#sidebar-main,
+#browser,
+#tabbrowser-tabpanels,
+#appcontent,
+findbar {
+    background-color: #000000 !important;
+    background-image: none !important;
+    border-color: transparent !important;
+}
+
+/* ---------- Menus & panels ---------- */
+
+menupopup, panel {
+    --panel-border-radius: 16px !important;
+    --arrowpanel-border-radius: 12px !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+
+menuitem:hover, menu:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    border-radius: 12px !important;
+}
+
+menupopup menuitem,
+menupopup menu {
+    font-size: 18px !important;
+}
+
+#appMenu-popup .subviewbutton,
+.panel-subview-body,
+.subviewbutton {
+    font-size: 16px !important;
+}
+
+#appMenu-popup .subviewbutton {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+}
+
+/* ---------- URL bar ---------- */
+
+#urlbar {
+    border-radius: 12px !important;
+}
+
+#urlbar-input {
+    color: #ffffff !important;
+}
+
+#urlbar-input-container {
+    align-items: center !important;
+}

@@ -1,0 +1,19 @@
+/* ==========================================
+   FIREFOX CONTENT — PURE BLACK INTERNAL PAGES
+   New tab, home, blank and about: pages.
+   ========================================== */
+
+@-moz-document url-prefix("about:") {
+    :root {
+        --newtab-background-color: #000000 !important;
+        --newtab-background-color-secondary: #0a0a0a !important;
+        --in-content-page-background: #000000 !important;
+        --in-content-box-background: #0a0a0a !important;
+        --background-color-canvas: #000000 !important;
+        --background-color-box: #0a0a0a !important;
+    }
+
+    html, body {
+        background-color: #000000 !important;
+    }
+}

@@ -1,0 +1,16 @@
+# Black-and-white notifications to match the niri "creation of adam" look.
+# Click a notification to run its default action (e.g. "I am here").
+font=JetBrainsMono Nerd Font 10
+background-color=#030303e6
+text-color=#e0e0e0
+border-color=#505050
+border-size=1
+border-radius=0
+padding=10
+margin=16
+width=360
+default-timeout=5000
+anchor=top-right
+
+[urgency=critical]
+border-color=#ffffff
