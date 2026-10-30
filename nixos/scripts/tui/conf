@@ -125,50 +125,24 @@ nixos| |NixOS Base System Settings|$DOTFILES_DIR/nixos/modules/core/system.ni
 nixos| |NixOS User Accounts & Privileges|$DOTFILES_DIR/nixos/modules/core/user.nix
 nixos| |NixOS Hardware Configuration|$DOTFILES_DIR/nixos/system/hardware-configuration.nix
 nixos| |NixOS System Configuration|$DOTFILES_DIR/nixos/system/configuration.nix
-nixos| |NixOS Script Test Suite (nixtest)|$DOTFILES_DIR/nixos/scripts/nixtest
 nixos| |NixOS Core Shell Scripts Folder|$DOTFILES_DIR/nixos/scripts
 nixos| |NixOS TUI Tools Directory|$DOTFILES_DIR/nixos/scripts/tui
-desktop|󰒓 |Waybar Main Config (JSONC)|$DOTFILES_DIR/config/waybar/config.jsonc
-desktop|󰒓 |Waybar Active Stylesheet (CSS)|$DOTFILES_DIR/config/waybar/style.css
-desktop|󰒓 |Waybar Configuration Directory|$DOTFILES_DIR/config/waybar
-desktop|󰒓 |Mango Compositor Main Config|$DOTFILES_DIR/config/mango/config.conf
-desktop|󰒓 |Mango Keybindings (bind.conf)|$DOTFILES_DIR/config/mango/bind.conf
-desktop|󰒓 |Mango Core Settings (settings.conf)|$DOTFILES_DIR/config/mango/settings.conf
-desktop|󰒓 |Mango Autostart Services|$DOTFILES_DIR/config/mango/autostart.conf
-desktop|󰒓 |Mango Window Rules (rule.conf)|$DOTFILES_DIR/config/mango/rule.conf
-desktop|󰒓 |Mango Visual Effects (effect.conf)|$DOTFILES_DIR/config/mango/effect.conf
-desktop|󰒓 |Mango Window Layouts (layout.conf)|$DOTFILES_DIR/config/mango/layout.conf
-desktop|󰒓 |Mango Animations (animation.conf)|$DOTFILES_DIR/config/mango/animation.conf
-desktop|󰒓 |Mango Environment Vars (env.conf)|$DOTFILES_DIR/config/mango/env.conf
-desktop|󰒓 |Mango Config Directory|$DOTFILES_DIR/config/mango
-desktop|󰒓 |Hyprland Idle Watchdog (hypridle)|$DOTFILES_DIR/config/hypr/hypridle.conf
-desktop|󰒓 |Hyprland Screen Lock (hyprlock)|$DOTFILES_DIR/config/hypr/hyprlock.conf
-desktop|󰒓 |Hyprland Config Directory|$DOTFILES_DIR/config/hypr
-desktop|󰒓 |SwayNC Notification Settings|$DOTFILES_DIR/config/swaync/config.json
-desktop|󰒓 |SwayNC Notification CSS|$DOTFILES_DIR/config/swaync/style.css
-desktop|󰒓 |SwayNC Config Directory|$DOTFILES_DIR/config/swaync
-desktop|󰒓 |Kitty Terminal Config|$DOTFILES_DIR/config/kitty/kitty.conf
-desktop|󰒓 |Kitty Config Directory|$DOTFILES_DIR/config/kitty
-desktop|󰒓 |Rofi Launcher Main Config|$DOTFILES_DIR/config/rofi/config.rasi
-desktop|󰒓 |Rofi Themes & Config Directory|$DOTFILES_DIR/config/rofi
-desktop|󰒓 |BongoCat Virtual Pet Config|$DOTFILES_DIR/config/bongocat/bongocat.conf
-desktop|󰒓 |BongoCat Config Directory|$DOTFILES_DIR/config/bongocat
-desktop|󰒓 |Thunar Custom Actions (UCA XML)|$DOTFILES_DIR/config/Thunar/uca.xml
+desktop|󰒓 |niri Compositor Config (config.kdl)|$DOTFILES_DIR/config/niri/config.kdl
+desktop|󰒓 |niri Config Directory|$DOTFILES_DIR/config/niri
+desktop| |Kitty Terminal Config|$DOTFILES_DIR/config/kitty/kitty.conf
+desktop| |Fastfetch Config (config.jsonc)|$DOTFILES_DIR/config/fastfetch/config.jsonc
+desktop| |fetch 3D Logo Config|$DOTFILES_DIR/config/fetch/config
 shell|󰈺 |Fish Shell Config (config.fish)|$DOTFILES_DIR/config/fish/config.fish
 shell|󰈺 |Fish Functions & Config Folder|$DOTFILES_DIR/config/fish
-shell|🚀|Starship Prompt Configuration|$DOTFILES_DIR/config/starship.toml
 shell| |Tmux Multiplexer Config|$DOTFILES_DIR/config/tmux/tmux.conf
 shell| |Tmux Config Directory|$DOTFILES_DIR/config/tmux
 shell|󰇥 |Yazi Main Config (yazi.toml)|$DOTFILES_DIR/config/yazi/yazi.toml
 shell|󰇥 |Yazi Keybindings (keymap.toml)|$DOTFILES_DIR/config/yazi/keymap.toml
 shell|󰇥 |Yazi Config Directory|$DOTFILES_DIR/config/yazi
-shell|󰖟 |PinchTab Automation Config|$DOTFILES_DIR/config/pinchtab/config.json
-shell|󰖟 |PinchTab Directory|$DOTFILES_DIR/config/pinchtab
 custom|󰒓 |Hakuspace Main Setting Script|$HAKUSPACE_DIR/main_setting.sh
 custom|󰒓 |Hakuspace Menu Custom Script|$HAKUSPACE_DIR/hakumenu-general-custom.sh
 custom|󰒓 |Hakuspace Mango Custom Config|$HAKUSPACE_DIR/mango-custom.conf
 custom|󰒓 |Hakuspace Hyprland Custom Lua|$HAKUSPACE_DIR/hyprland-custom.lua
-custom|󰒓 |Hakuspace Dockbar App Pins|$HAKUSPACE_DIR/dockbar_pin_apps
 custom|󰒓 |Hakuspace Niri Custom KDL|$HAKUSPACE_DIR/niri-custom.kdl
 custom|󱁤 |Hakuspace Control Root Directory|$HAKUSPACE_DIR
 repo| |Dotfiles Git Repository Root|$DOTFILES_DIR
@@ -312,8 +286,8 @@ cmd_preview() {
 ${BOLD}${CYAN}Scope Filtering${RESET}
 Cycle through configuration categories:
   • ${BOLD}all${RESET}      - All registered configuration files & directories
-  • ${BOLD}nixos${RESET}    - NixOS Flake, system modules, scripts & nixtest
-  • ${BOLD}desktop${RESET}  - Waybar, Mango, Hyprland, SwayNC, Kitty, Rofi
+  • ${BOLD}nixos${RESET}    - NixOS Flake, system modules & scripts
+  • ${BOLD}desktop${RESET}  - Mango, Hyprland, SwayNC, Kitty, Rofi
   • ${BOLD}shell${RESET}    - Fish shell, Starship, Tmux, Yazi
   • ${BOLD}custom${RESET}   - Hakuspace custom scripts & desktop controllers
   • ${BOLD}modified${RESET} - Files with uncommitted changes in git repository
@@ -450,7 +424,7 @@ EOF
 
         # Check for primary config file snippet
         local primary=""
-        for candidate in "$target/config.jsonc" "$target/config.conf" "$target/settings.conf" "$target/config.fish" "$target/init.lua" "$target/tmux.conf" "$target/kitty.conf" "$target/hypridle.conf" "$target/config.rasi" "$target/flake.nix"; do
+        for candidate in "$target/config.kdl" "$target/config.jsonc" "$target/kitty.conf" "$target/config.fish" "$target/tmux.conf" "$target/yazi.toml" "$target/flake.nix"; do
             if [ -f "$candidate" ]; then
                 primary="$candidate"
                 break

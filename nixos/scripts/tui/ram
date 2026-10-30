@@ -42,10 +42,10 @@ fi
 
 export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
 
-# Ensure Mango IPC socket is discovered if running under Wayland
-if [ -z "${MANGO_INSTANCE_SIGNATURE:-}" ]; then
-    MANGO_INSTANCE_SIGNATURE=$(ls /run/user/"$TARGET_UID"/mango-*.sock 2>/dev/null | head -n1 || true)
-    export MANGO_INSTANCE_SIGNATURE
+# Ensure the niri IPC socket is discovered if running under Wayland
+if [ -z "${NIRI_SOCKET:-}" ]; then
+    NIRI_SOCKET=$(ls /run/user/"$TARGET_UID"/niri.*.sock 2>/dev/null | head -n1 || true)
+    export NIRI_SOCKET
 fi
 
 # ------------------------------------------------------------------------------
@@ -106,7 +106,7 @@ cur=$$
 while [ -n "$cur" ] && [ "$cur" -gt 1 ]; do
     ANCESTOR_PIDS["$cur"]=1
     cur_comm=$(ps -o comm= -p "$cur" 2>/dev/null || true)
-    if [[ "$cur_comm" =~ (kitty|\.kitty|alacritty|foot|wezterm|ghostty) ]] && [ -z "$CALLER_TERM_PID" ]; then
+    if [[ "$cur_comm" =~ (kitty|\.kitty|foot|wezterm|ghostty) ]] && [ -z "$CALLER_TERM_PID" ]; then
         CALLER_TERM_PID="$cur"
     fi
     cur=$(ps -o ppid= -p "$cur" 2>/dev/null | tr -d ' ' || true)
@@ -120,16 +120,17 @@ declare -A WHITELIST_COMMS=(
     ["(sd-pam)"]=1
     ["dbus-daemon"]=1
     ["dbus-broker"]=1
-    ["mango"]=1
+    ["niri"]=1
     ["Xwayland"]=1
     ["gdm-wayland-session"]=1
     ["gdm-wayland-ses"]=1
-    ["waybar"]=1
-    [".waybar-wrapped"]=1
-    ["swaync"]=1
-    [".swaync-wrapped"]=1
-    ["swaync-client"]=1
-    [".swaync-client-"]=1
+    ["swaybg"]=1
+    [".swaybg-wrapped"]=1
+    ["swayidle"]=1
+    ["mako"]=1
+    [".mako-wrapped"]=1
+    ["gnome-keyring-d"]=1
+    [".gnome-keyring-"]=1
     ["nm-applet"]=1
     [".nm-applet-wrap"]=1
     ["blueman-applet"]=1
@@ -138,9 +139,6 @@ declare -A WHITELIST_COMMS=(
     [".blueman-tray-w"]=1
     ["polkit-mate-authentication-agent-1"]=1
     ["polkit-mate-aut"]=1
-    ["awww-daemon"]=1
-    [".awww-daemon-wr"]=1
-    ["hypridle"]=1
     ["wl-paste"]=1
     ["cliphist"]=1
     ["pipewire"]=1
@@ -149,7 +147,8 @@ declare -A WHITELIST_COMMS=(
     ["xdg-desktop-portal"]=1
     [".xdg-desktop-po"]=1
     ["xdg-desktop-portal-gtk"]=1
-    ["xdg-desktop-portal-wlr"]=1
+    ["xdg-desktop-portal-gnome"]=1
+    ["xdg-desktop-por"]=1
     ["xdg-document-portal"]=1
     [".xdg-document-p"]=1
     ["xdg-permission-store"]=1
@@ -167,8 +166,8 @@ declare -A WHITELIST_SYSTEMD_SERVICES=(
     ["openclaw-gateway.service"]=1
     ["telegram-pc-bot.service"]=1
     ["antigravity-cli-daemon.service"]=1
-    ["awww-daemon.service"]=1
-    ["hypridle.service"]=1
+    ["swayidle.service"]=1
+    ["polkit-mate.service"]=1
     ["dbus.service"]=1
     ["pipewire.service"]=1
     ["wireplumber.service"]=1
@@ -214,8 +213,8 @@ is_whitelisted_proc() {
 
 # Returns lines: WID TAB PID TAB APPID TAB TITLE
 parse_windows() {
-    if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
-        mmsg get all-clients 2>/dev/null | jq -r '.clients[]? | [ .id, .pid, .appid, (.title | gsub("\t|\n"; " ")) ] | @tsv' 2>/dev/null || true
+    if command -v niri >/dev/null 2>&1 && [ -n "$NIRI_SOCKET" ]; then
+        niri msg --json windows 2>/dev/null | jq -r '.[]? | [ .id, (.pid // 0), (.app_id // ""), ((.title // "") | gsub("\t|\n"; " ")) ] | @tsv' 2>/dev/null || true
     fi
 }
 
@@ -270,7 +269,7 @@ populate_targets() {
         fi
 
         # Skip utility tools
-        [[ "$p_comm" =~ ^(ps|jq|awk|sed|grep|sleep|mmsg|free|tr|cat|find|cut|head|tail) ]] && continue
+        [[ "$p_comm" =~ ^(ps|jq|awk|sed|grep|sleep|niri|free|tr|cat|find|cut|head|tail) ]] && continue
 
         local p_cmd
         p_cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || echo "$p_comm")
@@ -295,8 +294,8 @@ app_to_icon() {
     elif [[ "$app" =~ (chrome|chromium|brave) ]]; then echo ""
     elif [[ "$app" =~ (telegram) ]]; then echo "󰭹"
     elif [[ "$app" =~ (discord) ]]; then echo "󰭹"
-    elif [[ "$app" =~ (antigravity|code|codex|vscodium) ]]; then echo ""
-    elif [[ "$app" =~ (kitty|terminal|alacritty|foot) ]]; then echo ""
+    elif [[ "$app" =~ (code|codex|vscodium) ]]; then echo ""
+    elif [[ "$app" =~ (kitty|terminal|foot) ]]; then echo ""
     elif [[ "$app" =~ (thunar|files|nautilus) ]]; then echo ""
     elif [[ "$app" =~ (obsidian) ]]; then echo "󰠮"
     elif [[ "$app" =~ (spotify|music|cava|mpv|vlc) ]]; then echo ""
@@ -333,8 +332,8 @@ cmd_close_windows() {
             continue
         fi
 
-        if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
-            mmsg dispatch killclient "client,$wid" >/dev/null 2>&1 || true
+        if command -v niri >/dev/null 2>&1 && [ -n "$NIRI_SOCKET" ]; then
+            niri msg action close-window --id "$wid" >/dev/null 2>&1 || true
         fi
         if kill -0 "$wpid" 2>/dev/null; then
             kill -15 "$wpid" 2>/dev/null || true
@@ -438,9 +437,9 @@ cmd_full_restore() {
         echo ""
 
         echo -e "${BOLD}Protected Daemons & Desktop Components (Preserved):${RESET}"
-        echo -e "  • Session:    mango (compositor), Xwayland, gdm-wayland-session"
-        echo -e "  • UI Panel:   waybar, swaync, nm-applet, blueman-applet, polkit-mate, awww-daemon, hypridle"
-        echo -e "  • Audio/IPC:  pipewire, wireplumber, xdg-desktop-portal*, dbus-daemon, systemd user daemons"
+        echo -e "  • Session:    niri (compositor), Xwayland, gdm-wayland-session"
+        echo -e "  • UI Panel:   swaybg, swayidle, mako, nm-applet, blueman-applet, polkit-mate"
+        echo -e "  • Audio/IPC:  pipewire, wireplumber, xdg-desktop-portal*, dbus-daemon, gnome-keyring, systemd user daemons"
         echo -e "  • Services:   openclaw-gateway, telegram-pc-bot, antigravity-cli-daemon"
         echo ""
         echo -e "${GREEN}Simulation complete. No processes or windows were modified.${RESET}"
@@ -459,8 +458,8 @@ cmd_full_restore() {
         if [ -n "$CALLER_TERM_WID" ] && [ "$wid" = "$CALLER_TERM_WID" ]; then
             continue
         fi
-        if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
-            mmsg dispatch killclient "client,$wid" >/dev/null 2>&1 || true
+        if command -v niri >/dev/null 2>&1 && [ -n "$NIRI_SOCKET" ]; then
+            niri msg action close-window --id "$wid" >/dev/null 2>&1 || true
         fi
         if kill -0 "$wpid" 2>/dev/null; then
             kill -15 "$wpid" 2>/dev/null || true
@@ -620,8 +619,8 @@ cmd_preview() {
                     echo -e "  ${BOLD}Windows to Close:${RESET}    ${#CLIENT_WINDOW_WIDS[@]}"
                     echo -e "  ${BOLD}Processes to Kill:${RESET}   ${#TARGET_PROCS[@]}\n"
                     echo -e "${BOLD}${CYAN}Preserved Whitelist Guarantee:${RESET}"
-                    echo -e "  ✓ Mango Wayland Compositor & Xwayland"
-                    echo -e "  ✓ Waybar Status Bar & SwayNC Notifications"
+                    echo -e "  ✓ niri Wayland Compositor & Xwayland"
+                    echo -e "  ✓ swaybg Wallpaper & swayidle"
                     echo -e "  ✓ NetworkManager & Bluetooth Applets"
                     echo -e "  ✓ PipeWire & WirePlumber Audio Stack"
                     echo -e "  ✓ OpenClaw Gateway & Telegram Bot & Antigravity"
@@ -669,11 +668,11 @@ cmd_preview() {
                 protected)
                     echo -e "${BOLD}${CYAN}=== Protected Boot Whitelist ===${RESET}\n"
                     echo -e "${BOLD}Session Core:${RESET}"
-                    echo -e "  • mango, Xwayland, gdm-wayland-session"
+                    echo -e "  • niri, Xwayland, gdm-wayland-session"
                     echo -e "${BOLD}UI & Shell:${RESET}"
-                    echo -e "  • waybar, swaync, nm-applet, blueman-applet, polkit-mate, awww-daemon, hypridle, wl-paste"
+                    echo -e "  • swaybg, swayidle, mako, nm-applet, blueman-applet, polkit-mate, wl-paste"
                     echo -e "${BOLD}Audio & IPC:${RESET}"
-                    echo -e "  • pipewire, pipewire-pulse, wireplumber, xdg-desktop-portal*, dbus-daemon, systemd"
+                    echo -e "  • pipewire, pipewire-pulse, wireplumber, xdg-desktop-portal*, dbus-daemon, gnome-keyring, systemd"
                     echo -e "${BOLD}Persistent Daemons:${RESET}"
                     echo -e "  • telegram-pc-bot.service, antigravity-cli-daemon.service"
                     ;;
@@ -814,8 +813,8 @@ cmd_interactive() {
                 if [ "$item_type" = "win" ]; then
                     local w_id
                     w_id=$(echo "$item_payload" | cut -d: -f1)
-                    if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
-                        mmsg dispatch focusid,"$w_id" >/dev/null 2>&1 || true
+                    if command -v niri >/dev/null 2>&1 && [ -n "$NIRI_SOCKET" ]; then
+                        niri msg action focus-window --id "$w_id" >/dev/null 2>&1 || true
                     fi
                     break
                 fi
@@ -904,14 +903,14 @@ cmd_interactive() {
                     --border=rounded) || continue
                 case "$act" in
                     1*)
-                        if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
-                            mmsg dispatch focusid,"$wid" >/dev/null 2>&1 || true
+                        if command -v niri >/dev/null 2>&1 && [ -n "$NIRI_SOCKET" ]; then
+                            niri msg action focus-window --id "$wid" >/dev/null 2>&1 || true
                         fi
                         break
                         ;;
                     2*)
-                        if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
-                            mmsg dispatch killclient "client,$wid" >/dev/null 2>&1 || true
+                        if command -v niri >/dev/null 2>&1 && [ -n "$NIRI_SOCKET" ]; then
+                            niri msg action close-window --id "$wid" >/dev/null 2>&1 || true
                         fi
                         kill -15 "$wpid" 2>/dev/null || true
                         sleep 0.4

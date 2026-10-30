@@ -37,13 +37,11 @@ CODE_DIRS=(
 )
 
 CONFIG_DIRS=(
-    "$HOME/.config/hypr"
-    "$HOME/.config/mango"
-    "$HOME/.config/waybar"
+    "$HOME/.config/niri"
     "$HOME/.config/kitty"
     "$HOME/.config/fish"
-    "$HOME/.config/rofi"
-    "$HOME/.config/swaync"
+    "$HOME/.config/tmux"
+    "$HOME/.config/yazi"
     "$HOME/Code/Dotfiles/nixos"
 )
 

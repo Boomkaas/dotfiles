@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# task - Terminal Process & Mango Wayland Window Controller (CLI & fzf TUI)
+# task - Terminal Process & niri Window Controller (CLI & fzf TUI)
 # Inspect, focus, manage graphical windows, and control processes with live stats.
 # ==============================================================================
 
@@ -31,9 +31,9 @@ fi
 
 export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
 
-# Ensure Mango IPC socket is discovered if running under Wayland
-if [ -z "${MANGO_INSTANCE_SIGNATURE:-}" ]; then
-    export MANGO_INSTANCE_SIGNATURE=$(ls /run/user/$UID/mango-*.sock 2>/dev/null | head -n1 || true)
+# Ensure the niri IPC socket is discovered if running under Wayland
+if [ -z "${NIRI_SOCKET:-}" ]; then
+    export NIRI_SOCKET=$(ls /run/user/$UID/niri.*.sock 2>/dev/null | head -n1 || true)
 fi
 
 notify() {
@@ -64,7 +64,6 @@ resolve_app_name() {
             if [[ "$cmd_lower" =~ (obsidian) ]]; then app="Obsidian"
             elif [[ "$cmd_lower" =~ (discord) ]]; then app="Discord"
             elif [[ "$cmd_lower" =~ (telegram) ]]; then app="Telegram"
-            elif [[ "$cmd_lower" =~ (antigravity) ]]; then app="Antigravity"
             elif [[ "$cmd_lower" =~ (code) ]]; then app="VS Code"
             elif [ -n "$cmdline" ]; then
                 app=$(basename "$(echo "$cmdline" | awk '{print $1}')")
@@ -81,8 +80,8 @@ app_to_icon() {
     elif [[ "$app" =~ (chrome|chromium|brave) ]]; then echo ""
     elif [[ "$app" =~ (telegram) ]]; then echo "󰭹"
     elif [[ "$app" =~ (discord) ]]; then echo "󰭹"
-    elif [[ "$app" =~ (antigravity|code|codex) ]]; then echo ""
-    elif [[ "$app" =~ (kitty|terminal|alacritty|foot) ]]; then echo ""
+    elif [[ "$app" =~ (code|codex) ]]; then echo ""
+    elif [[ "$app" =~ (kitty|terminal|foot) ]]; then echo ""
     elif [[ "$app" =~ (tmux) ]]; then echo ""
     elif [[ "$app" =~ (thunar|files|nautilus) ]]; then echo ""
     elif [[ "$app" =~ (obsidian) ]]; then echo "󰠮"
@@ -100,8 +99,12 @@ app_to_icon() {
 
 # Returns lines: WID<TAB>PID<TAB>APPID<TAB>TAG<TAB>FOCUSED(1/0)<TAB>TITLE
 parse_windows() {
-    if command -v mmsg >/dev/null 2>&1 && [ -n "$MANGO_INSTANCE_SIGNATURE" ]; then
-        mmsg get all-clients 2>/dev/null | jq -r '.clients[] | [ .id, .pid, .appid, (.tags[0] // 1), (if .is_focused then 1 else 0 end), (.title | gsub("\t|\n"; " ")) ] | @tsv' 2>/dev/null
+    if command -v niri >/dev/null 2>&1 && [ -n "$NIRI_SOCKET" ]; then
+        jq -rn \
+            --argjson ws "$(niri msg --json workspaces 2>/dev/null || echo '[]')" \
+            --argjson wins "$(niri msg --json windows 2>/dev/null || echo '[]')" \
+            '($ws | map({(.id | tostring): .idx}) | add // {}) as $idx
+             | $wins[] | [ .id, (.pid // 0), (.app_id // ""), ($idx[(.workspace_id | tostring)] // 1), (if .is_focused then 1 else 0 end), ((.title // "") | gsub("\t|\n"; " ")) ] | @tsv' 2>/dev/null
     fi
 }
 
@@ -115,7 +118,7 @@ parse_procs() {
         [ -z "$p_pid" ] && continue
         [ "$p_pid" = "$$" ] || [ "$p_pid" = "$PPID" ] && continue
         [ "$p_ppid" = "2" ] && continue
-        [[ "$p_comm" =~ ^(\[|kworker|rcu|migration|ps|jq|awk|sed|grep|sleep|mmsg|rofi) ]] && continue
+        [[ "$p_comm" =~ ^(\[|kworker|rcu|migration|ps|jq|awk|sed|grep|sleep|niri) ]] && continue
         [[ "$p_comm" =~ (Web Content|Isolated Web|RDD Process|Utility Process|WebExtensions|Privileged Cont) ]] && continue
         echo -e "${p_pid}\t${p_ppid}\t${p_cpu}\t${p_mem}\t${p_stat}\t${p_comm}"
     done
@@ -126,7 +129,7 @@ parse_procs() {
 # ------------------------------------------------------------------------------
 
 cmd_list() {
-    echo -e "${BOLD}${CYAN}=== Active Graphical Windows (Wayland/Mango) ===${RESET}"
+    echo -e "${BOLD}${CYAN}=== Active Graphical Windows (Wayland/niri) ===${RESET}"
     local win_count=0
     while IFS=$'\t' read -r wid wpid wappid wtag wfocused wtitle; do
         [ -z "$wid" ] && continue
@@ -175,8 +178,8 @@ cmd_focus() {
         fi
     done < <(parse_windows)
 
-    if [ -n "$target_wid" ] && command -v mmsg >/dev/null 2>&1; then
-        mmsg dispatch focus "client,$target_wid" 2>/dev/null
+    if [ -n "$target_wid" ] && command -v niri >/dev/null 2>&1; then
+        niri msg action focus-window --id "$target_wid" 2>/dev/null
         echo -e "${GREEN}Focused window ID: $target_wid${RESET}"
     else
         echo -e "${RED}Window not found for target: $target${RESET}" >&2
@@ -481,16 +484,16 @@ cmd_interactive() {
                 local wid wpid wname
                 IFS=':' read -r wid wpid wname <<< "$item_payload"
                 local act
-                act=$(printf "1. Focus / Bring to Front\n2. Close Window (Graceful)\n3. Toggle Fullscreen (Mango)\n4. Toggle Floating (Mango)\n5. Terminate Process (SIGTERM / 15)\n6. Force Kill (SIGKILL / 9)\n7. Cancel" | fzf \
+                act=$(printf "1. Focus / Bring to Front\n2. Close Window (Graceful)\n3. Toggle Fullscreen\n4. Toggle Floating\n5. Terminate Process (SIGTERM / 15)\n6. Force Kill (SIGKILL / 9)\n7. Cancel" | fzf \
                     --prompt="Window [$wname] > " \
                     --height=48% \
                     --reverse \
                     --border=rounded) || continue
                 case "$act" in
                     1*) cmd_focus "$wid"; break ;;
-                    2*) [ -n "$MANGO_INSTANCE_SIGNATURE" ] && mmsg dispatch close "client,$wid" 2>/dev/null; sleep 0.5 ;;
-                    3*) [ -n "$MANGO_INSTANCE_SIGNATURE" ] && mmsg dispatch togglefullscreen "client,$wid" 2>/dev/null ;;
-                    4*) [ -n "$MANGO_INSTANCE_SIGNATURE" ] && mmsg dispatch togglefloating "client,$wid" 2>/dev/null ;;
+                    2*) [ -n "$NIRI_SOCKET" ] && niri msg action close-window --id "$wid" 2>/dev/null; sleep 0.5 ;;
+                    3*) [ -n "$NIRI_SOCKET" ] && niri msg action fullscreen-window --id "$wid" 2>/dev/null ;;
+                    4*) [ -n "$NIRI_SOCKET" ] && niri msg action toggle-window-floating --id "$wid" 2>/dev/null ;;
                     5*) cmd_kill "$wpid" "15"; sleep 0.5 ;;
                     6*) cmd_kill "$wpid" "9"; sleep 0.5 ;;
                 esac
@@ -531,7 +534,7 @@ cmd_interactive() {
 
 cmd_help() {
     cat <<EOF
-${BOLD}task${RESET} - Terminal Process & Mango Wayland Window Controller (CLI & fzf TUI)
+${BOLD}task${RESET} - Terminal Process & niri Window Controller (CLI & fzf TUI)
 
 ${BOLD}USAGE:${RESET}
     task                            Launch interactive fzf menu with live preview

@@ -55,6 +55,7 @@ bluetooth|network|󰂯 |Bluetooth Device & Audio Manager|bt|Pair, connect, trust
 tb|network|🐻|TunnelBear VPN & Split Tunneling Manager|tunnelbear, vpn|Connect servers, per-app routing, quota meter
 ports|network|🌐|Live Ports, Sockets & Dev Servers|port, net|Inspect listening ports, kill stuck dev servers
 share|network|󰝰 |Samba & Hamachi Local File Sharing|share|Samba folders, Hamachi VPN, mount remote CIFS
+tailscale|network|🔗|Tailscale Mesh VPN Controller|ts, tailscale-tui|Connect/disconnect this device, peers, subnet routes
 nixos|system| |NixOS Generations & Rollback Manager|gens|List generations, diff closures, rollback, gc
 service|system|󰒓 |Systemd Services & Daemons Manager|services|Control user/system units, view logs, restart
 disk|system|󰋊 |Storage, USB Drives & Nix Store Cleaner|storage|Partitions, USB auto-mount/eject, nh clean, gc
@@ -69,7 +70,7 @@ container|dev|🐳|Docker Containers & Libvirt VM Manager|containers, vm|Start, 
 conf|dev|󰒓 |Dotfiles & Config Picker with Preview|config, configs|Bat preview, git diff, jump to configs in Zed
 audio|desktop|󰕾 |PipeWire & WirePlumber Audio Mixer|audio|Volume slider, mute, node routing, ALC256 test
 setting|desktop|󰒓 |System Settings & Wayland Controls|settings|Brightness, volume, power profile, idle, DND
-theme|desktop|󰏘 |Themes, Wallpapers & Waybar Customizer|theme|Switch Waybar layouts, wallpapers, fonts, cava
+theme|desktop|󰏘 |Themes, Wallpapers & Customizer|theme|Switch wallpapers, fonts, cava
 clip|desktop|📋|Wayland Clipboard & Snippet History|clips, clipboard|Cliphist decode, bat preview, pin snippets
 EOF
 }
@@ -170,6 +171,13 @@ EOF
   Ctrl-R  Refresh connection status
 EOF
             ;;
+        tailscale|ts)
+            cat <<'EOF'
+  Enter   Connect / Disconnect this device
+  Ctrl-D  Disconnect (tailscale down)
+  Ctrl-R  Refresh connection status
+EOF
+            ;;
         *)
             cat <<'EOF'
   Enter   Launch tool interactive session
@@ -212,6 +220,16 @@ get_live_telemetry() {
                 echo -e "${GREEN}● Connected:${RESET} ${country} (Per-app split routing active)"
             else
                 echo -e "${YELLOW}○ Disconnected${RESET} (System internet stays direct)"
+            fi
+            ;;
+        tailscale|ts)
+            local ts_state ts_ip
+            ts_state=$(tailscale status --json 2>/dev/null | jq -r '.BackendState // "Unknown"' 2>/dev/null || echo "Unavailable")
+            ts_ip=$(tailscale ip -4 2>/dev/null | head -n 1)
+            if [ "$ts_state" = "Running" ]; then
+                echo -e "${GREEN}● Connected:${RESET} ${ts_ip:-no IPv4} (tailnet mesh active)"
+            else
+                echo -e "${YELLOW}○ ${ts_state}${RESET} (this device is off the tailnet)"
             fi
             ;;
         audio)
@@ -293,9 +311,9 @@ get_live_telemetry() {
             echo -e "${CYAN}● Power Profile:${RESET} ${pmode}"
             ;;
         theme)
-            local wb
-            wb=$(basename "$(readlink -f "$HOME/.config/waybar/config.jsonc" 2>/dev/null || readlink -f "$HOME/.config/waybar/config" 2>/dev/null || echo "default")")
-            echo -e "${MAGENTA}● Active Waybar Layout:${RESET} ${wb}"
+            local gt
+            gt=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'" || echo "default")
+            echo -e "${MAGENTA}● Active GTK Theme:${RESET} ${gt:-default}"
             ;;
         clip)
             local hcnt=0
@@ -334,7 +352,7 @@ cmd_preview() {
             cat <<EOF
 ${BOLD}${CYAN}Scope Filtering${RESET}
 Cycle through tool categories:
-  • ${BOLD}all${RESET}     - All 21 registered TUI tools
+  • ${BOLD}all${RESET}     - All 22 registered TUI tools
   • ${BOLD}network${RESET} - Wi-Fi, Bluetooth, TunnelBear VPN, Ports & Sockets, Sharing
   • ${BOLD}system${RESET}  - NixOS Manager, Systemd Services, Disks, Tasks, RAM & Memory, Logs
   • ${BOLD}dev${RESET}     - Git Repos, Tmux, Nix Packages, Containers, Configs
@@ -409,14 +427,14 @@ cmd_interactive() {
 
         local scope_label
         case "$current_scope" in
-            all) scope_label="${CYAN}All Tools (21)${RESET}" ;;
+            all) scope_label="${CYAN}All Tools (22)${RESET}" ;;
             network) scope_label="${YELLOW}Network & Wireless (5)${RESET}" ;;
             system) scope_label="${MAGENTA}System & Hardware (6)${RESET}" ;;
             dev) scope_label="${GREEN}Developer & Workspace (5)${RESET}" ;;
             desktop) scope_label="${BLUE}Desktop & Media (5)${RESET}" ;;
         esac
 
-        local header_info="Scope: $scope_label | Hub: 21 Tools Available"
+        local header_info="Scope: $scope_label | Hub: 22 Tools Available"
 
         # Next scope for Tab
         local next_scope="all"
@@ -502,7 +520,7 @@ cmd_interactive() {
 }
 
 cmd_list() {
-    echo -e "${BOLD}Unified TUI Scripts Registry (21 Tools):${RESET}\n"
+    echo -e "${BOLD}Unified TUI Scripts Registry (22 Tools):${RESET}\n"
     printf "%-12s %-10s %-40s %s\n" "COMMAND" "CATEGORY" "DESCRIPTION" "ALIASES"
     echo "─────────────────────────────────────────────────────────────────────────────────────────────"
     while IFS='|' read -r cmd cat icon title aliases desc; do
@@ -518,7 +536,7 @@ ${BOLD}s${RESET} - Master TUI Command Center & Script Launcher (CLI & fzf TUI)
 ${BOLD}USAGE:${RESET}
     s                               Launch interactive TUI hub to browse and launch all tools
     s <tool> [args...]              Directly run any TUI script (e.g. 's wifi', 's disk clean')
-    s list                          Print formatted table of all 21 available TUI tools
+    s list                          Print formatted table of all 22 available TUI tools
     s preview <tool>                Internal preview generator for fzf
     s help                          Show this help message
 
@@ -528,6 +546,7 @@ ${BOLD}SUPPORTED TOOLS & ALIASES:${RESET}
     ${CYAN}ports${RESET} (port, net)            Live ports, listening sockets & process killer
     ${CYAN}share${RESET}                       Samba folders & Hamachi VPN sharing
     ${CYAN}tb${RESET} (tunnelbear, vpn)         TunnelBear VPN & Split Tunneling Manager
+    ${CYAN}tailscale${RESET} (ts, tailscale-tui) Tailscale mesh VPN connect/disconnect
     ${CYAN}nixos${RESET} (gens)                 NixOS generations & rollback manager
     ${CYAN}service${RESET} (services)           Systemd user & system services
     ${CYAN}disk${RESET} (storage)               Partitions, USB auto-mount/eject & Nix GC
@@ -542,7 +561,7 @@ ${BOLD}SUPPORTED TOOLS & ALIASES:${RESET}
     ${CYAN}conf${RESET} (config, configs)       Dotfiles & config picker with syntax preview
     ${CYAN}audio${RESET}                       PipeWire & WirePlumber mixer
     ${CYAN}setting${RESET} (settings)           System settings & desktop toggles
-    ${CYAN}theme${RESET}                       Themes, wallpapers & Waybar layout switcher
+    ${CYAN}theme${RESET}                       Themes, wallpapers & accent switcher
     ${CYAN}clip${RESET} (clips, clipboard)      Wayland clipboard history & snippets
 
 ${BOLD}INTERACTIVE HOTKEYS (inside fzf hub):${RESET}
@@ -578,7 +597,7 @@ case "${1:-}" in
             exec "$target_script" "$@"
         else
             echo -e "${RED}✘ Unknown tool or command:${RESET} $1"
-            echo -e "${DIM}Run 's list' or 's help' to see all 21 available tools.${RESET}"
+            echo -e "${DIM}Run 's list' or 's help' to see all 22 available tools.${RESET}"
             exit 1
         fi
         ;;

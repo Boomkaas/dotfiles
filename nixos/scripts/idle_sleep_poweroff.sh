@@ -10,7 +10,7 @@
 # 5. On resume:
 #    - User-initiated wake: If resumed before alarm expiry, cancels alarm & exits.
 #    - Alarm-initiated wake: Gives grace window with desktop notification.
-#      If user unlocks (hyprlock closed), plays audio, or toggles caffeine, aborts.
+#      If user unlocks (swaylock closed), plays audio, or toggles caffeine, aborts.
 #      Otherwise, safely executes `systemctl poweroff`.
 # ==============================================================================
 
@@ -264,13 +264,13 @@ fi
 
 # Verify / ensure session lock
 WAS_LOCKED=0
-if pidof hyprlock >/dev/null 2>&1; then
+if pidof swaylock >/dev/null 2>&1; then
     WAS_LOCKED=1
 else
-    log "hyprlock is not currently running; triggering session lock..."
+    log "swaylock is not currently running; triggering session lock..."
     loginctl lock-session 2>/dev/null || true
     sleep 0.5
-    if pidof hyprlock >/dev/null 2>&1; then
+    if pidof swaylock >/dev/null 2>&1; then
         WAS_LOCKED=1
     fi
 fi
@@ -359,8 +359,8 @@ for (( i = GRACE_PERIOD_SECS; i > 0; i-- )); do
     sleep 1
 
     # Check 1: Did the user unlock the screen?
-    if [[ "$WAS_LOCKED" -eq 1 ]] && ! pidof hyprlock >/dev/null 2>&1; then
-        log "Grace period aborted: hyprlock is no longer running (user unlocked screen)."
+    if [[ "$WAS_LOCKED" -eq 1 ]] && ! pidof swaylock >/dev/null 2>&1; then
+        log "Grace period aborted: swaylock is no longer running (user unlocked screen)."
         notify_user "Inactivity Shutdown Cancelled" "User presence detected (screen unlocked)."
         exit 0
     fi

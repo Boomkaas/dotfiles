@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # theme - Terminal Theme, Wallpaper & Desktop Customizer (CLI & fzf TUI)
-# Manage wallpapers, Waybar layouts, accent colors, dockbar, visualizer & pets.
+# Manage wallpapers, accent colors, visualizer & pets.
 # ==============================================================================
 
 # Colors
@@ -47,12 +47,6 @@ get_cava_status() {
     [ -f /tmp/cava-layer.pid ] && echo "ON" || echo "OFF"
 }
 
-get_dockbar_status() {
-    local s
-    s=$(cat "$HOME/.local/state/haku_theme/dockbar_manual_state" 2>/dev/null || echo "0")
-    [ "$s" = "1" ] && echo "ON" || echo "OFF"
-}
-
 get_desktop_icons_status() {
     local s
     s=$(cat "$HOME/.local/state/haku_theme/desktop_icons_state" 2>/dev/null || echo "0")
@@ -90,7 +84,6 @@ cmd_status() {
     echo -e "  ${BOLD}Accent Color:${RESET}       $(get_accent_color)"
     echo -e "  ${BOLD}Monochrome Filter:${RESET}  $([ "$(get_mono_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
     echo -e "  ${BOLD}Cava Visualizer:${RESET}    $([ "$(get_cava_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
-    echo -e "  ${BOLD}Dockbar:${RESET}            $([ "$(get_dockbar_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
     echo -e "  ${BOLD}Desktop Icons:${RESET}      $([ "$(get_desktop_icons_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
     echo -e "  ${BOLD}Desktop Pet:${RESET}        $([ "$(get_pet_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
     echo -e "  ${BOLD}Lively Video:${RESET}       $([ "$(get_lively_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
@@ -184,7 +177,7 @@ cmd_preview() {
             echo ""
             echo -e "${BOLD}Description:${RESET}"
             echo -e "  Allows clicking any pixel on screen to extract color,"
-            echo -e "  update theme CSS, and automatically re-render Waybar."
+            echo -e "  and update theme CSS."
             echo ""
             echo -e "${BOLD}Action:${RESET} Launch eyedropper on screen"
             ;;
@@ -204,7 +197,7 @@ cmd_preview() {
             ;;
         font_change)
             echo -e "${BOLD}${CYAN}=== Global Font & Size ===${RESET}"
-            echo -e "  ${BOLD}Target:${RESET} Waybar, terminals, and desktop font configurations"
+            echo -e "  ${BOLD}Target:${RESET} Terminals and desktop font configurations"
             echo ""
             echo -e "${BOLD}Action:${RESET} Choose global typeface and point size"
             ;;
@@ -215,18 +208,10 @@ cmd_preview() {
             echo -e "  ${BOLD}Status:${RESET} $([ "$cava" = "ON" ] && echo -e "${GREEN}Active (Underbar On)${RESET}" || echo -e "${DIM}Inactive${RESET}")"
             echo ""
             echo -e "${BOLD}Description:${RESET}"
-            echo -e "  Renders a low-latency spectrum bar underneath Waybar"
+            echo -e "  Renders a low-latency spectrum bar"
             echo -e "  synced to currently playing audio streams."
             echo ""
             echo -e "${BOLD}Action:${RESET} Toggle Cava visualizer underbar"
-            ;;
-        dockbar_toggle)
-            local dock
-            dock=$(get_dockbar_status)
-            echo -e "${BOLD}${CYAN}=== Toggle Dockbar ===${RESET}"
-            echo -e "  ${BOLD}Status:${RESET} $([ "$dock" = "ON" ] && echo -e "${GREEN}Shown (Manual)${RESET}" || echo -e "${DIM}Hidden / Auto${RESET}")"
-            echo ""
-            echo -e "${BOLD}Action:${RESET} Toggle Waybar bottom dockbar visibility"
             ;;
         desktop_icons)
             local icons
@@ -274,10 +259,9 @@ cmd_interactive() {
 
     while true; do
         clear
-        local mono cava dock icons pet lively accent
+        local mono cava icons pet lively accent
         mono=$(get_mono_status)
         cava=$(get_cava_status)
-        dock=$(get_dockbar_status)
         icons=$(get_desktop_icons_status)
         pet=$(get_pet_status)
         lively=$(get_lively_status)
@@ -296,7 +280,6 @@ cmd_interactive() {
         menu+=("󰏘  GTK Look & Feel (Themes, Icons, Cursors)"$'\t'"gtk_look")
         menu+=("  Change Global Font & Size"$'\t'"font_change")
         menu+=("󰝚  Cava Underbar Audio Visualizer ($cava)"$'\t'"cava_vis")
-        menu+=("󱂩  Toggle Dockbar ($dock)"$'\t'"dockbar_toggle")
         menu+=("  Desktop Icons ($icons)"$'\t'"desktop_icons")
         menu+=("🐾 Desktop Pet Companion ($pet)"$'\t'"pet_companion")
         menu+=("󱁤  Open Wallpapers Folder"$'\t'"folder_wp")
@@ -366,10 +349,6 @@ cmd_interactive() {
                 $HOME/.local/bin/cava_manager.sh
                 sleep 0.5
                 ;;
-            dockbar_toggle)
-                $HOME/.local/bin/dockbar_manager.sh --toggle
-                sleep 0.5
-                ;;
             desktop_icons)
                 $HOME/.local/bin/desktop_icons_manager.sh --toggle
                 sleep 0.5
@@ -405,7 +384,6 @@ ${BOLD}USAGE:${RESET}
     theme gtk                       Open GTK look & appearance customizer
     theme font                      Change global font and size
     theme cava                      Toggle Cava underbar visualizer
-    theme dock                      Toggle Waybar dockbar
     theme icons                     Toggle desktop icons
     theme pet                       Toggle desktop companion pet
     theme help | -h                 Show this help message
@@ -460,9 +438,6 @@ case "${1:-}" in
         ;;
     cava)
         $HOME/.local/bin/cava_manager.sh
-        ;;
-    dock|dockbar)
-        $HOME/.local/bin/dockbar_manager.sh --toggle
         ;;
     icons)
         $HOME/.local/bin/desktop_icons_manager.sh --toggle

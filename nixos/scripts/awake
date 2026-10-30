@@ -96,12 +96,12 @@ disable_awake() {
     mkdir -p "$STATE_DIR"
     echo "0" > "$STATE_FILE"
 
-    # Restart hypridle so that any expired/stale idle listeners are refreshed
+    # Restart swayidle so that any expired/stale idle listeners are refreshed
     # and inactivity timeouts begin tracking immediately.
-    if systemctl --user is-active --quiet hypridle 2>/dev/null; then
-        systemctl --user restart hypridle >/dev/null 2>&1 || true
-    elif systemctl --user is-enabled --quiet hypridle 2>/dev/null; then
-        systemctl --user start hypridle >/dev/null 2>&1 || true
+    if systemctl --user is-active --quiet swayidle 2>/dev/null; then
+        systemctl --user restart swayidle >/dev/null 2>&1 || true
+    elif systemctl --user is-enabled --quiet swayidle 2>/dev/null; then
+        systemctl --user start swayidle >/dev/null 2>&1 || true
     fi
 
     notify_user "Awake Mode Disabled" "Inactivity system active: normal screen lock, display sleep, and auto-poweroff resumed." "video-display"
