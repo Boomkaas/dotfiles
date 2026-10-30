@@ -65,8 +65,6 @@ if status is-interactive
     # Note: awake, nixreb, epic, twitch, gfn, roblox are managed by Nix wrappers — use them directly.
     abbr addchans '/home/peng/Code/Dotfiles/nixos/scripts/channels.sh'
     abbr tdrops 'twitch'  # alias to the twitch Nix wrapper
-    abbr tokens '/home/peng/Code/Dotfiles/nixos/scripts/agy-tokens.py'
-    abbr agy-tokens '/home/peng/Code/Dotfiles/nixos/scripts/agy-tokens.py'
     abbr pet 'wayland-vpet'
     abbr delgar 'sudo nix-collect-garbage --delete-older-than 1d'
 
@@ -92,15 +90,14 @@ if status is-interactive
     bind \co 'y; commandline -f repaint'
 
 
-    # Antigravity wrapper function
-    function agy
-        if test (count $argv) -gt 0; and test "$argv[1]" = "tokens" -o "$argv[1]" = "token" -o "$argv[1]" = "quota"
-            /home/peng/Code/Dotfiles/nixos/scripts/agy-tokens.py $argv[2..-1]
+    # Claude Code wrapper: remote-control sessions default to bypassPermissions
+    function claude --description "Claude Code; 'rc' runs with all permissions allowed"
+        if contains -- "$argv[1]" rc remote-control; and not string match -q -- '--permission-mode*' $argv
+            command claude $argv --permission-mode bypassPermissions
         else
-            command agy --add-dir "$PWD" $argv
+            command claude $argv
         end
     end
-    alias antigravity='agy'
 
     # Smart LazyGit: opens current repo directly, or presents project selector if in $HOME / outside git
     function lazygit --description "Smart LazyGit: opens current repo, or presents project selector"
