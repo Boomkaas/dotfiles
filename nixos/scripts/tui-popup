@@ -68,25 +68,15 @@ if [ -n "$RUNNING_PIDS" ]; then
     fi
 fi
 
-# Window dimensions: strictly 150x25 cells for optimal TUI layout
-WIN_WIDTH="150c"
-WIN_HEIGHT="25c"
-
 echo "$TOOL" > "$STATE_FILE"
 
-# Launch floating Kitty modal
+# Launch floating Kitty modal; niri floats and sizes app-id tui-overlay
+# (window rule in config/niri/config.kdl)
 nohup kitty \
     --class tui-overlay \
-    --app-id tui-overlay \
     --title "Control Center - $TOOL" \
-    -o initial_window_width="$WIN_WIDTH" \
-    -o initial_window_height="$WIN_HEIGHT" \
-    -o remember_window_size=no \
-    -o confirm_os_window_close=0 \
-    -o placement_strategy=center \
-    -o hide_window_decorations=yes \
     "$CMD_PATH" "$@" >/dev/null 2>&1 &
 
-KITTY_PID=$!
-(wait "$KITTY_PID" 2>/dev/null; rm -f "$STATE_FILE" 2>/dev/null) &
+TERM_PID=$!
+(wait "$TERM_PID" 2>/dev/null; rm -f "$STATE_FILE" 2>/dev/null) &
 disown -a 2>/dev/null || true

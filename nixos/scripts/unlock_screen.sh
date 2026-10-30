@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# unlock_screen.sh - Reliable desktop unlocker for MangoWM / Hyprland
-# Handles DPMS wake, hyprlock PAM authentication via wtype, and stuck lock recovery.
+# unlock_screen.sh - Reliable desktop unlocker for niri / Hyprland
+# Handles DPMS wake, swaylock PAM authentication via wtype, and stuck lock recovery.
 
 set -e
 
@@ -18,34 +18,34 @@ wlopm --on '*' 2>/dev/null || true
 # Give display a moment to power up
 sleep 0.2
 
-# 2. Check if hyprlock is running
-if pidof hyprlock >/dev/null 2>&1; then
+# 2. Check if swaylock is running
+if pidof swaylock >/dev/null 2>&1; then
     if [ -z "$PASSWORD" ]; then
-        echo "LOCKED: hyprlock is running but no password provided"
+        echo "LOCKED: swaylock is running but no password provided"
         exit 1
     fi
 
     WTYPE=$(command -v wtype || ls /nix/store/*-wtype-*/bin/wtype 2>/dev/null | head -n 1)
     if [ -n "$WTYPE" ]; then
-        # Type password into hyprlock and press Return
+        # Type password into swaylock and press Return
         "$WTYPE" -d 20 "$PASSWORD" -k Return
-        # Wait up to 2 seconds for hyprlock to authenticate PAM and cleanly unlock
+        # Wait up to 2 seconds for swaylock to authenticate PAM and cleanly unlock
         for _ in {1..20}; do
-            if ! pidof hyprlock >/dev/null 2>&1; then
-                echo "UNLOCKED: hyprlock authenticated and exited cleanly"
+            if ! pidof swaylock >/dev/null 2>&1; then
+                echo "UNLOCKED: swaylock authenticated and exited cleanly"
                 exit 0
             fi
             sleep 0.1
         done
-        echo "WARNING: hyprlock still running after typing password"
+        echo "WARNING: swaylock still running after typing password"
     else
         echo "ERROR: wtype utility not found"
         exit 1
     fi
 fi
 
-# 3. Check for stuck MangoWM locked_bg state (e.g. if hyprlock was killed or crashed)
-if pidof mango >/dev/null 2>&1 && ! pidof hyprlock >/dev/null 2>&1; then
+# 3. Check for stuck MangoWM locked_bg state (e.g. if swaylock was killed or crashed)
+if pidof mango >/dev/null 2>&1 && ! pidof swaylock >/dev/null 2>&1; then
     TMP_IMG="/tmp/screen_check_$$.png"
     if grim "$TMP_IMG" 2>/dev/null; then
         IS_STUCK=$(python3 -c "

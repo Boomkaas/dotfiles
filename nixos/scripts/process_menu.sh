@@ -51,7 +51,6 @@ resolve_app_details() {
             elif [[ "$cmd_lower" =~ (slack) ]]; then APP_NAME="Slack"
             elif [[ "$cmd_lower" =~ (teams) ]]; then APP_NAME="Teams"
             elif [[ "$cmd_lower" =~ (code) ]]; then APP_NAME="VS Code"
-            elif [[ "$cmd_lower" =~ (antigravity) ]]; then APP_NAME="Antigravity"
             elif [ -n "$cmdline" ]; then
                 local first_arg="${cmdline%% *}"
                 APP_NAME="${first_arg##*/}"
@@ -75,10 +74,6 @@ resolve_app_details() {
         APP_NAME="Discord"
         APP_ICON="discord"
         NERD_ICON="󰭹"
-    elif [[ "$combined" =~ (antigravity) ]] || [[ "$APP_NAME" =~ antigravity ]]; then
-        APP_NAME="Antigravity"
-        APP_ICON="code"
-        NERD_ICON=""
     elif [[ "$combined" =~ (code|codex|vscodium) ]] || [[ "$APP_NAME" =~ (code|codex|vscodium) ]]; then
         APP_NAME="VS Code"
         APP_ICON="code"
@@ -87,7 +82,7 @@ resolve_app_details() {
         APP_NAME="Kitty"
         APP_ICON="terminal"
         NERD_ICON=""
-    elif [[ "$combined" =~ (alacritty|foot|wezterm|ghostty) ]] || [[ "$APP_NAME" =~ (alacritty|foot|wezterm|ghostty) ]]; then
+    elif [[ "$combined" =~ (foot|wezterm|ghostty) ]] || [[ "$APP_NAME" =~ (foot|wezterm|ghostty) ]]; then
         APP_NAME="Terminal"
         APP_ICON="terminal"
         NERD_ICON=""
@@ -122,7 +117,7 @@ resolve_app_details() {
     elif [[ "$combined" =~ (pipewire|wireplumber) ]] || [[ "$APP_NAME" =~ (pipewire|wireplumber) ]]; then
         APP_ICON="audio-speakers"
         NERD_ICON="󰓃"
-    elif [[ "$combined" =~ (waybar|swaync|mango|hypr) ]] || [[ "$APP_NAME" =~ (waybar|swaync|mango|hypr) ]]; then
+    elif [[ "$combined" =~ (swaync|mango|hypr) ]] || [[ "$APP_NAME" =~ (swaync|mango|hypr) ]]; then
         APP_ICON="preferences-system"
         NERD_ICON="󱂩"
     elif [[ "$combined" =~ (bash|zsh|fish|sh) ]] || [[ "$APP_NAME" =~ (bash|zsh|fish|sh) ]]; then

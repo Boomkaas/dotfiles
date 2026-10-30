@@ -439,7 +439,7 @@ cmd_preview() {
                 flake_info)
                     echo -e "${BOLD}${CYAN}=== Flake Inputs & Lock Metadata ===${RESET}"
                     echo -e "Inspects the locked git revisions, commit dates, and"
-                    echo -e "dependency trees for nixpkgs, home-manager, mangowm, noctalia."
+                    echo -e "dependency trees for nixpkgs, nixpkgs_unstable, home-manager."
                     echo ""
                     echo -e "  ${BOLD}Hotkey:${RESET} ${CYAN}Ctrl-U${RESET}"
                     ;;

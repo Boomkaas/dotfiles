@@ -36,7 +36,6 @@ main_menu() {
         fi
     }
 
-    add_item "󰒓  Waybar Bar Configuration" "$HOME/.config/waybar"
     add_item "󰒓  Mango Compositor Configuration" "$HOME/.config/mango"
     add_item "󰒓  Hyprland / Idle Configuration" "$HOME/.config/hypr"
     add_item "󰒓  SwayNC Notifications Configuration" "$HOME/.config/swaync"
@@ -68,7 +67,7 @@ main_menu() {
             ;;
         *"Open All Config Paths"*)
             local existing=()
-            for p in "$HOME/.config/waybar" "$HOME/.config/mango" "$HOME/.config/swaync" "$HOME/.config/kitty" "$HOME/.config/rofi" "$HOME/.config/fish" "$HOME/hakuspace-control" "$HOME/Code/Dotfiles/nixos"; do
+            for p in "$HOME/.config/mango" "$HOME/.config/swaync" "$HOME/.config/kitty" "$HOME/.config/rofi" "$HOME/.config/fish" "$HOME/hakuspace-control" "$HOME/Code/Dotfiles/nixos"; do
                 [ -e "$p" ] && existing+=("$p")
             done
             code -n "${existing[@]}" &

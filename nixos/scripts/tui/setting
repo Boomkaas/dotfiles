@@ -475,7 +475,7 @@ cmd_preview() {
             ;;
         lock)
             echo -e "${BOLD}${CYAN}=== Lock Screen ===${RESET}"
-            echo -e "  ${BOLD}Screen Locker:${RESET} hyprlock / lock.sh"
+            echo -e "  ${BOLD}Screen Locker:${RESET} swaylock / lock.sh"
             echo ""
             echo -e "${BOLD}Action:${RESET} Lock the current session immediately"
             ;;
@@ -492,10 +492,10 @@ cmd_preview() {
             echo -e "${BOLD}Action:${RESET} Inspect windows, kill frozen apps, monitor RAM & CPU"
             ;;
         theme)
-            echo -e "${BOLD}${CYAN}=== Themes, Wallpapers & Waybar ===${RESET}"
+            echo -e "${BOLD}${CYAN}=== Themes & Wallpapers ===${RESET}"
             echo -e "  ${BOLD}Tool:${RESET}        theme"
             echo ""
-            echo -e "${BOLD}Action:${RESET} Switch wallpapers, accent colors, visualizer, Waybar"
+            echo -e "${BOLD}Action:${RESET} Switch wallpapers, accent colors, visualizer"
             ;;
         config)
             echo -e "${BOLD}${CYAN}=== Open Config Files & Dotfiles ===${RESET}"
@@ -588,7 +588,7 @@ cmd_interactive() {
         menu+=("󰌾  Lock Screen"$'\t'"lock")
         menu+=("  Power & Session Controls"$'\t'"power")
         menu+=("󰍛  Task & Process Controller"$'\t'"process")
-        menu+=("󰏘  Themes, Wallpapers & Waybar"$'\t'"theme")
+        menu+=("󰏘  Themes & Wallpapers"$'\t'"theme")
         menu+=("󱁤  Open Config Files & Dotfiles"$'\t'"config")
         menu+=("󰖟  Cloudflare WARP VPN ($warp)"$'\t'"warp")
         menu+=("󰈊  Color Picker (Screen Eyedropper)"$'\t'"colorpicker")
@@ -782,7 +782,7 @@ ${BOLD}USAGE:${RESET}
     setting lock                    Lock screen immediately
     setting power                   Open power & shutdown menu
     setting process | top           Open process manager
-    setting theme                   Open theme, wallpaper & Waybar customizer
+    setting theme                   Open theme, wallpaper & accent customizer
     setting configs                 Open configuration files selector
     setting warp                    Toggle Cloudflare WARP VPN
     setting colorpicker             Pick color from screen

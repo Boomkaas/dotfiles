@@ -120,11 +120,11 @@ if [[ $EUID -eq 0 ]]; then
                     -t "$TIMEOUT_MS" \
                     -a "Power Management" \
                     -i system-shutdown \
-                    -A "stay=I am here" \
+                    -A "default=I am here" \
                     "Are you still here?" \
                     "System will shut down in ${TIMEOUT_SEC}s unless you confirm you are still here." 2>/dev/null || true)
 
-                if [[ "$ACTION" == "stay" ]]; then
+                if [[ "$ACTION" == "default" ]]; then
                     notify-send -t 3000 -a "Power Management" "System" "Presence confirmed. Shutdown cancelled." 2>/dev/null || true
                     exit 0
                 fi
@@ -153,11 +153,11 @@ else
         -t "$TIMEOUT_MS" \
         -a "Power Management" \
         -i system-shutdown \
-        -A "stay=I am here" \
+        -A "default=I am here" \
         "Are you still here?" \
         "System will shut down in ${TIMEOUT_SEC}s unless you confirm you are still here." 2>/dev/null || true)
 
-    if [[ "$ACTION" == "stay" ]]; then
+    if [[ "$ACTION" == "default" ]]; then
         USER_CONFIRMED=1
         notify-send -t 3000 -a "Power Management" "System" "Presence confirmed. Shutdown cancelled." 2>/dev/null || true
     fi
