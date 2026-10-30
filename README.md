@@ -23,7 +23,7 @@ plus a suite of fzf TUIs for managing the system.
 | **Fetch** | fastfetch + [fetch](https://github.com/areofyl/fetch) | White/gray NixOS logo; `fetch` spins the logo in 3D |
 | **Display manager** | Ly (TUI) | Pick the *niri* session; unlocks gnome-keyring at login |
 | **Shell** | Fish + Starship, Tmux, Yazi | `config/fish`, `config/tmux`, `config/yazi` |
-| **Editor** | Zed (`pkgs_unstable.zed-editor`) | `$EDITOR` is `zed-wait` |
+| **Editor** | Zed (`pkgs_unstable.zed-editor`) | `$EDITOR` is `zed-wait`; `nvim` is installed clean (no config) for quick viewing and small edits |
 | **TUIs** | [`s`](nixos/scripts/tui/s) + 22 tools | fzf control center for network, system, dev and desktop |
 
 Terminal toys from the adam setup are installed too: `tty-clock -c -C 7`,
@@ -66,7 +66,8 @@ Ported from the old Mango binds. `Mod` is Super. `Mod+Shift+/` shows the full li
 | `Mod+Q` / `Mod+Shift+Q` | Kitty / fullscreen Kitty with tmux |
 | `Mod+R`, `Mod+B`, `Mod+E`, `Mod+T` | Zed, Firefox, Thunar, Telegram |
 | `Mod+C` | Close window |
-| `Mod+L` / `Mod+K` / `Mod+M` | Lock (`lock.sh` → swaylock) |
+| `Mod+L` (F9) / `Mod+K` | Lock (`lock.sh` → swaylock) |
+| `Mod+M` | Log out to the Ly greeter (ends the session; open apps close) |
 | `Mod+Shift+L` | Night light toggle |
 | `Mod+P` / `Mod+Print` | Region screenshot (niri built-in) |
 | `Mod+Shift+P` / `Print` | Full-screen screenshot (niri built-in) |
@@ -185,7 +186,7 @@ tui-popup <cmd> # Summon any TUI tool in a floating Kitty window (niri rule for 
 | [`conf`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/conf) | `config`, `configs` | **Dev** | **Dotfiles & Config Picker**: Syntax-highlighted `bat` previews, Git diff indicators, and instant jump into Zed for any dotfile. |
 | [`audio`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/audio) | `audio` | **Desktop** | **PipeWire & WirePlumber Mixer**: Terminal volume faders, sink/source routing, mute toggles, WireMix integration, ALC256 mic testing. |
 | [`setting`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/setting) | `settings` | **Desktop** | **Quick Settings**: Backlight brightness faders (`brightnessctl`), volume sliders, power governor, screen idle inhibit. |
-| [`theme`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/theme) | `theme` | **Desktop** | **Themes & Wallpapers**: Wallpaper, accent colour and visualizer helpers from `~/.local/bin` (still written for the old awww/waybar setup). |
+| [`theme`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/theme) | `theme` | **Desktop** | **Themes & Wallpapers**: Wallpaper, accent colour and visualizer helpers from `~/.local/bin` (still written for the old awww setup). |
 | [`clip`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/clip) | `clips`, `clipboard` | **Desktop** | **Clipboard & Snippets**: Wayland clipboard history (`cliphist`), decode text/image entries with syntax preview, auto-paste on Enter, wipe history. |
 
 ### 🐻 TunnelBear VPN & Per-App Split Tunneling (`tb`)
