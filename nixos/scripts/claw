@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# claw - on-demand toggle for the OpenClaw gateway user service
+
+set -euo pipefail
+
+UNIT="openclaw-gateway.service"
+
+is_active() { systemctl --user is-active --quiet "$UNIT"; }
+
+cmd_status() {
+    if is_active; then
+        local pid mem
+        pid=$(systemctl --user show "$UNIT" --property=MainPID --value)
+        mem=$(systemctl --user show "$UNIT" --property=MemoryCurrent --value)
+        if [[ "$mem" =~ ^[0-9]+$ ]]; then
+            mem=$(numfmt --to=iec "$mem")
+        else
+            mem="?"
+        fi
+        echo "active (pid $pid, $mem)"
+    else
+        echo "inactive"
+    fi
+}
+
+case "${1:-toggle}" in
+    start|on)   systemctl --user start "$UNIT"; cmd_status ;;
+    stop|off)   systemctl --user stop "$UNIT"; cmd_status ;;
+    restart)    systemctl --user restart "$UNIT"; cmd_status ;;
+    toggle)
+        if is_active; then
+            systemctl --user stop "$UNIT"
+        else
+            systemctl --user start "$UNIT"
+        fi
+        cmd_status
+        ;;
+    status)     cmd_status ;;
+    logs)       journalctl --user -u "$UNIT" -f -n 50 ;;
+    *)          echo "usage: claw [toggle|start|stop|restart|status|logs]" >&2; exit 1 ;;
+esac
