@@ -55,6 +55,9 @@ let
   share = pkgs.writeShellScriptBin "share" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/share "$@"
   '';
+  tailscale-tui = pkgs.writeShellScriptBin "tailscale-tui" ''
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/tailscale "$@"
+  '';
   wifi = pkgs.writeShellScriptBin "wifi" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/wifi "$@"
   '';
@@ -162,9 +165,6 @@ let
   '';
   s-cmd = pkgs.writeShellScriptBin "s" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/s "$@"
-  '';
-  nixtest = pkgs.writeShellScriptBin "nixtest" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/nixtest "$@"
   '';
   tunnelbear-cmd = pkgs.writeShellScriptBin "tunnelbear" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tunnelbear "$@"
@@ -351,6 +351,19 @@ EOF
       ln -s $out/bin/wayland-vpet $out/bin/pet
     '';
   };
+  fetch = pkgs.stdenv.mkDerivation rec {
+    pname = "fetch";
+    version = "2.3.0";
+
+    src = pkgs.fetchFromGitHub {
+      owner = "areofyl";
+      repo = "fetch";
+      rev = "1e0f767be4129976d4bece808b0110dd39ea66d7";
+      hash = "sha256-wNgMxL+wiYVHTULqSvq9QOK6n8j3qQp7pugWclXORZE=";
+    };
+
+    makeFlags = [ "PREFIX=$(out)" ];
+  };
 in
 {
   environment.systemPackages = with pkgs; [
@@ -361,18 +374,18 @@ in
       exec ${pkgs_unstable.zed-editor}/bin/zeditor --wait "$@"
     '')
 
+    # Neovim, clean: no config directory, so it runs with built-in defaults
+    # for quick viewing and small edits.
+    neovim
+
     # Antigravity CLI from unstable
     pkgs_unstable.antigravity-cli
     (pkgs.writeShellScriptBin "antigravity" ''
       exec ${pkgs_unstable.antigravity-cli}/bin/agy "$@"
     '')
 
-    # Noctalia
-    inputs.noctalia.packages.${pkgs.system}.default
-
     # Terminal & Shell
     kitty
-    foot
     fastfetch
     htop
     btop
@@ -403,6 +416,7 @@ in
     discord
     #ayugram-desktop
     teams-for-linux
+    zoom-us                 # Video meetings
 
     # Dev Tools
     git
@@ -521,18 +535,12 @@ in
     asciiquarium
     cbonsai
 
-    # Hakuspace Components
-    (waybar.overrideAttrs (oldAttrs: {
-      postPatch = (oldAttrs.postPatch or "") + ''
-        substituteInPlace src/bar.cpp \
-          --replace-fail 'auto group_config = config[ref];' 'const auto& group_config = config[ref];'
-      '';
-    }))                     # Status bar (with upstream dangling ref fix)
-    swaynotificationcenter  # Notifications & control center (swaync)
-    pkgs_unstable.hypridle  # Idle management
-    hyprlock                # Screen lock
-    pkgs_unstable.hyprsunset # Blue light filter
-    pkgs_unstable.awww      # Wallpaper daemon (formerly swww)
+    # niri desktop (niri itself comes from programs.niri)
+    swaybg                  # Wallpaper
+    swayidle                # Idle management (user service in configuration.nix)
+    swaylock-effects        # Screen lock (Ly-styled; provides `swaylock`)
+    mako                    # Notifications
+    fetch                   # 3D spinning-logo fetch
     fish                    # Shell
     starship                # Shell prompt
     xfce.thunar             # File manager
@@ -627,9 +635,9 @@ in
     pkg-tool
     pkgs-tool
     s-cmd
-    nixtest
     tunnelbear-cmd
     tb-cmd
+    tailscale-tui
 
     # Archive
     zip
@@ -649,7 +657,9 @@ in
     glib
     procps
     iputils
+    nmap
     libgcc
     jmtpfs
+    linssid
   ];
 }

@@ -7,13 +7,17 @@
   services.power-profiles-daemon.enable = true;
   services.udisks2.enable = true;
   services.gvfs.enable = true;
-  # Secret Service for Zed's credentials (sign-in, AI provider keys); GDM's PAM unlocks it at login.
+  # Secret Service for Zed's credentials (sign-in, AI provider keys); Ly's PAM unlocks it at login.
   services.gnome.gnome-keyring.enable = true;
+  # gcr's prompter lets a locked keyring ask for its password outside GNOME; without it unlock requests hang.
+  services.dbus.packages = [ pkgs.gcr ];
   services.udev.packages = [ pkgs.android-udev-rules ];
   services.udev.extraRules = ''
     KERNEL=="event*", SUBSYSTEM=="input", TAG+="uaccess"
     KERNEL=="rtc0", SUBSYSTEM=="rtc", TAG+="uaccess", GROUP="wheel", MODE="0660"
     SUBSYSTEM=="rtc", KERNEL=="rtc0", ATTR{wakealarm}!="", GROUP="wheel", MODE="0664"
+    # Webcam kill switch (camera_toggle.sh): let the video group toggle USB authorization
+    SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="13d3", ATTR{idProduct}=="5a11", RUN+="${pkgs.coreutils}/bin/chgrp video /sys%p/authorized", RUN+="${pkgs.coreutils}/bin/chmod 0664 /sys%p/authorized"
   '';
 
   virtualisation.docker.enable = true;
@@ -105,6 +109,10 @@
   services.logmein-hamachi.enable = true;
   programs.haguichi.enable = true;
 
+  # Tailscale mesh VPN: tailscaled + `tailscale` CLI; the module trusts the tailscale0 interface
+  # and opens UDP 41641. Log in once with: sudo tailscale up
+  services.tailscale.enable = true;
+
   systemd.tmpfiles.rules = [
     "d /var/lib/logmein-hamachi 0755 root root -"
     "f+ /var/lib/logmein-hamachi/h2-engine-override.cfg 0644 root root - Ipc.User peng\n"
@@ -154,6 +162,13 @@
       Persistent = false;
     };
   };
-  # hypridle PATH is set via Service.Environment in configuration.nix (single source of truth)
+  hardware.graphics = {
+    enable = true;
+    extraPackages = with pkgs; [
+      intel-media-driver
+      intel-vaapi-driver
+      libvdpau-va-gl
+      intel-compute-runtime-legacy1
+    ];
+  };
 }
-

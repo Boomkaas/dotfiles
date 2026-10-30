@@ -4,15 +4,9 @@
   imports =
     [
       ../modules/default.nix
-      inputs.mangowm.nixosModules.mango
     ];
 
-  programs.mango.enable = true;
-  programs.mango.package = inputs.mangowm.packages.${pkgs.stdenv.hostPlatform.system}.mango.overrideAttrs (old: {
-    patches = (old.patches or []) ++ [
-      ../modules/patches/mango-vertical-swipe-bias.patch
-    ];
-  });
+  programs.niri.enable = true;
 
   nixpkgs.overlays = [
     (final: prev: {
@@ -95,14 +89,13 @@
         size = 24;
         package = pkgs.bibata-cursors;
       };
-      gtk3.extraConfig = {
-        gtk-application-prefer-dark-theme = 1;
-        gtk-theme = "adw-gtk3";
+      # Black overrides live in config/gtk/gtk.css (linked below).
+      theme = {
+        name = "adw-gtk3-dark";
+        package = pkgs.adw-gtk3;
       };
-      gtk4.extraConfig = {
-        gtk-application-prefer-dark-theme = 1;
-        gtk-theme = "adw-gtk3";
-      };
+      gtk3.extraConfig.gtk-application-prefer-dark-theme = 1;
+      gtk4.extraConfig.gtk-application-prefer-dark-theme = 1;
     };
 
     qt = {
@@ -241,19 +234,63 @@
       '';
     };
 
-    systemd.user.services.awww-daemon = {
+    # Desktop configs from the repo, symlinked so edits are live.
+    xdg.configFile = let
+      link = path: config.lib.file.mkOutOfStoreSymlink "/home/peng/Code/Dotfiles/config/${path}";
+    in {
+      "niri/config.kdl".source = link "niri/config.kdl";
+      "kitty/kitty.conf".source = link "kitty/kitty.conf";
+      "fastfetch/config.jsonc".source = link "fastfetch/config.jsonc";
+      "fetch/config".source = link "fetch/config";
+      "swaylock/config".source = link "swaylock/config";
+      "mako/config".source = link "mako/config";
+      "gtk-3.0/gtk.css".source = link "gtk/gtk.css";
+      "gtk-4.0/gtk.css".source = link "gtk/gtk.css";
+    };
+
+    # Firefox black theme, linked into the default profile.
+    home.file = let
+      link = path: config.lib.file.mkOutOfStoreSymlink "/home/peng/Code/Dotfiles/config/${path}";
+      profile = ".mozilla/firefox/ra10zn6t.default";
+    in {
+      "${profile}/chrome/userChrome.css".source = link "firefox/userChrome.css";
+      "${profile}/chrome/userContent.css".source = link "firefox/userContent.css";
+      "${profile}/user.js".source = link "firefox/user.js";
+    };
+
+    # Idle chain (same timings as the old hypridle setup): idle_inhibit.sh
+    # gates each step on battery/AC, caffeine and audio playback.
+    systemd.user.services.swayidle = let
+      sh = script: "${pkgs.bash}/bin/bash /home/peng/.local/bin/${script}";
+      idle = timeout: cmd: "timeout ${toString timeout} '${cmd}'";
+      idleResume = timeout: cmd: resume: "timeout ${toString timeout} '${cmd}' resume '${resume}'";
+    in {
       Unit = {
-        Description = "awww wallpaper daemon";
+        Description = "Idle manager (swayidle)";
         PartOf = [ "graphical-session.target" ];
         After = [ "graphical-session.target" ];
         ConditionEnvironment = "WAYLAND_DISPLAY";
       };
       Service = {
-        ExecStart = "${pkgs_unstable.awww}/bin/awww-daemon";
+        ExecStart = lib.concatStringsSep " " [
+          "${pkgs.swayidle}/bin/swayidle"
+          "lock '${sh "lock.sh"}'"
+          "before-sleep 'loginctl lock-session'"
+          "after-resume '${sh "dpms_handler.sh"} on'"
+          (idle 120 "${sh "idle_inhibit.sh"} --battery && loginctl lock-session")
+          (idleResume 180 "${sh "idle_inhibit.sh"} --battery && ${sh "dpms_handler.sh"} off" "${sh "dpms_handler.sh"} on")
+          (idle 300 "${sh "idle_sleep_poweroff.sh"} --battery")
+          (idle 3600 "${sh "idle_inhibit.sh"} --battery && systemctl poweroff")
+          (idle 180 "${sh "idle_inhibit.sh"} --ac && loginctl lock-session")
+          (idleResume 600 "${sh "idle_inhibit.sh"} --ac && ${sh "dpms_handler.sh"} off" "${sh "dpms_handler.sh"} on")
+          (idle 1200 "${sh "idle_sleep_poweroff.sh"} --ac")
+          (idle 10800 "${sh "idle_inhibit.sh"} --ac && systemctl poweroff")
+        ];
         Restart = "always";
-        RestartSec = "1s";
+        RestartSec = "2s";
         Environment = [
-          "PATH=/run/current-system/sw/bin:/etc/profiles/per-user/peng/bin:/home/peng/.local/bin:/usr/bin:/bin"
+          "PATH=/run/current-system/sw/bin:/etc/profiles/per-user/peng/bin:/home/peng/.local/bin:/run/wrappers/bin:/usr/bin:/bin"
+          "XDG_CURRENT_DESKTOP=niri"
         ];
       };
       Install = {
@@ -261,28 +298,20 @@
       };
     };
 
-    systemd.user.services.hypridle = {
+    systemd.user.services.polkit-mate = {
       Unit = {
-        Description = "Hyprland's idle daemon";
+        Description = "MATE polkit authentication agent";
         PartOf = [ "graphical-session.target" ];
         After = [ "graphical-session.target" ];
-        ConditionEnvironment = "WAYLAND_DISPLAY";
       };
       Service = {
-        Type = "simple";
-        ExecStart = "${pkgs_unstable.hypridle}/bin/hypridle";
-        Restart = "always";
-        RestartSec = "2s";
-        # PATH consolidated here — replaces xdg.configFile drop-in and services.nix .path injection
-        Environment = [
-          "PATH=/run/current-system/sw/bin:/etc/profiles/per-user/peng/bin:/home/peng/.local/bin:/run/wrappers/bin:/usr/bin:/bin"
-        ];
+        ExecStart = "${pkgs.mate.mate-polkit}/libexec/polkit-mate-authentication-agent-1";
+        Restart = "on-failure";
       };
       Install = {
         WantedBy = [ "graphical-session.target" ];
       };
     };
-    # xdg.configFile hypridle drop-in removed: was redundantly setting the same PATH as Service.Environment above
   };
 }
 

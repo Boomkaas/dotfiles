@@ -98,7 +98,7 @@
     glib
   ];
 
-  # System Fonts & Fontconfig for Waybar, Rofi, Terminal & WM icon glyphs
+  # System Fonts & Fontconfig for Rofi, Terminal & WM icon glyphs
   fonts = {
     fontDir.enable = true;
     packages = with pkgs; [
