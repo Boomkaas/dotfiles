@@ -1,0 +1,30 @@
+# Ly-styled lock screen: black TTY look, monospace text, black and white
+# (needs swaylock-effects for clock/font/indicator options)
+color=000000
+font=JetBrainsMono Nerd Font Mono
+font-size=18
+clock
+timestr=%H:%M
+datestr=%a %d %b %Y
+indicator
+indicator-idle-visible
+indicator-radius=110
+indicator-thickness=2
+inside-color=00000000
+inside-clear-color=00000000
+inside-ver-color=00000000
+inside-wrong-color=00000000
+ring-color=505050
+ring-clear-color=a0a0a0
+ring-ver-color=ffffff
+ring-wrong-color=ffffff
+key-hl-color=ffffff
+bs-hl-color=505050
+line-uses-inside
+separator-color=00000000
+text-color=e0e0e0
+text-clear-color=e0e0e0
+text-ver-color=e0e0e0
+text-wrong-color=ffffff
+show-failed-attempts
+ignore-empty-password

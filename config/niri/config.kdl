@@ -1,0 +1,293 @@
+// niri — "creation of adam" black-and-white look
+// (https://github.com/klautizm/niri-creation-of-adam) with binds ported from
+// the old Mango config. Symlinked to ~/.config/niri/config.kdl; niri reloads
+// it on save. Check syntax with `niri validate`.
+
+input {
+    keyboard {
+        xkb {
+            layout "us,ua"
+            options "grp:win_space_toggle"
+        }
+        repeat-delay 260
+        repeat-rate 35
+        numlock
+    }
+
+    touchpad {
+        tap
+        natural-scroll
+        accel-speed 0.2
+        accel-profile "flat"
+        scroll-factor 2.0
+    }
+
+    mouse {
+        accel-speed 0.0
+        accel-profile "flat"
+    }
+
+    warp-mouse-to-focus
+    focus-follows-mouse max-scroll-amount="0%"
+}
+
+cursor {
+    xcursor-theme "Bibata-Modern-Ice"
+    xcursor-size 24
+    hide-when-typing
+}
+
+layout {
+    gaps 16
+    center-focused-column "never"
+    always-center-single-column
+
+    preset-column-widths {
+        proportion 0.5
+        proportion 0.8
+        proportion 1.0
+    }
+    default-column-width { proportion 0.5; }
+
+    // Drawn inside each tile rather than around it: the outer focus ring was
+    // not visible on Firefox and Telegram
+    focus-ring {
+        off
+    }
+
+    border {
+        width 1
+        active-color "#ffffff"
+        inactive-color "#505050"
+    }
+
+    shadow {
+        on
+    }
+}
+
+// Alt+Tab overview: black behind the workspaces instead of niri's grey
+overview {
+    backdrop-color "#000000"
+}
+
+prefer-no-csd
+screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
+hotkey-overlay {
+    skip-at-startup
+}
+
+environment {
+    QT_QPA_PLATFORM "wayland;xcb"
+    QT_QPA_PLATFORMTHEME "gtk3"
+    QT_QPA_PLATFORMTHEME_QT6 "gtk3"
+    SDL_VIDEODRIVER "wayland"
+    CLUTTER_BACKEND "wayland"
+    MOZ_ENABLE_WAYLAND "1"
+    _JAVA_AWT_WM_NONREPARENTING "1"
+    LIBVA_DRIVER_NAME "iHD"
+    VDPAU_DRIVER "va_gl"
+    XCURSOR_THEME "Bibata-Modern-Ice"
+    XCURSOR_SIZE "24"
+}
+
+spawn-at-startup "mako"
+spawn-at-startup "swaybg" "-m" "fill" "-i" "/home/peng/Code/Dotfiles/config/niri/wallpaper.jpeg"
+spawn-at-startup "wl-paste" "--type" "text" "--watch" "cliphist" "store"
+spawn-at-startup "wl-paste" "--type" "image" "--watch" "cliphist" "store"
+
+// ── Window rules ──────────────────────────────────────────────────────────
+// Don't fill the focus ring behind windows; it shows through translucent
+// kitty (90% opacity) and turns its background grey
+window-rule {
+    draw-border-with-background false
+}
+
+window-rule {
+    opacity 0.95
+}
+
+// kitty sets its own 90% background opacity; skip niri's to avoid stacking
+window-rule {
+    match app-id="^kitty$"
+    opacity 1.0
+}
+
+window-rule {
+    match app-id="firefox"
+    opacity 0.95
+}
+
+window-rule {
+    match app-id="firefox"
+    match app-id="^dev\\.zed\\.Zed$"
+    default-column-width { proportion 1.0; }
+}
+
+window-rule {
+    match app-id="^thunar$"
+    default-column-width { proportion 0.65; }
+}
+
+// Popup TUIs launched by tui-popup
+window-rule {
+    match app-id="^tui-overlay$"
+    open-floating true
+    default-column-width { fixed 1300; }
+    default-window-height { fixed 560; }
+}
+
+window-rule {
+    match title="^Confirm to replace files"
+    match title="^File Operation Progress"
+    open-floating true
+}
+
+binds {
+    Mod+Shift+Slash { show-hotkey-overlay; }
+    Mod+Shift+E { quit; }
+
+    // ── Applications ──
+    Mod+Q hotkey-overlay-title="Terminal" { spawn "kitty"; }
+    Mod+Shift+Q hotkey-overlay-title="Terminal + tmux" { spawn "kitty" "--start-as=fullscreen" "tmux"; }
+    Mod+R { spawn "zeditor"; }
+    Mod+B { spawn "firefox"; }
+    Mod+E { spawn "thunar"; }
+    Mod+T { spawn "telegram-desktop"; }
+    Mod+C { close-window; }
+
+    // Log out to the real Ly greeter (ends the session, closes all apps)
+    Mod+M { quit skip-confirmation=true; }
+    Mod+K { spawn "/home/peng/.local/bin/lock.sh"; }
+    // F9 sends Super+L (ASUS firmware macro)
+    Mod+L { spawn "/home/peng/.local/bin/lock.sh"; }
+    Mod+Shift+L { spawn "/home/peng/.local/bin/nightlight_toggle.sh"; }
+
+    Mod+P { screenshot; }
+    Mod+Shift+P { screenshot-screen; }
+    Mod+Ctrl+Shift+P { spawn "/home/peng/.local/bin/record.sh"; }
+    Mod+F11 { spawn "/home/peng/.local/bin/record.sh"; }
+    Print { screenshot-screen; }
+    Mod+Print { screenshot; }
+
+    // ── TUI popups ──
+    Mod+Comma { spawn "/home/peng/.local/bin/tui-popup" "setting"; }
+    Mod+Escape { spawn "/home/peng/.local/bin/tui-popup" "s"; }
+    Mod+Tab { spawn "/home/peng/.local/bin/tui-popup" "app"; }
+    Mod+Shift+Tab { spawn "/home/peng/.local/bin/tui-popup" "task"; }
+    Mod+V { spawn "/home/peng/.local/bin/tui-popup" "clip"; }
+    Mod+Shift+V { spawn "/home/peng/.local/bin/tui-popup" "clip" "wipe"; }
+
+    // ── Window state ──
+    Alt+Tab { toggle-overview; }
+    Mod+Z { toggle-window-floating; }
+    Mod+Shift+F { maximize-column; }
+    Mod+Ctrl+Shift+F { fullscreen-window; }
+    Alt+Shift+F { toggle-windowed-fullscreen; }
+    Mod+F { switch-preset-column-width; }
+
+    // ── Focus (WASD + arrows) ──
+    Mod+A { focus-column-left; }
+    Mod+D { focus-column-right; }
+    Mod+Left { focus-column-left; }
+    Mod+Right { focus-column-right; }
+
+    // W = previous workspace, S = next
+    Mod+W { focus-workspace-up; }
+    Mod+S { focus-workspace-down; }
+    Mod+Up { focus-workspace-up; }
+    Mod+Down { focus-workspace-down; }
+
+    Mod+Shift+W { move-column-to-workspace-up; }
+    Mod+Shift+S { move-column-to-workspace-down; }
+    Mod+Shift+Up { move-column-to-workspace-up; }
+    Mod+Shift+Down { move-column-to-workspace-down; }
+
+    // ── Swap windows ──
+    Mod+Shift+A { move-column-left; }
+    Mod+Shift+D { move-column-right; }
+    Alt+Shift+A { move-column-left; }
+    Alt+Shift+D { move-column-right; }
+    Alt+Shift+Left { move-column-left; }
+    Alt+Shift+Right { move-column-right; }
+    Alt+Shift+W { move-window-up; }
+    Alt+Shift+S { move-window-down; }
+    Alt+Shift+Up { move-window-up; }
+    Alt+Shift+Down { move-window-down; }
+
+    // ── Stack into columns (Mango scroller_stack) ──
+    Mod+Ctrl+A { consume-or-expel-window-left; }
+    Mod+Ctrl+D { consume-or-expel-window-right; }
+    Mod+Ctrl+Left { consume-or-expel-window-left; }
+    Mod+Ctrl+Right { consume-or-expel-window-right; }
+    Mod+Ctrl+W { focus-window-up; }
+    Mod+Ctrl+S { focus-window-down; }
+    Mod+Ctrl+Up { focus-window-up; }
+    Mod+Ctrl+Down { focus-window-down; }
+
+    // ── Resize ──
+    Ctrl+Alt+Left { set-column-width "-50"; }
+    Ctrl+Alt+Right { set-column-width "+50"; }
+    Ctrl+Alt+Up { set-window-height "-50"; }
+    Ctrl+Alt+Down { set-window-height "+50"; }
+
+    // ── Workspaces ──
+    Mod+1 { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+    Mod+5 { focus-workspace 5; }
+    Mod+6 { focus-workspace 6; }
+    Mod+7 { focus-workspace 7; }
+    Mod+8 { focus-workspace 8; }
+    Mod+9 { focus-workspace 9; }
+    Mod+Shift+1 { move-column-to-workspace 1; }
+    Mod+Shift+2 { move-column-to-workspace 2; }
+    Mod+Shift+3 { move-column-to-workspace 3; }
+    Mod+Shift+4 { move-column-to-workspace 4; }
+    Mod+Shift+5 { move-column-to-workspace 5; }
+    Mod+Shift+6 { move-column-to-workspace 6; }
+    Mod+Shift+7 { move-column-to-workspace 7; }
+    Mod+Shift+8 { move-column-to-workspace 8; }
+    Mod+Shift+9 { move-column-to-workspace 9; }
+
+    // ── Monitors ──
+    Mod+Alt+Ctrl+A { focus-monitor-left; }
+    Mod+Alt+Ctrl+D { focus-monitor-right; }
+    Mod+Alt+Ctrl+W { focus-monitor-up; }
+    Mod+Alt+Ctrl+S { focus-monitor-down; }
+    Mod+Alt+Ctrl+Left { focus-monitor-left; }
+    Mod+Alt+Ctrl+Right { focus-monitor-right; }
+    Mod+Alt+Ctrl+Up { focus-monitor-up; }
+    Mod+Alt+Ctrl+Down { focus-monitor-down; }
+    Mod+Alt+A { move-column-to-monitor-left; }
+    Mod+Alt+D { move-column-to-monitor-right; }
+    Mod+Alt+W { move-column-to-monitor-up; }
+    Mod+Alt+S { move-column-to-monitor-down; }
+    Mod+Alt+Left { move-column-to-monitor-left; }
+    Mod+Alt+Right { move-column-to-monitor-right; }
+    Mod+Alt+Up { move-column-to-monitor-up; }
+    Mod+Alt+Down { move-column-to-monitor-down; }
+
+    // ── Mouse wheel ──
+    Mod+WheelScrollUp cooldown-ms=150 { focus-workspace-down; }
+    Mod+WheelScrollDown cooldown-ms=150 { focus-workspace-up; }
+    Mod+Shift+WheelScrollUp { focus-column-right; }
+    Mod+Shift+WheelScrollDown { focus-column-left; }
+    Mod+Ctrl+WheelScrollUp { move-column-right; }
+    Mod+Ctrl+WheelScrollDown { move-column-left; }
+    Mod+Ctrl+MouseMiddle { fullscreen-window; }
+
+    // ── Media & hardware keys ──
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "-l" "1.5" "@DEFAULT_AUDIO_SINK@" "5%+"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
+    XF86AudioMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
+    XF86MonBrightnessUp allow-when-locked=true { spawn "brightnessctl" "set" "5%+"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "set" "5%-"; }
+    XF86AudioPlay allow-when-locked=true { spawn "playerctl" "play-pause"; }
+    XF86AudioNext allow-when-locked=true { spawn "playerctl" "next"; }
+    XF86AudioPrev allow-when-locked=true { spawn "playerctl" "previous"; }
+    XF86WebCam { spawn "/home/peng/.local/bin/camera_toggle.sh"; }
+    XF86Sleep { spawn "sh" "-c" "loginctl lock-session && systemctl suspend"; }
+}
