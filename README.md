@@ -89,6 +89,7 @@ Ported from the old Mango binds. `Mod` is Super. `Mod+Shift+/` shows the full li
 | `Mod+1..9` / `Mod+Shift+1..9` | Go to / move column to workspace |
 | `Mod+Alt+Ctrl+WASD` / `Mod+Alt+WASD` | Focus monitor / move column to monitor |
 | `Mod+Shift+E` | Quit niri |
+| `Fn+F1` / `Fn+F2` / `Fn+F3` (XF86 mute / volume down / up) | Mute toggle / volume down / up (5% steps, capped at 150%); each shows the current volume as a notification (`nixos/scripts/volume_osd.sh`) |
 
 Keyboard layouts are `us,ua`, switched with `Win+Space`.
 
