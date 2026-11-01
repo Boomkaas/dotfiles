@@ -283,8 +283,9 @@ binds {
     XF86AudioLowerVolume allow-when-locked=true { spawn "/home/peng/Code/Dotfiles/nixos/scripts/volume_osd.sh" "down"; }
     XF86AudioMute allow-when-locked=true { spawn "/home/peng/Code/Dotfiles/nixos/scripts/volume_osd.sh" "mute"; }
     XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
-    XF86MonBrightnessUp allow-when-locked=true { spawn "brightnessctl" "set" "5%+"; }
-    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "set" "5%-"; }
+    XF86MonBrightnessUp allow-when-locked=true { spawn "/home/peng/Code/Dotfiles/nixos/scripts/brightness_osd.sh" "up"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "/home/peng/Code/Dotfiles/nixos/scripts/brightness_osd.sh" "down"; }
+    XF86TouchpadToggle allow-when-locked=true { spawn "/home/peng/Code/Dotfiles/nixos/scripts/touchpad_toggle.sh"; }
     XF86AudioPlay allow-when-locked=true { spawn "playerctl" "play-pause"; }
     XF86AudioNext allow-when-locked=true { spawn "playerctl" "next"; }
     XF86AudioPrev allow-when-locked=true { spawn "playerctl" "previous"; }

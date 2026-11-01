@@ -90,6 +90,8 @@ Ported from the old Mango binds. `Mod` is Super. `Mod+Shift+/` shows the full li
 | `Mod+Alt+Ctrl+WASD` / `Mod+Alt+WASD` | Focus monitor / move column to monitor |
 | `Mod+Shift+E` | Quit niri |
 | `Fn+F1` / `Fn+F2` / `Fn+F3` (XF86 mute / volume down / up) | Mute toggle / volume down / up (5% steps, capped at 150%); each shows the current volume as a notification (`nixos/scripts/volume_osd.sh`) |
+| `Fn+F4` / `Fn+F5` (XF86 brightness down / up) | Backlight down / up (5% steps); shows the level as a notification (`nixos/scripts/brightness_osd.sh`) |
+| `Fn+F6` (XF86 touchpad toggle) | Enable / disable the touchpad, with a notification (`nixos/scripts/touchpad_toggle.sh`; holds an evdev grab while disabled, so it needs the `input` group) |
 
 Keyboard layouts are `us,ua`, switched with `Win+Space`.
 
