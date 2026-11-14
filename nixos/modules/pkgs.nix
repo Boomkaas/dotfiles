@@ -360,6 +360,12 @@ EOF
     };
 
     makeFlags = [ "PREFIX=$(out)" ];
+
+    # Monochrome logo by default (fetch colors it blue/cyan otherwise).
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postInstall = ''
+      wrapProgram $out/bin/fetch --add-flags --no-color
+    '';
   };
 in
 {
