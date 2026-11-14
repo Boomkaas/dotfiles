@@ -154,9 +154,6 @@ let
   containers-cmd = pkgs.writeShellScriptBin "containers" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/container "$@"
   '';
-  vm-cmd = pkgs.writeShellScriptBin "vm" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/container "$@"
-  '';
   pkg-tool = pkgs.writeShellScriptBin "pkg" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/pkg "$@"
   '';
@@ -631,7 +628,6 @@ in
     journal-cmd
     container-cmd
     containers-cmd
-    vm-cmd
     pkg-tool
     pkgs-tool
     s-cmd
