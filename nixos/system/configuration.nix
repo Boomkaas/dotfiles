@@ -308,6 +308,24 @@
         WantedBy = [ "graphical-session.target" ];
       };
     };
+
+    # Wi-Fi and Bluetooth connect/disconnect notifications (connection_notify.sh).
+    systemd.user.services.connection-notify = {
+      Unit = {
+        Description = "Wi-Fi and Bluetooth connection notifications";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+        ConditionEnvironment = "WAYLAND_DISPLAY";
+      };
+      Service = {
+        ExecStart = "${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/connection_notify.sh";
+        Restart = "always";
+        RestartSec = "2s";
+      };
+      Install = {
+        WantedBy = [ "graphical-session.target" ];
+      };
+    };
   };
 }
 

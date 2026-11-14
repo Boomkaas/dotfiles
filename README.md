@@ -17,7 +17,7 @@ plus a suite of fzf TUIs for managing the system.
 | **Wallpaper** | swaybg | `config/niri/wallpaper.jpeg` (from niri-creation-of-adam) |
 | **Terminal** | Kitty | `#030303` background, `#E0E0E0` text, 0.9 opacity, 12px padding |
 | **Lock & idle** | swaylock-effects + swayidle | Ly-styled black lock screen (monospace clock/date, always-visible ring); same AC/battery idle chain as before (lock, DPMS, suspend, poweroff) |
-| **Notifications** | mako | Black/white; click a notification to run its default action |
+| **Notifications** | mako | Black/white; click a notification to run its default action; Wi-Fi and Bluetooth connect/disconnect alerts (`connection-notify` user service) |
 | **GTK** | adw-gtk3-dark + `config/gtk/gtk.css` | Pure-black surfaces, white accents; file pickers (Zed, browsers) go through the GTK portal |
 | **Fetch** | fastfetch + [fetch](https://github.com/areofyl/fetch) | White/gray NixOS logo; `fetch` spins the logo in 3D |
 | **Display manager** | Ly (TUI) | Pick the *niri* session; unlocks gnome-keyring at login |
@@ -145,6 +145,9 @@ local derivations (`fetch`, `wayland-vpet`, `tlauncher`, `libredb-studio`).
   AC 180 s lock → 600 s DPMS off → 1200 s suspend → 3 h poweroff. Each step is
   gated by `idle_inhibit.sh` (caffeine via `awake`, audio playback).
 - `polkit-mate`: polkit authentication agent.
+- `connection-notify`: notifies when a Wi-Fi network or Bluetooth device connects or
+  disconnects (`nixos/scripts/connection_notify.sh`; watches `nmcli monitor` and BlueZ
+  over D-Bus). Networks and devices already connected at login are not announced.
 
 ---
 
