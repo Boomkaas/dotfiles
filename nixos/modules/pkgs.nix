@@ -399,7 +399,6 @@ in
     nix-output-monitor
     zoxide
     yazi
-    ueberzugpp
     nload
     termshark
     pkgs_unstable.wiremix
@@ -413,7 +412,6 @@ in
     discord
     #ayugram-desktop
     teams-for-linux
-    zoom-us                 # Video meetings
 
     # Dev Tools
     git
@@ -427,6 +425,7 @@ in
     gnumake
     cmake
     gdb
+    ruff                    # Python linter & formatter
     (python3.withPackages (ps: with ps; [
       numpy
       matplotlib
@@ -438,7 +437,7 @@ in
       pandas
       pillow
       sqlalchemy
-      psycopg2-binary 
+      psycopg2-binary
       openpyxl
       flask
       python-telegram-bot
@@ -467,9 +466,19 @@ in
       fastapi
       uvicorn
       alembic
+      # Testing (pytest / BDD / behave / reporting / schema & YAML)
+      pytest
+      pytest-bdd
+      behave
+      pytest-html
+      jsonschema
+      pyyaml
+      pytest-xdist
+      pytest-rerunfailures
+      allure-pytest
     ]))
     nodejs
-    dotnet-sdk_9
+    pkgs_unstable.dotnet-sdk_10  # projects target net10.0; stable has no SDK 10
     docker
     docker-compose
     krb5
@@ -563,8 +572,8 @@ in
     # nerd-fonts and font-awesome declared in system.nix fonts.packages (canonical NixOS font location)
 
     # Office & Media
+    slack
     libreoffice-fresh
-    obs-studio
     vlc
     obsidian
     evince
@@ -574,7 +583,6 @@ in
     # Wine & Gaming
     wineWow64Packages.stable
     winetricks
-    bottles
     tlauncher
     gfn
     roblox
@@ -646,7 +654,6 @@ in
     jq
     gparted
     cifs-utils
-    postman
     bruno
     pgadmin4-desktopmode
     libredb-studio
