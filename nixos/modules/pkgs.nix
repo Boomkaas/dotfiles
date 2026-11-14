@@ -408,7 +408,7 @@ in
     pkgs_unstable.wiremix
 
     # Browser
-    firefox
+    brave
     chromium
 
     # Communication

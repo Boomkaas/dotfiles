@@ -135,17 +135,17 @@
         "application/javascript" = [ "dev.zed.Zed.desktop" ];
 
         # Web / Browsers
-        "text/html" = [ "firefox.desktop" ];
-        "x-scheme-handler/http" = [ "firefox.desktop" ];
-        "x-scheme-handler/https" = [ "firefox.desktop" ];
-        "x-scheme-handler/chrome" = [ "firefox.desktop" ];
-        "application/x-extension-htm" = [ "firefox.desktop" ];
-        "application/x-extension-html" = [ "firefox.desktop" ];
-        "application/x-extension-shtml" = [ "firefox.desktop" ];
-        "application/xhtml+xml" = [ "firefox.desktop" ];
-        "application/x-extension-xhtml" = [ "firefox.desktop" ];
-        "application/x-extension-xht" = [ "firefox.desktop" ];
-        "application/x-zerosize" = [ "firefox.desktop" ];
+        "text/html" = [ "brave-browser.desktop" ];
+        "x-scheme-handler/http" = [ "brave-browser.desktop" ];
+        "x-scheme-handler/https" = [ "brave-browser.desktop" ];
+        "x-scheme-handler/chrome" = [ "brave-browser.desktop" ];
+        "application/x-extension-htm" = [ "brave-browser.desktop" ];
+        "application/x-extension-html" = [ "brave-browser.desktop" ];
+        "application/x-extension-shtml" = [ "brave-browser.desktop" ];
+        "application/xhtml+xml" = [ "brave-browser.desktop" ];
+        "application/x-extension-xhtml" = [ "brave-browser.desktop" ];
+        "application/x-extension-xht" = [ "brave-browser.desktop" ];
+        "application/x-zerosize" = [ "brave-browser.desktop" ];
 
         # Messaging / Chat
         "x-scheme-handler/tg" = [ "org.telegram.desktop.desktop" ];
@@ -252,16 +252,6 @@
       "mako/config".source = link "mako/config";
       "gtk-3.0/gtk.css".source = link "gtk/gtk.css";
       "gtk-4.0/gtk.css".source = link "gtk/gtk.css";
-    };
-
-    # Firefox black theme, linked into the default profile.
-    home.file = let
-      link = path: config.lib.file.mkOutOfStoreSymlink "/home/peng/Code/Dotfiles/config/${path}";
-      profile = ".mozilla/firefox/ra10zn6t.default";
-    in {
-      "${profile}/chrome/userChrome.css".source = link "firefox/userChrome.css";
-      "${profile}/chrome/userContent.css".source = link "firefox/userContent.css";
-      "${profile}/user.js".source = link "firefox/user.js";
     };
 
     # Idle chain (same timings as the old hypridle setup): idle_inhibit.sh

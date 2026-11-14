@@ -2,7 +2,7 @@
 // @name         Epic Games Store - Auto Free Games Claimer
 // @namespace    https://github.com/Boomkaas/dotfiles
 // @version      2.0.0
-// @description  Claims the weekly free Epic Games Store games in your logged-in Firefox. Stoppable and resumable at any step.
+// @description  Claims the weekly free Epic Games Store games in your logged-in Brave. Stoppable and resumable at any step.
 // @author       Peng
 // @match        https://*.epicgames.com/*
 // @connect      store-site-backend-static-ipv4.ak.epicgames.com

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# epic — run the Epic Games Store free-games claimer (Violentmonkey userscript) in Firefox
+# epic — run the Epic Games Store free-games claimer (Violentmonkey userscript) in Brave
 set -euo pipefail
 
 FREE_GAMES_URL="https://store.epicgames.com/en-US/free-games"
@@ -10,7 +10,7 @@ show_help() {
 Usage: epic [COMMAND]
 
 Commands:
-  start (default)    Open the free-games page in Firefox and claim every free game
+  start (default)    Open the free-games page in Brave and claim every free game
   stop               Halt a running claim (works from any terminal)
   install            Install/replace the userscript in Violentmonkey
   status             Show the userscript location and version
@@ -23,12 +23,12 @@ page and the claimer carries on. The tab closes by itself when everything worked
 EOF
 }
 
-open_in_firefox() {
-  if ! command -v firefox >/dev/null 2>&1; then
-    echo "❌ firefox not found in PATH" >&2
+open_in_brave() {
+  if ! command -v brave >/dev/null 2>&1; then
+    echo "❌ brave not found in PATH" >&2
     exit 1
   fi
-  setsid -f firefox --new-tab "$1" >/dev/null 2>&1
+  setsid -f brave "$1" >/dev/null 2>&1
 }
 
 script_version() {
@@ -48,7 +48,7 @@ stop_server() {
 
 install_userscript() {
   # Violentmonkey intercepts *.user.js URLs and opens its install page, which replaces the
-  # script with the same @name/@namespace. Firefox won't let it read file:// URLs, so serve
+  # script with the same @name/@namespace. Brave won't let it read file:// URLs, so serve
   # a copy on localhost until the install is confirmed.
   local port url
   trap stop_server EXIT
@@ -73,9 +73,9 @@ install_userscript() {
     exit 1
   fi
 
-  echo "📥 Installing userscript v$(script_version) — Violentmonkey opens its install page in Firefox."
+  echo "📥 Installing userscript v$(script_version) — Violentmonkey opens its install page in Brave."
   echo "   Click \"Reinstall\" (or \"Confirm installation\") there; it replaces the old version."
-  open_in_firefox "$url"
+  open_in_brave "$url"
   if [[ -t 0 ]]; then
     read -r -t 300 -p "   Press Enter once it's confirmed… " || true
     echo
@@ -90,14 +90,14 @@ cmd="${1:-start}"
 
 case "$cmd" in
   start|--start)
-    echo "🎮 Opening the Epic free-games page in Firefox…"
-    open_in_firefox "${FREE_GAMES_URL}#epic-claim"
+    echo "🎮 Opening the Epic free-games page in Brave…"
+    open_in_brave "${FREE_GAMES_URL}#epic-claim"
     echo "✨ Claimer started — follow progress in the HUD (bottom-right of the page)."
     ;;
 
   stop|--stop)
     # The userscript sees #epic-stop, flags the shared run state as stopped and closes this helper tab.
-    open_in_firefox "${FREE_GAMES_URL}#epic-stop"
+    open_in_brave "${FREE_GAMES_URL}#epic-stop"
     echo "⏹ Stop signal sent. Press Resume in the HUD to continue later."
     ;;
 

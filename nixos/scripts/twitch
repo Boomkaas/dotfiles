@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # twitch — Start/stop the Don't Starve Together Twitch Drops farmer
-# (Violentmonkey userscript twitch-drops-claimer.user.js running in Firefox)
+# (Violentmonkey userscript twitch-drops-claimer.user.js running in Brave)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,13 +12,13 @@ show_help() {
 Usage: twitch [COMMAND]   (fish abbr: tdrops)
 
 Commands:
-  start (default)    Open a Firefox tab that farms DST drops until all are claimed
+  start (default)    Open a Brave tab that farms DST drops until all are claimed
   stop               Tell the farming tab to stop (opens a short-lived Twitch tab)
   install            Install/update the userscript in Violentmonkey
   help, -h, --help   Show this help
 
 The farming tab shows a HUD in the bottom-right corner with live drop
-progress and a Start/Stop button. You must be logged in to Twitch in Firefox
+progress and a Start/Stop button. You must be logged in to Twitch in Brave
 and have your Klei account linked on twitch.tv/drops/campaigns.
 EOF
 }
@@ -34,7 +34,7 @@ install_userscript() {
   # Expand now: the locals are out of scope by the time an EXIT trap would run
   trap "kill $pid 2>/dev/null; rm -rf '$tmpdir'" EXIT
   sleep 0.5
-  firefox --new-tab "http://127.0.0.1:$port/$(basename "$USERSCRIPT")" >/dev/null 2>&1 &
+  brave "http://127.0.0.1:$port/$(basename "$USERSCRIPT")" >/dev/null 2>&1 &
   echo "📥 Confirm the install in the Violentmonkey tab, then press Enter here."
   read -r
   echo "✅ Done. Make sure only one 'Twitch Drops Auto-Claimer' script is enabled in Violentmonkey."
@@ -44,13 +44,13 @@ cmd="${1:-start}"
 
 case "$cmd" in
   start|--start)
-    firefox --new-tab "$DROPS_URL#dst-drops" >/dev/null 2>&1 &
-    echo "🎮 DST drops farmer started in Firefox — watch the HUD in the bottom-right."
+    brave "$DROPS_URL#dst-drops" >/dev/null 2>&1 &
+    echo "🎮 DST drops farmer started in Brave — watch the HUD in the bottom-right."
     echo "   (Nothing happens? Run 'twitch install' to install the userscript first.)"
     ;;
 
   stop|--stop)
-    firefox --new-tab "$DROPS_URL#dst-drops-stop" >/dev/null 2>&1 &
+    brave "$DROPS_URL#dst-drops-stop" >/dev/null 2>&1 &
     echo "⏹ Stop signal sent to the farming tab."
     ;;
 
