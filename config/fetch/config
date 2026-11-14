@@ -9,6 +9,21 @@ cpu
 memory
 disk
 gpu
+packages
+display
+wm
+displaymanager
+theme
+icons
+font
+cursor
+terminal
+swap
+ip
+battery
+powerprofile
+locale
+colors
 
  appearance
  label_color=white

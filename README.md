@@ -19,7 +19,7 @@ plus a suite of fzf TUIs for managing the system.
 | **Lock & idle** | swaylock-effects + swayidle | Ly-styled black lock screen (monospace clock/date, always-visible ring); same AC/battery idle chain as before (lock, DPMS, suspend, poweroff) |
 | **Notifications** | mako | Black/white; click a notification to run its default action; Wi-Fi and Bluetooth connect/disconnect alerts (`connection-notify` user service) |
 | **GTK** | adw-gtk3-dark + `config/gtk/gtk.css` | Pure-black surfaces, white accents; file pickers (Zed, browsers) go through the GTK portal |
-| **Fetch** | fastfetch + [fetch](https://github.com/areofyl/fetch) | White/gray NixOS logo; `fetch` spins the logo in 3D |
+| **Fetch** | fastfetch + [fetch](https://github.com/areofyl/fetch) | White/gray NixOS logo with every fastfetch module shown (`config/fastfetch/config.jsonc`); `fetch` spins the logo in 3D, monochrome |
 | **Display manager** | Ly (TUI) | Pick the *niri* session; unlocks gnome-keyring at login |
 | **Shell** | Fish + Starship, Tmux, Yazi | `config/fish`, `config/tmux`, `config/yazi` |
 | **Editor** | Zed (`pkgs_unstable.zed-editor`) | `$EDITOR` is `zed-wait`; `nvim` is installed clean (no config) for quick viewing and small edits |
