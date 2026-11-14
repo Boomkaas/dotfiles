@@ -543,12 +543,12 @@ in
     fetch                   # 3D spinning-logo fetch
     fish                    # Shell
     starship                # Shell prompt
-    xfce.thunar             # File manager
-    xfce.thunar-volman      # Thunar volume management
-    xfce.tumbler            # Thunar thumbnail service
+    thunar                  # File manager
+    thunar-volman           # Thunar volume management
+    tumbler                 # Thunar thumbnail service
     wl-screenrec            # Screen recording
     pulseaudio              # Provides pactl and pacat for audio recording/control
-    mate.mate-polkit        # Polkit authentication agent
+    mate-polkit             # Polkit authentication agent
     ly                      # Display manager
 
     # GTK, Qt & Theming
@@ -575,7 +575,7 @@ in
     swappy
 
     # Wine & Gaming
-    wineWowPackages.stable
+    wineWow64Packages.stable
     winetricks
     bottles
     tlauncher

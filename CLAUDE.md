@@ -1,6 +1,6 @@
 # Dotfiles — NixOS flake + desktop configs
 
-Single-host NixOS 25.05 flake (`nixos#nixos`, user `peng`, x86_64) running the
+Single-host NixOS 26.05 flake (`nixos#nixos`, user `peng`, x86_64) running the
 niri Wayland compositor (black-and-white "niri-creation-of-adam" look), plus
 the dotfiles it uses. `README.md` is the
 feature reference; this file covers how the repo is wired and how to change it
@@ -8,7 +8,7 @@ safely.
 
 ## Layout
 
-- `nixos/flake.nix` — inputs: nixpkgs 25.05, `nixpkgs_unstable` (passed as
+- `nixos/flake.nix` — inputs: nixpkgs 26.05, `nixpkgs_unstable` (passed as
   `pkgs_unstable`), home-manager.
 - `nixos/system/configuration.nix` — `programs.niri`, overlays (tmux, yazi),
   home-manager user block (config symlinks, swayidle and polkit user services). `hardware-configuration.nix` is generated; don't edit.

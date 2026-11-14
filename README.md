@@ -1,6 +1,6 @@
 # ❄️ NixOS + niri Dotfiles
 
-A declarative **NixOS 25.05** flake for a single laptop, running the
+A declarative **NixOS 26.05** flake for a single laptop, running the
 [niri](https://github.com/YaLTeR/niri) scrollable-tiling compositor with the
 black-and-white look from
 [niri-creation-of-adam](https://github.com/klautizm/niri-creation-of-adam),
@@ -12,7 +12,7 @@ plus a suite of fzf TUIs for managing the system.
 
 | Component | Tool | Details |
 | :--- | :--- | :--- |
-| **OS** | NixOS 25.05 (+ nixpkgs unstable as `pkgs_unstable`) | Flake + home-manager |
+| **OS** | NixOS 26.05 (+ nixpkgs unstable as `pkgs_unstable`) | Flake + home-manager |
 | **Compositor** | niri (`programs.niri`) | Config in `config/niri/config.kdl`: gaps 16, 1px white window border (grey when unfocused) drawn inside each window, shadows, other windows at 0.95 opacity |
 | **Wallpaper** | swaybg | `config/niri/wallpaper.jpeg` (from niri-creation-of-adam) |
 | **Terminal** | Kitty | `#030303` background, `#E0E0E0` text, 0.9 opacity, 12px padding |
