@@ -19,7 +19,6 @@ plus a suite of fzf TUIs for managing the system.
 | **Lock & idle** | swaylock-effects + swayidle | Ly-styled black lock screen (monospace clock/date, always-visible ring); same AC/battery idle chain as before (lock, DPMS, suspend, poweroff) |
 | **Notifications** | mako | Black/white; click a notification to run its default action |
 | **GTK** | adw-gtk3-dark + `config/gtk/gtk.css` | Pure-black surfaces, white accents; file pickers (Zed, browsers) go through the GTK portal |
-| **Firefox** | `config/firefox/` → default profile | Pure-black `userChrome.css` (toolbars, tabs, panels) and `userContent.css` (new tab/about: pages); `user.js` enables them and forces dark mode |
 | **Fetch** | fastfetch + [fetch](https://github.com/areofyl/fetch) | White/gray NixOS logo; `fetch` spins the logo in 3D |
 | **Display manager** | Ly (TUI) | Pick the *niri* session; unlocks gnome-keyring at login |
 | **Shell** | Fish + Starship, Tmux, Yazi | `config/fish`, `config/tmux`, `config/yazi` |
@@ -41,7 +40,6 @@ config/
   fetch/       config
   swaylock/    config
   mako/        config
-  firefox/     userChrome.css, userContent.css, user.js
   gtk/         gtk.css
   fish/ tmux/ yazi/
 nixos/
@@ -64,7 +62,7 @@ Ported from the old Mango binds. `Mod` is Super. `Mod+Shift+/` shows the full li
 | Keys | Action |
 | :--- | :--- |
 | `Mod+Q` / `Mod+Shift+Q` | Kitty / fullscreen Kitty with tmux |
-| `Mod+R`, `Mod+B`, `Mod+E`, `Mod+T` | Zed, Firefox, Thunar, Telegram |
+| `Mod+R`, `Mod+B`, `Mod+E`, `Mod+T` | Zed, Brave, Thunar, Telegram |
 | `Mod+C` | Close window |
 | `Mod+L` (F9) / `Mod+K` | Lock (`lock.sh` → swaylock) |
 | `Mod+M` | Log out to the Ly greeter (ends the session; open apps close) |
@@ -236,7 +234,7 @@ awake status # Inspect active caffeine state
 ```
 
 ### 4. `epic` & `epic-games-claimer.user.js` (Epic Games Freebies Claimer)
-An in-browser weekly auto-claimer (Violentmonkey userscript) that runs inside native logged-in Firefox:
+An in-browser weekly auto-claimer (Violentmonkey userscript) that runs inside native logged-in Brave:
 - **Layout-proof Discovery:** Reads the current free games from Epic's promotions API, falling back to the "Free Now" cards on the free-games page.
 - **Current Checkout Flow:** Handles the "This is free → Add to library" checkout (and the older zero-total "Place Order" one), EULA / "I Accept" prompts, mature-content gates, and verifies every claim via "In Library".
 - **Safe by Design:** The checkout frame only acts during a run it was armed for, so manual purchases are never touched; captchas pause the run until solved.
@@ -244,7 +242,7 @@ An in-browser weekly auto-claimer (Violentmonkey userscript) that runs inside na
 - **CLI Commands:** `epic start`, `epic stop` (halts a run from any terminal), `epic install` (installs/replaces the userscript in Violentmonkey), `epic status`.
 
 ### 5. `twitch` & `twitch-drops-claimer.user.js` (Twitch Drops Auto-Claimer)
-A Violentmonkey userscript that farms **Don't Starve Together** (DST) Twitch Drops in a Firefox tab:
+A Violentmonkey userscript that farms **Don't Starve Together** (DST) Twitch Drops in a Brave tab:
 - **Real-page driven:** Reads campaigns and watched minutes from the data Twitch's own Drops Campaigns/Inventory pages load (so Twitch's integrity checks are handled by Twitch itself), and claims with the page's own "Claim Now" button.
 - **Channel Routing:** Watches the highest-viewed live, drops-enabled DST stream (skipping Russian-language streams and channels outside a campaign's allow-list), muted at 160p, and switches channels when a stream ends or progress stalls.
 - **Progress Checks:** Returns to the inventory page when the next drop should be done (at most every 15 min), claims it, and stops once every watchable DST drop is claimed.

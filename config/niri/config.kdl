@@ -50,7 +50,7 @@ layout {
     default-column-width { proportion 0.5; }
 
     // Drawn inside each tile rather than around it: the outer focus ring was
-    // not visible on Firefox and Telegram
+    // not visible on Brave and Telegram
     focus-ring {
         off
     }
@@ -114,12 +114,12 @@ window-rule {
 }
 
 window-rule {
-    match app-id="firefox"
+    match app-id="brave-browser"
     opacity 0.95
 }
 
 window-rule {
-    match app-id="firefox"
+    match app-id="brave-browser"
     match app-id="^dev\\.zed\\.Zed$"
     default-column-width { proportion 1.0; }
 }
@@ -151,7 +151,7 @@ binds {
     Mod+Q hotkey-overlay-title="Terminal" { spawn "kitty"; }
     Mod+Shift+Q hotkey-overlay-title="Terminal + tmux" { spawn "kitty" "--start-as=fullscreen" "tmux"; }
     Mod+R { spawn "zeditor"; }
-    Mod+B { spawn "firefox"; }
+    Mod+B { spawn "brave"; }
     Mod+E { spawn "thunar"; }
     Mod+T { spawn "telegram-desktop"; }
     Mod+C { close-window; }
