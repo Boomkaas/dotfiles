@@ -105,6 +105,7 @@ Keyboard layouts are `us,ua`, switched with `Win+Space`.
     - `i915.enable_psr=0`: Disables Intel Panel Self Refresh to eliminate display stutter/flicker on mobile Intel UHD graphics.
     - `vm.swappiness=10`: Keeps application pages in RAM and minimizes premature disk paging.
     - `vm.vfs_cache_pressure=50`: Favors retaining directory and inode caches for snappy filesystem responsiveness.
+  - **Swap**: zram (zstd, 50% of RAM, priority 100) first, backed by a 4 GiB `/var/lib/swapfile`. There is no swap partition.
   - **Localization**: Timezone set to `Europe/Kyiv`, default locale `en_US.UTF-8`, console keymap `ua-utf`.
   - **Keyboard Layout**: `us,ua` switching via `Win + Space` (`grp:win_space_toggle`).
   - **Binary Compatibility (`nix-ld`)**: Enables running unpatched foreign dynamically-linked binaries (prebuilt language servers, CLI binaries, IDE tooling).

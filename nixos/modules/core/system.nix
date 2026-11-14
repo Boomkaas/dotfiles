@@ -96,6 +96,10 @@
     curl
     icu
     glib
+    # WeasyPrint (uv/venv Python) dlopens these by bare name
+    pango
+    harfbuzz
+    fontconfig
   ];
 
   # System Fonts & Fontconfig for Rofi, Terminal & WM icon glyphs
@@ -128,6 +132,9 @@
     memoryPercent = 50;
     priority = 100;
   };
+
+  # 4 GiB swapfile behind zram, replacing the old nvme0n1p3 swap partition (merged into root).
+  swapDevices = pkgs.lib.mkForce [ { device = "/var/lib/swapfile"; size = 4096; } ];
 
   # Journald RAM & disk usage caps to prevent log cache bloat
   services.journald.extraConfig = ''
