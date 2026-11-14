@@ -106,6 +106,22 @@ if status is-interactive
             return
         end
 
+        # Bare repo root (worktrees as subfolders): pick one of its worktrees, fzf when there are several
+        if test "$(command git rev-parse --is-bare-repository 2>/dev/null)" = "true"
+            # Bare entries have no HEAD line in porcelain output, so this lists checked-out worktrees only
+            set -l trees (command git worktree list --porcelain | awk '/^worktree /{p=substr($0,10)} /^HEAD /{print p}')
+            set -l tree $trees[1]
+            if test (count $trees) -gt 1
+                set tree (printf '%s\n' $trees | fzf --prompt="󰊢  Worktree > " --height=40% --reverse); or return
+            end
+            if test -n "$tree"
+                command lazygit -p "$tree"
+            else
+                command lazygit
+            end
+            return
+        end
+
         set -l inside_git (command git rev-parse --is-inside-work-tree 2>/dev/null)
         if test "$inside_git" = "true" -a "$PWD" != "$HOME"
             command lazygit
