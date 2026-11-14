@@ -66,7 +66,7 @@ app|desktop|󰀻 |Application Launcher & .desktop Browser|apps, launch|Launch GU
 repo|dev| |Multi-Repository Git Dashboard|repos, gitui|Radar across all git projects, pull/push, status
 tm|dev| |Tmux Sessions & Git Projects Dashboard|project|Manage tmux sessions, jump to projects, panes
 pkg|dev|📦|Nix Package Explorer & Ephemeral Shells|pkgs|Inspect declared pkgs, test in nix-shell, copy
-container|dev|🐳|Docker Containers & Libvirt VM Manager|containers, vm|Start, stop, restart, follow logs, shell
+container|dev|🐳|Docker Containers Manager|containers|Start, stop, restart, follow logs, shell
 conf|dev|󰒓 |Dotfiles & Config Picker with Preview|config, configs|Bat preview, git diff, jump to configs in Zed
 audio|desktop|󰕾 |PipeWire & WirePlumber Audio Mixer|audio|Volume slider, mute, node routing, ALC256 test
 setting|desktop|󰒓 |System Settings & Wayland Controls|settings|Brightness, volume, power profile, idle, DND
@@ -557,7 +557,7 @@ ${BOLD}SUPPORTED TOOLS & ALIASES:${RESET}
     ${CYAN}repo${RESET} (repos, gitui)          Multi-repository Git workspace radar
     ${CYAN}tm${RESET} (project)                 Tmux session & project manager
     ${CYAN}pkg${RESET} (pkgs)                   Nix package explorer & ephemeral shells
-    ${CYAN}container${RESET} (containers, vm)   Docker container & Libvirt VM manager
+    ${CYAN}container${RESET} (containers)       Docker container manager
     ${CYAN}conf${RESET} (config, configs)       Dotfiles & config picker with syntax preview
     ${CYAN}audio${RESET}                       PipeWire & WirePlumber mixer
     ${CYAN}setting${RESET} (settings)           System settings & desktop toggles

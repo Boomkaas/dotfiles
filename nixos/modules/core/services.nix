@@ -21,10 +21,7 @@
 
   virtualisation.docker.enable = true;
   virtualisation.docker.enableOnBoot = false; # docker.socket starts it on first use
-  virtualisation.libvirtd.enable = true;
-  virtualisation.spiceUSBRedirection.enable = true;
 
-  programs.virt-manager.enable = true;
   programs.dconf.enable = true;
 
   services.postgresql = {
@@ -124,10 +121,7 @@
   systemd.services.samba-winbindd.wantedBy = pkgs.lib.mkForce [ ];
   systemd.services.samba-wsdd.wantedBy = pkgs.lib.mkForce [ ];
 
-  # Disable boot autostart for libvirt & PostgreSQL — libvirtd.socket starts libvirtd on demand
-  # (virt-manager/virsh); start PostgreSQL with: sudo systemctl start postgresql
-  systemd.services.libvirtd.wantedBy = pkgs.lib.mkForce [ ];
-  systemd.services.libvirt-guests.wantedBy = pkgs.lib.mkForce [ ];
+  # Disable boot autostart for PostgreSQL; start it with: sudo systemctl start postgresql
   systemd.services.postgresql.wantedBy = pkgs.lib.mkForce [ ];
 
   systemd.services.logmein-hamachi = {

@@ -118,7 +118,7 @@ Keyboard layouts are `us,ua`, switched with `Win+Space`.
   - **Bluetooth**: Auto-powered on boot, Dual Controller Mode, FastConnectable, `EnableAdvMonInterleaveScan = 1` integer type, `blueman` integration, and a systemd service running `rfkill unblock bluetooth`.
   - **Wireshark**: `programs.wireshark` enabled with full package (`pkgs.wireshark`) and packet capture capabilities for user `peng`.
 - **`services.nix`**:
-  - **Virtualization**: Docker daemon and Libvirt / KVM with SPICE USB redirection and `virt-manager`. Neither starts on boot: `docker.socket` and `libvirtd.socket` start the daemons on first use (`libvirt-guests` is not enabled either).
+  - **Containers**: Docker daemon. It does not start on boot: `docker.socket` starts it on first use.
   - **Database Hardening**: PostgreSQL 16 server pre-configured with `mydatabase`, enforced `peer` authentication for local sockets, and `scram-sha-256` for TCP connections. Autostart on boot disabled (`wantedBy = []`); start on demand with `sudo systemctl start postgresql`.
   - **Samba LAN Sharing**: Dedicated `[Shared]` folder restricted exclusively to `/home/peng/Shared` (`valid users = peng`, `guest ok = no`). Autostart on boot is disabled (`wantedBy = []`) for zero idle resource drain; invoked on-demand via `share`.
   - **Hamachi VPN**: LogMeIn Hamachi daemon (`logmein-hamachi`) with IPC user `peng`. Autostart on boot disabled (`wantedBy = []`) for on-demand launch via `share` or Haguichi GUI.
@@ -126,7 +126,7 @@ Keyboard layouts are `us,ua`, switched with `Win+Space`.
   - **Polkit**: Scoped permissions for specific desktop actions (udisks2, login1, networkmanager, flatpak).
   - **Power & System**: UPower, `power-profiles-daemon`, UDisks2, GVFS, CUPS printing, and Android udev permissions.
 - **`user.nix`**:
-  - User `peng` configured with default shell `pkgs.fish` and membership in `networkmanager`, `wheel`, `video`, `docker`, `libvirtd`, `input`, `uinput`, and `wireshark`.
+  - User `peng` configured with default shell `pkgs.fish` and membership in `networkmanager`, `wheel`, `video`, `docker`, `input`, `uinput`, and `wireshark`.
 
 
 ### Overlays & patches
@@ -183,7 +183,7 @@ tui-popup <cmd> # Summon any TUI tool in a floating Kitty window (niri rule for 
 | [`repo`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/repo) | `repos`, `gitui` | **Dev** | **Git Multi-Repo Radar**: Discovers all Git repositories under `~/Code`, branch state, dirty working tree status, fetch, pull, and push. |
 | [`tm`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/tm) | `project` | **Dev** | **Tmux Sessions & Projects**: Interactive session switcher, window/pane preview, kill/detach sessions, and new project session bootstrap. |
 | [`pkg`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/pkg) | `pkgs` | **Dev** | **Nix Package Explorer**: Search systemPackages, view derivation details, copy package names, or spawn instant `nix-shell -p <pkg>`. |
-| [`container`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/container) | `containers`, `vm` | **Dev** | **Docker & Libvirt VM Manager**: Inspect running/stopped containers, start/stop/restart, follow container logs, and attach `/bin/sh`. |
+| [`container`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/container) | `containers` | **Dev** | **Docker Container Manager**: Inspect running/stopped containers, start/stop/restart, follow container logs, and attach `/bin/sh`. |
 | [`conf`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/conf) | `config`, `configs` | **Dev** | **Dotfiles & Config Picker**: Syntax-highlighted `bat` previews, Git diff indicators, and instant jump into Zed for any dotfile. |
 | [`audio`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/audio) | `audio` | **Desktop** | **PipeWire & WirePlumber Mixer**: Terminal volume faders, sink/source routing, mute toggles, WireMix integration, ALC256 mic testing. |
 | [`setting`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/setting) | `settings` | **Desktop** | **Quick Settings**: Backlight brightness faders (`brightnessctl`), volume sliders, power governor, screen idle inhibit. |
