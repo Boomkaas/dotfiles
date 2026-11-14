@@ -19,7 +19,7 @@ input {
         natural-scroll
         accel-speed 0.2
         accel-profile "flat"
-        scroll-factor 2.0
+        scroll-factor 1.0
     }
 
     mouse {
@@ -104,18 +104,17 @@ window-rule {
 }
 
 window-rule {
-    opacity 0.95
+    opacity 0.97
 }
 
-// kitty sets its own 90% background opacity; skip niri's to avoid stacking
 window-rule {
     match app-id="^kitty$"
-    opacity 1.0
+    opacity 0.97
 }
 
 window-rule {
     match app-id="brave-browser"
-    opacity 0.95
+    opacity 0.97
 }
 
 window-rule {
