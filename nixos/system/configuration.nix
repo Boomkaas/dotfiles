@@ -20,18 +20,20 @@
           ../modules/patches/yazi-disable-trt.patch
         ];
       });
+      # Upstream regression tests fail on 26.05, so Hydra has no cached build; skip them.
+      pgadmin4-desktopmode = prev.pgadmin4-desktopmode.overridePythonAttrs { doCheck = false; };
     })
   ];
 
   hardware.uinput.enable = true;
 
-  services.logind = {
-    powerKey = "suspend";
-    powerKeyLongPress = "poweroff";
-    suspendKey = "suspend";
-    lidSwitch = "ignore";
-    lidSwitchExternalPower = "ignore";
-    lidSwitchDocked = "ignore";
+  services.logind.settings.Login = {
+    HandlePowerKey = "suspend";
+    HandlePowerKeyLongPress = "poweroff";
+    HandleSuspendKey = "suspend";
+    HandleLidSwitch = "ignore";
+    HandleLidSwitchExternalPower = "ignore";
+    HandleLidSwitchDocked = "ignore";
   };
 
   programs.steam = {
@@ -70,8 +72,10 @@
 
     programs.git = {
       enable = true;
-      userEmail = "boomeceeb@gmail.com";
-      userName = "Peng";
+      settings.user.email = "vilatiimakohin@gmail.com";
+      settings.user.name = "SyntaxTears";
+      # Same as `gh auth setup-git`, which can't write this read-only config.
+      settings.credential."https://github.com".helper = [ "" "!${pkgs.gh}/bin/gh auth git-credential" ];
     };
 
     gtk = {
@@ -96,6 +100,7 @@
       };
       gtk3.extraConfig.gtk-application-prefer-dark-theme = 1;
       gtk4.extraConfig.gtk-application-prefer-dark-theme = 1;
+      gtk4.theme = config.gtk.theme;
     };
 
     qt = {
@@ -218,6 +223,7 @@
     programs.yazi = {
       enable = true;
       enableFishIntegration = true;
+      shellWrapperName = "yy";
     };
 
     programs.starship = {
@@ -305,7 +311,7 @@
         After = [ "graphical-session.target" ];
       };
       Service = {
-        ExecStart = "${pkgs.mate.mate-polkit}/libexec/polkit-mate-authentication-agent-1";
+        ExecStart = "${pkgs.mate-polkit}/libexec/polkit-mate-authentication-agent-1";
         Restart = "on-failure";
       };
       Install = {

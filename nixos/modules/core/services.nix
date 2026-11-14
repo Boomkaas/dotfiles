@@ -11,7 +11,6 @@
   services.gnome.gnome-keyring.enable = true;
   # gcr's prompter lets a locked keyring ask for its password outside GNOME; without it unlock requests hang.
   services.dbus.packages = [ pkgs.gcr ];
-  services.udev.packages = [ pkgs.android-udev-rules ];
   services.udev.extraRules = ''
     KERNEL=="event*", SUBSYSTEM=="input", TAG+="uaccess"
     KERNEL=="rtc0", SUBSYSTEM=="rtc", TAG+="uaccess", GROUP="wheel", MODE="0660"
