@@ -17,7 +17,7 @@ TARGET_USER="${SUDO_USER:-peng}"
 TARGET_UID=$(id -u "$TARGET_USER" 2>/dev/null || echo 1000)
 TARGET_HOME=$(eval echo "~$TARGET_USER")
 
-STATE_DIR="$TARGET_HOME/.local/state/haku_theme"
+STATE_DIR="$TARGET_HOME/.local/state/idle"
 LOG_FILE="$STATE_DIR/night_presence.log"
 DPMS_HANDLER="$TARGET_HOME/.local/bin/dpms_handler.sh"
 

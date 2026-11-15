@@ -5,9 +5,6 @@
 # Supports region capture (slurp) and fullscreen capture. Copies to wl-clipboard.
 # ==============================================================================
 
-# Include SCREENSHOT_DIR if defined
-[ -f "$HOME/hakuspace-control/main_setting.sh" ] && source "$HOME/hakuspace-control/main_setting.sh"
-
 SCREENSHOT_DIR=${SCREENSHOT_DIR:-"$HOME/Pictures/Screenshots"}
 mkdir -p "$SCREENSHOT_DIR"
 

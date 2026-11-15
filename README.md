@@ -23,7 +23,7 @@ plus a suite of fzf TUIs for managing the system.
 | **Display manager** | Ly (TUI) | Pick the *niri* session; unlocks gnome-keyring at login |
 | **Shell** | Fish + Starship, Tmux, Yazi | `config/fish`, `config/tmux`, `config/yazi` |
 | **Editor** | Zed (`pkgs_unstable.zed-editor`) | `$EDITOR` is `zed-wait`; `nvim` is installed clean (no config) for quick viewing and small edits |
-| **TUIs** | [`s`](nixos/scripts/tui/s) + 22 tools | fzf control center for network, system, dev and desktop |
+| **TUIs** | [`s`](nixos/scripts/tui/s) + 20 tools | fzf control center for network, system, dev and desktop |
 
 Terminal toys from the adam setup are installed too: `tty-clock -c -C 7`,
 `cmatrix -C white`.
@@ -69,7 +69,7 @@ Ported from the old Mango binds. `Mod` is Super. `Mod+Shift+/` shows the full li
 | `Mod+Shift+L` | Night light toggle |
 | `Mod+P` / `Mod+Print` | Region screenshot (niri built-in) |
 | `Mod+Shift+P` / `Print` | Full-screen screenshot (niri built-in) |
-| `Mod+Ctrl+Shift+P`, `Mod+F11` | Screen recording (`record.sh`) |
+| `Mod+Ctrl+Shift+P`, `Mod+F11` | Screen recording (`record.sh`; pick audio mode and mic in an fzf popup) |
 | `Mod+Esc` / `Mod+,` / `Mod+Tab` / `Mod+Shift+Tab` | TUI popups: `s`, `setting`, `app`, `task` |
 | `Mod+V` / `Mod+Shift+V` | Clipboard history / wipe |
 | `Alt+Tab` | Overview |
@@ -121,8 +121,8 @@ Keyboard layouts are `us,ua`, switched with `Win+Space`.
 - **`services.nix`**:
   - **Containers**: Docker daemon. It does not start on boot: `docker.socket` starts it on first use.
   - **Database Hardening**: PostgreSQL 16 server pre-configured with `mydatabase`, enforced `peer` authentication for local sockets, and `scram-sha-256` for TCP connections. Autostart on boot disabled (`wantedBy = []`); start on demand with `sudo systemctl start postgresql`.
-  - **Samba LAN Sharing**: Dedicated `[Shared]` folder restricted exclusively to `/home/peng/Shared` (`valid users = peng`, `guest ok = no`). Autostart on boot is disabled (`wantedBy = []`) for zero idle resource drain; invoked on-demand via `share`.
-  - **Hamachi VPN**: LogMeIn Hamachi daemon (`logmein-hamachi`) with IPC user `peng`. Autostart on boot disabled (`wantedBy = []`) for on-demand launch via `share` or Haguichi GUI.
+  - **Samba LAN Sharing**: Dedicated `[Shared]` folder restricted exclusively to `/home/peng/Shared` (`valid users = peng`, `guest ok = no`). Autostart on boot is disabled (`wantedBy = []`) for zero idle resource drain; start on demand with `sudo systemctl start samba-smbd`.
+  - **Hamachi VPN**: LogMeIn Hamachi daemon (`logmein-hamachi`) with IPC user `peng`. Autostart on boot disabled (`wantedBy = []`) for on-demand launch via the Haguichi GUI.
   - **Tailscale VPN**: `services.tailscale` enables `tailscaled` and the `tailscale` CLI. The module trusts the `tailscale0` interface and opens UDP `41641`. Not yet logged in: run `sudo tailscale up` once after the rebuild.
   - **Polkit**: Scoped permissions for specific desktop actions (udisks2, login1, networkmanager, flatpak).
   - **Power & System**: UPower, `power-profiles-daemon`, UDisks2, GVFS, CUPS printing, and Android udev permissions.
@@ -138,7 +138,7 @@ Keyboard layouts are `us,ua`, switched with `Win+Space`.
 ### Packages (`nixos/modules/pkgs.nix`)
 Packages by section, plus the `writeShellScriptBin` wrappers that turn
 `nixos/scripts/*` into commands (all TUIs and their aliases, `nixreb`,
-`awake`, `epic`, `twitch`, `tunnelbear`/`tb`, menu scripts) and
+`awake`, `epic`, `twitch`, `tunnelbear`/`tb`) and
 local derivations (`fetch`, `wayland-vpet`, `tlauncher`, `libredb-studio`).
 
 ### User services (`nixos/system/configuration.nix`)
@@ -152,7 +152,7 @@ local derivations (`fetch`, `wayland-vpet`, `tlauncher`, `libredb-studio`).
 
 ---
 
-## 🎛️ Unified TUI Command Center & 22 Interactive Terminal Tools (`nixos/scripts/tui/`)
+## 🎛️ Unified TUI Command Center & 20 Interactive Terminal Tools (`nixos/scripts/tui/`)
 
 The system features a complete, standalone terminal control suite built on `fzf`, ANSI styling, live previews, and keyboard navigation.
 
@@ -162,7 +162,7 @@ Run `s` anywhere in the terminal to summon the interactive launcher. Filter tool
 ```bash
 s               # Open interactive fzf launcher with live category filters and preview
 s <tool>        # Directly invoke any tool or alias (e.g., 's wifi', 's bt', 's tb', 's port', 's ram', 's app')
-s list          # Print clean, formatted tabular list of all 22 tools and aliases
+s list          # Print clean, formatted tabular list of all 20 tools and aliases
 tui-popup <cmd> # Summon any TUI tool in a floating Kitty window (niri rule for app-id tui-overlay)
 ```
 
@@ -170,13 +170,12 @@ tui-popup <cmd> # Summon any TUI tool in a floating Kitty window (niri rule for 
 
 | Command | Aliases | Category | Purpose & Interactive Features |
 | :--- | :--- | :--- | :--- |
-| [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) | — | **Launcher** | **Master Command Center**: Unified launcher searching all 22 tools by name, alias, and description. |
-| [`wifi`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/wifi) | `wifi` | **Network** | **Wi-Fi Manager**: Scan nearby APs, monitor live signal dBm, connect with password prompt, display Wi-Fi QR codes, and WPS. |
+| [`s`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/s) | — | **Launcher** | **Master Command Center**: Unified launcher searching all 20 tools by name, alias, and description. |
+| [`wifi`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/wifi) | `wifi` | **Network** | **Wi-Fi Manager**: Scan nearby APs, monitor live signal dBm, and connect with a password prompt. |
 | [`bluetooth`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/bluetooth) | `bt` | **Network** | **Bluetooth Manager**: Controller power, scan, pair, trust, connect/disconnect audio devices & peripherals, battery % gauges. |
 | [`tb`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/tb) | `tunnelbear`, `vpn` | **Network** | **TunnelBear VPN & Split Tunneling**: Connect servers, usage-based ranking, per-app split tunneling (`tb run <cmd>`), live cloud quota sync, auto-connect disabled on boot. |
 | [`tailscale`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/tailscale) | `ts`, `tailscale-tui` | **Network** | **Tailscale Mesh VPN**: Connect or disconnect this device, show tailnet IP and peers, accept subnet routes, control the `tailscaled` daemon. Run `sudo tailscale up` once after a rebuild to log in. |
 | [`ports`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/ports) | `port`, `net` | **Network** | **Listening Ports & Dev Servers**: Real-time listening TCP/UDP sockets, bound processes, PIDs, and instant `kill` for stuck servers. |
-| [`share`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/share) | `share` | **Network** | **Samba & Hamachi File Sharing**: Manage Samba `/home/peng/Shared` & VM `/home/peng/Code`, view Hamachi mesh VPN peers, mount CIFS shares. |
 | [`nixos`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/nixos) | `gens` | **System** | **NixOS Generations & Rollback**: Generation history, active boot entry, closure size diffing (`nix profile diff-closures`), rollbacks, and GC. |
 | [`service`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/service) | `services` | **System** | **Systemd Service Manager**: Filter user & system units, start, stop, restart, reload, inspect unit status, and tail live logs. |
 | [`disk`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/disk) | `storage` | **System** | **Storage & USB Cleaner**: Filesystem usage gauges, USB auto-mount/safe-eject, interactive `ncdu`, `nh clean`, and nix-store GC. |
@@ -191,7 +190,6 @@ tui-popup <cmd> # Summon any TUI tool in a floating Kitty window (niri rule for 
 | [`conf`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/conf) | `config`, `configs` | **Dev** | **Dotfiles & Config Picker**: Syntax-highlighted `bat` previews, Git diff indicators, and instant jump into Zed for any dotfile. |
 | [`audio`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/audio) | `audio` | **Desktop** | **PipeWire & WirePlumber Mixer**: Terminal volume faders, sink/source routing, mute toggles, WireMix integration, ALC256 mic testing. |
 | [`setting`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/setting) | `settings` | **Desktop** | **Quick Settings**: Backlight brightness faders (`brightnessctl`), volume sliders, power governor, screen idle inhibit. |
-| [`theme`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/theme) | `theme` | **Desktop** | **Themes & Wallpapers**: Wallpaper, accent colour and visualizer helpers from `~/.local/bin` (still written for the old awww setup). |
 | [`clip`](file:///home/peng/Code/Dotfiles/nixos/scripts/tui/clip) | `clips`, `clipboard` | **Desktop** | **Clipboard & Snippets**: Wayland clipboard history (`cliphist`), decode text/image entries with syntax preview, auto-paste on Enter, wipe history. |
 
 ### 🐻 TunnelBear VPN & Per-App Split Tunneling (`tb`)
@@ -259,16 +257,6 @@ unlock_screen.sh "<password>"
 Performs reliable desktop unlocking across Wayland compositors:
 - **Display Wakeup**: Powers on monitors across niri, Hyprland and Sway.
 - **Automated Authentication**: Enters passwords into `swaylock` via `wtype` with sub-second feedback verification.
-
-### 7. `share` & `share_menu.sh` (Network File Sharing & Hamachi VPN Manager)
-```bash
-share                   # Interactive TUI/FZF manager matching wifi & bluetooth style
-share status            # Show Hamachi VPN & Samba service and network status
-share-menu              # Terminal-based quick control menu
-```
-Unified network sharing controller:
-- **Hamachi VPN**: On-demand service startup, account login, join/leave mesh networks, peer listing, and nickname assignment.
-- **Samba LAN & VM Sharing**: On-demand daemon startup, manage LAN `/home/peng/Shared` & VM-restricted `/home/peng/Code` (`192.168.122.0/24`), set SMB user passwords, and mount remote network shares into `/mnt` via `cifs-utils`.
 
 ---
 

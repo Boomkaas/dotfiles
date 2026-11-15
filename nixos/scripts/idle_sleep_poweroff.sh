@@ -40,7 +40,7 @@ IDLE_INHIBIT_BIN="$HOME/.local/bin/idle_inhibit.sh"
 DPMS_HANDLER_BIN="$HOME/.local/bin/dpms_handler.sh"
 
 # State & logging
-STATE_DIR="$HOME/.local/state/haku_theme"
+STATE_DIR="$HOME/.local/state/idle"
 LOG_FILE="$STATE_DIR/idle_poweroff.log"
 LOCK_FILE="$STATE_DIR/idle_poweroff.lock"
 mkdir -p "$STATE_DIR"

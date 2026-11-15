@@ -6,7 +6,7 @@ export PATH="/run/wrappers/bin:/run/current-system/sw/bin:/etc/profiles/per-user
 # 2. Audio playback status
 # 3. Power profile (Battery vs AC/Charging)
 
-STATE_DIR="$HOME/.local/state/haku_theme"
+STATE_DIR="$HOME/.local/state/idle"
 STATE_FILE="$STATE_DIR/idle_inhibit"
 
 # Ensure state directory exists
