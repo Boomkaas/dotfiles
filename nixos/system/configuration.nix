@@ -252,6 +252,9 @@
       "mako/config".source = link "mako/config";
       "gtk-3.0/gtk.css".source = link "gtk/gtk.css";
       "gtk-4.0/gtk.css".source = link "gtk/gtk.css";
+      # No tray to show it in; connection-notify and wifi_menu cover its jobs.
+      # The package stays for nm-connection-editor.
+      "autostart/nm-applet.desktop".text = "[Desktop Entry]\nHidden=true\n";
     };
 
     # Idle chain (same timings as the old hypridle setup): idle_inhibit.sh
