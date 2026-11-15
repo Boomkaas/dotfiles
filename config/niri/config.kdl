@@ -152,7 +152,7 @@ binds {
     Mod+R { spawn "zeditor"; }
     Mod+B { spawn "brave"; }
     Mod+E { spawn "thunar"; }
-    Mod+T { spawn "telegram-desktop"; }
+    Mod+T { spawn "Telegram"; }
     Mod+C { close-window; }
 
     // Log out to the real Ly greeter (ends the session, closes all apps)
