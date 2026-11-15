@@ -123,6 +123,8 @@
 
   # Disable boot autostart for PostgreSQL; start it with: sudo systemctl start postgresql
   systemd.services.postgresql.wantedBy = pkgs.lib.mkForce [ ];
+  # 26.05 added postgresql.target (wanted by multi-user.target), which Requires the service.
+  systemd.targets.postgresql.wantedBy = pkgs.lib.mkForce [ ];
 
   systemd.services.logmein-hamachi = {
     wantedBy = pkgs.lib.mkForce [ ];
