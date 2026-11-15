@@ -32,7 +32,6 @@ fi
 export FZF_DEFAULT_OPTS="--color=border:bright-black,prompt:green,pointer:red,marker:yellow,header:blue,info:yellow,hl:cyan,hl+:bright-red ${FZF_DEFAULT_OPTS:-}"
 
 DOTFILES_DIR="${DOTFILES_DIR:-$HOME/Code/Dotfiles}"
-HAKUSPACE_DIR="${HAKUSPACE_DIR:-$HOME/hakuspace-control}"
 
 notify() {
     local urgency="${1:-normal}"
@@ -99,12 +98,8 @@ copy_to_clipboard() {
         echo -n "$text" | wl-copy
         notify "normal" "edit-copy" "Clipboard" "Copied to clipboard: $text"
         echo -e "${GREEN}✔ Copied to clipboard:${RESET} $text"
-    elif command -v xclip >/dev/null 2>&1; then
-        echo -n "$text" | xclip -selection clipboard
-        notify "normal" "edit-copy" "Clipboard" "Copied to clipboard: $text"
-        echo -e "${GREEN}✔ Copied to clipboard:${RESET} $text"
     else
-        echo -e "${YELLOW}Clipboard utility (wl-copy/xclip) not found.${RESET}"
+        echo -e "${YELLOW}Clipboard utility (wl-copy) not found.${RESET}"
     fi
 }
 
@@ -112,7 +107,7 @@ copy_to_clipboard() {
 # Inventory Definition
 # ------------------------------------------------------------------------------
 # Format per entry: CATEGORY | ICON | TITLE | PATH
-# Categories: nixos, desktop, shell, custom, repo
+# Categories: nixos, desktop, shell, repo
 get_config_catalog() {
     cat <<EOF
 nixos| |NixOS Flake Definition|$DOTFILES_DIR/nixos/flake.nix
@@ -139,12 +134,6 @@ shell| |Tmux Config Directory|$DOTFILES_DIR/config/tmux
 shell|󰇥 |Yazi Main Config (yazi.toml)|$DOTFILES_DIR/config/yazi/yazi.toml
 shell|󰇥 |Yazi Keybindings (keymap.toml)|$DOTFILES_DIR/config/yazi/keymap.toml
 shell|󰇥 |Yazi Config Directory|$DOTFILES_DIR/config/yazi
-custom|󰒓 |Hakuspace Main Setting Script|$HAKUSPACE_DIR/main_setting.sh
-custom|󰒓 |Hakuspace Menu Custom Script|$HAKUSPACE_DIR/hakumenu-general-custom.sh
-custom|󰒓 |Hakuspace Mango Custom Config|$HAKUSPACE_DIR/mango-custom.conf
-custom|󰒓 |Hakuspace Hyprland Custom Lua|$HAKUSPACE_DIR/hyprland-custom.lua
-custom|󰒓 |Hakuspace Niri Custom KDL|$HAKUSPACE_DIR/niri-custom.kdl
-custom|󱁤 |Hakuspace Control Root Directory|$HAKUSPACE_DIR
 repo| |Dotfiles Git Repository Root|$DOTFILES_DIR
 EOF
 }
@@ -287,9 +276,8 @@ ${BOLD}${CYAN}Scope Filtering${RESET}
 Cycle through configuration categories:
   • ${BOLD}all${RESET}      - All registered configuration files & directories
   • ${BOLD}nixos${RESET}    - NixOS Flake, system modules & scripts
-  • ${BOLD}desktop${RESET}  - Mango, Hyprland, SwayNC, Kitty, Rofi
+  • ${BOLD}desktop${RESET}  - niri, Kitty, Fastfetch, fetch
   • ${BOLD}shell${RESET}    - Fish shell, Starship, Tmux, Yazi
-  • ${BOLD}custom${RESET}   - Hakuspace custom scripts & desktop controllers
   • ${BOLD}modified${RESET} - Files with uncommitted changes in git repository
 
 ${DIM}Shortcut:${RESET} Press ${BOLD}TAB${RESET} at any time in the main list.
@@ -510,7 +498,7 @@ cmd_interactive() {
     self_bin="$(readlink -f "$0")"
 
     local current_scope="all"
-    local scopes=("all" "modified" "nixos" "desktop" "shell" "custom")
+    local scopes=("all" "modified" "nixos" "desktop" "shell")
 
     while true; do
         clear
@@ -540,7 +528,6 @@ cmd_interactive() {
             nixos) scope_label="${MAGENTA}NixOS Modules & System${RESET}" ;;
             desktop) scope_label="${BLUE}Desktop & Wayland${RESET}" ;;
             shell) scope_label="${GREEN}Shell & CLI Tools${RESET}" ;;
-            custom) scope_label="${WHITE}Hakuspace Custom Scripts${RESET}" ;;
         esac
 
         local changed_badge="${GREEN}0 changed${RESET}"
@@ -707,7 +694,7 @@ ${BOLD}conf${RESET} - Terminal Dotfiles & Config Picker with Syntax Preview (CLI
 
 ${BOLD}USAGE:${RESET}
     conf                            Launch interactive fzf picker with live preview
-    conf list [scope]               List registered configuration targets (all|nixos|desktop|shell|custom)
+    conf list [scope]               List registered configuration targets (all|nixos|desktop|shell)
     conf edit <query>               Quick open matching config directly in \$EDITOR
     conf diff [target]              Show git diff for dotfiles or specific config
     conf status                     Show git status summary of dotfiles repository
@@ -725,7 +712,7 @@ ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
     ${CYAN}Ctrl-O${RESET}      Open contextual actions menu (Options / Clipboard)
     ${CYAN}Ctrl-G${RESET}      Show repository git status
     ${CYAN}Ctrl-R${RESET}      Refresh list and git modified status
-    ${CYAN}Tab${RESET}         Cycle scope filter (all -> modified -> nixos -> desktop -> shell -> custom)
+    ${CYAN}Tab${RESET}         Cycle scope filter (all -> modified -> nixos -> desktop -> shell)
     ${CYAN}Esc / Ctrl-C${RESET} Exit picker
 
 EOF

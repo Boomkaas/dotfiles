@@ -48,9 +48,7 @@ if status is-interactive
 
     abbr c 'clear'
     abbr h 'history'
-    abbr haku '~/.local/bin/haku.sh'
     abbr menu 'rofi -show drun'
-    abbr openconfig '~/.local/bin/open_config.sh'
     abbr st 'setting'
     abbr wf 'wifi'
     abbr bt 'bluetooth'

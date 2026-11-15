@@ -52,7 +52,7 @@ notify() {
 # ------------------------------------------------------------------------------
 
 get_night_status() {
-    if pgrep -x "hyprsunset" >/dev/null 2>&1 || pgrep -x "gammastep" >/dev/null 2>&1; then
+    if pgrep -f gammastep >/dev/null 2>&1; then
         echo "ON"
     else
         echo "OFF"
@@ -62,23 +62,7 @@ get_night_status() {
 get_idle_status() {
     if command -v awake &>/dev/null && awake status -q 2>/dev/null; then
         echo "ON"
-    elif [[ -f "$HOME/.local/state/haku_theme/idle_inhibit" ]] && [[ "$(cat "$HOME/.local/state/haku_theme/idle_inhibit" 2>/dev/null)" == "1" ]]; then
-        echo "ON"
-    else
-        echo "OFF"
-    fi
-}
-
-get_warp_status() {
-    if command -v warp-cli &>/dev/null && warp-cli status 2>/dev/null | grep -q 'Connected'; then
-        echo "ON"
-    else
-        echo "OFF"
-    fi
-}
-
-get_dnd_status() {
-    if command -v swaync-client &>/dev/null && [[ "$(swaync-client --get-dnd 2>/dev/null)" == "true" ]]; then
+    elif [[ -f "$HOME/.local/state/idle/idle_inhibit" ]] && [[ "$(cat "$HOME/.local/state/idle/idle_inhibit" 2>/dev/null)" == "1" ]]; then
         echo "ON"
     else
         echo "OFF"
@@ -181,24 +165,7 @@ cmd_status() {
     echo -e "  ${BOLD}Battery Level:${RESET}        ${GREEN}$(get_battery_info)${RESET}"
     echo -e "  ${BOLD}Screen Awake Inhibit:${RESET} $([ "$(get_idle_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
     echo -e "  ${BOLD}Night Light:${RESET}          $([ "$(get_night_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
-    echo -e "  ${BOLD}Do Not Disturb:${RESET}       $([ "$(get_dnd_status)" = "ON" ] && echo -e "${GREEN}ON${RESET}" || echo -e "${DIM}OFF${RESET}")"
     echo -e "  ${BOLD}Power Profile:${RESET}        ${GREEN}$(get_power_profile)${RESET}"
-    echo -e "  ${BOLD}Cloudflare WARP VPN:${RESET}  $([ "$(get_warp_status)" = "ON" ] && echo -e "${GREEN}Connected${RESET}" || echo -e "${DIM}Disconnected${RESET}")"
-}
-
-cmd_dnd_toggle() {
-    if command -v swaync-client &>/dev/null; then
-        swaync-client -d -sw >/dev/null 2>&1 || true
-        local st
-        st=$(swaync-client --get-dnd 2>/dev/null || echo "false")
-        if [ "$st" = "true" ]; then
-            echo -e "${GREEN}Do Not Disturb: Enabled (Silent)${RESET}"
-            notify low notifications-disabled "Do Not Disturb" "Notifications muted"
-        else
-            echo -e "${YELLOW}Do Not Disturb: Disabled (Normal)${RESET}"
-            notify normal notifications "Do Not Disturb" "Notifications unmuted"
-        fi
-    fi
 }
 
 cmd_powerprofile_cycle() {
@@ -276,14 +243,10 @@ cmd_nightlight_menu() {
         fi
     elif [ "$val" = "6500" ]; then
         pkill -f gammastep 2>/dev/null || true
-        pkill -f hyprsunset 2>/dev/null || true
         notify normal weather-clear "Night Light" "Blue light filter turned OFF"
     else
         pkill -f gammastep 2>/dev/null || true
-        pkill -f hyprsunset 2>/dev/null || true
-        if [ "$XDG_CURRENT_DESKTOP" = "Hyprland" ] && command -v hyprsunset >/dev/null 2>&1; then
-            ( setsid hyprsunset --temperature "$val" & ) >/dev/null 2>&1
-        elif command -v gammastep >/dev/null 2>&1; then
+        if command -v gammastep >/dev/null 2>&1; then
             ( setsid gammastep -O "$val" & ) >/dev/null 2>&1
         fi
         notify normal weather-clear-night "Night Light" "Color temperature set to ${val}K"
@@ -357,7 +320,6 @@ cmd_preview() {
         echo -e "${BOLD}Keyboard Shortcuts in FZF:${RESET}"
         echo -e "  ${CYAN}Enter${RESET}   Select item / Toggle setting / Open tool"
         echo -e "  ${CYAN}Ctrl-R${RESET}  Refresh settings status"
-        echo -e "  ${CYAN}Ctrl-C${RESET}  Clear all SwayNC notifications"
         echo -e "  ${CYAN}Esc${RESET}     Exit menu"
         return 0
     fi
@@ -441,7 +403,7 @@ cmd_preview() {
             night=$(get_night_status)
             echo -e "${BOLD}${CYAN}=== Night Light / Eye Care ===${RESET}"
             echo -e "  ${BOLD}Filter State:${RESET} $([ "$night" = "ON" ] && echo -e "${GREEN}ON (Warm Color Active)${RESET}" || echo -e "${DIM}OFF (Neutral Color)${RESET}")"
-            echo -e "  ${BOLD}Engine:${RESET}       hyprsunset / gammastep"
+            echo -e "  ${BOLD}Engine:${RESET}       gammastep"
             echo ""
             echo -e "${BOLD}Action:${RESET} Toggle filter or select warmth (3000K-6500K)"
             ;;
@@ -453,16 +415,6 @@ cmd_preview() {
             echo -e "  ${BOLD}History Cache:${RESET} Available"
             echo ""
             echo -e "${BOLD}Action:${RESET} Open interactive clipboard history (clip)"
-            ;;
-        dnd)
-            local dnd
-            dnd=$(get_dnd_status)
-            echo -e "${BOLD}${CYAN}=== Do Not Disturb & Notifications ===${RESET}"
-            echo -e "  ${BOLD}Mode:${RESET}         $([ "$dnd" = "ON" ] && echo -e "${YELLOW}Silent / Muted (ON)${RESET}" || echo -e "${GREEN}Normal Notifications (OFF)${RESET}")"
-            echo ""
-            echo -e "${BOLD}Actions:${RESET}"
-            echo -e "  ${CYAN}Enter${RESET}   Toggle Do Not Disturb in SwayNC"
-            echo -e "  ${CYAN}Ctrl-C${RESET}  Clear all active notifications"
             ;;
         powerprofile)
             local profile
@@ -487,29 +439,15 @@ cmd_preview() {
             ;;
         process)
             echo -e "${BOLD}${CYAN}=== Task & Process Manager ===${RESET}"
-            echo -e "  ${BOLD}Controller:${RESET}  task (Mango Wayland Window & Process Controller)"
+            echo -e "  ${BOLD}Controller:${RESET}  task (niri Window & Process Controller)"
             echo ""
             echo -e "${BOLD}Action:${RESET} Inspect windows, kill frozen apps, monitor RAM & CPU"
-            ;;
-        theme)
-            echo -e "${BOLD}${CYAN}=== Themes & Wallpapers ===${RESET}"
-            echo -e "  ${BOLD}Tool:${RESET}        theme"
-            echo ""
-            echo -e "${BOLD}Action:${RESET} Switch wallpapers, accent colors, visualizer"
             ;;
         config)
             echo -e "${BOLD}${CYAN}=== Open Config Files & Dotfiles ===${RESET}"
             echo -e "  ${BOLD}Tool:${RESET}        conf"
             echo ""
             echo -e "${BOLD}Action:${RESET} Interactive dotfiles selector with syntax preview"
-            ;;
-        warp)
-            local warp
-            warp=$(get_warp_status)
-            echo -e "${BOLD}${CYAN}=== Cloudflare WARP VPN ===${RESET}"
-            echo -e "  ${BOLD}Tunnel State:${RESET} $([ "$warp" = "ON" ] && echo -e "${GREEN}Connected${RESET}" || echo -e "${DIM}Disconnected${RESET}")"
-            echo ""
-            echo -e "${BOLD}Action:${RESET} Toggle Cloudflare WARP connection"
             ;;
         colorpicker)
             echo -e "${BOLD}${CYAN}=== Screen Color Picker ===${RESET}"
@@ -539,7 +477,7 @@ cmd_preview() {
             ;;
         hub)
             echo -e "${BOLD}${CYAN}=== Master Tools Hub (s) ===${RESET}"
-            echo -e "  ${BOLD}Unified Hub:${RESET}  All 21 dotfiles TUI tools"
+            echo -e "  ${BOLD}Unified Hub:${RESET}  All 20 dotfiles TUI tools"
             echo ""
             echo -e "${BOLD}Action:${RESET} Open Master Command Center launcher"
             ;;
@@ -560,11 +498,9 @@ cmd_interactive() {
 
     while true; do
         clear
-        local night idle warp dnd profile wifi_ssid bt_short b_pct bat_info vol_info
+        local night idle profile wifi_ssid bt_short b_pct bat_info vol_info
         night=$(get_night_status)
         idle=$(get_idle_status)
-        warp=$(get_warp_status)
-        dnd=$(get_dnd_status)
         profile=$(get_power_profile)
         b_pct=$(get_brightness_pct)
         bat_info=$(get_battery_info)
@@ -572,7 +508,7 @@ cmd_interactive() {
         wifi_ssid=$(get_active_wifi_ssid)
         bt_short=$(get_bluetooth_status_short)
 
-        local header_info="Profile: $profile | Awake: $idle | Night: $night | DND: $dnd | Bat: $bat_info"
+        local header_info="Profile: $profile | Awake: $idle | Night: $night | Bat: $bat_info"
 
         local menu=()
         menu+=("󰖩  Wi-Fi & Network ($wifi_ssid)"$'\t'"wifi")
@@ -583,14 +519,11 @@ cmd_interactive() {
         menu+=("󰃝  Night Light / Eye Care ($night)"$'\t'"night")
         menu+=("󱐋  Power Profile ($profile)"$'\t'"powerprofile")
         menu+=("󰁹  Battery & Power Telemetry"$'\t'"battery")
-        menu+=("󰂚  Do Not Disturb ($dnd)"$'\t'"dnd")
         menu+=("󰅌  Clipboard History"$'\t'"clipboard")
         menu+=("󰌾  Lock Screen"$'\t'"lock")
         menu+=("  Power & Session Controls"$'\t'"power")
         menu+=("󰍛  Task & Process Controller"$'\t'"process")
-        menu+=("󰏘  Themes & Wallpapers"$'\t'"theme")
         menu+=("󱁤  Open Config Files & Dotfiles"$'\t'"config")
-        menu+=("󰖟  Cloudflare WARP VPN ($warp)"$'\t'"warp")
         menu+=("󰈊  Color Picker (Screen Eyedropper)"$'\t'"colorpicker")
         menu+=("󰋊  Disk & Storage Manager"$'\t'"disk")
         menu+=("󰚰  Clean System Garbage & Cache"$'\t'"clean")
@@ -599,13 +532,13 @@ cmd_interactive() {
 
         local res key choice
         res=$(printf "%s\n" "${menu[@]}" | fzf \
-            --expect=ctrl-r,ctrl-c \
+            --expect=ctrl-r \
             --delimiter=$'\t' \
             --with-nth=1 \
             --preview="$self_bin preview {2}" \
             --preview-window=right:52%:wrap \
             --prompt="󰒓 Settings > " \
-            --header="[$header_info] (Enter: Open | Ctrl-R: Refresh | Ctrl-C: Clear Notif | Esc: Exit)" \
+            --header="[$header_info] (Enter: Open | Ctrl-R: Refresh | Esc: Exit)" \
             --reverse \
             --height=100% \
             --border=rounded \
@@ -618,12 +551,6 @@ cmd_interactive() {
 
         if [ "$key" = "ctrl-r" ]; then
             rm -f "/tmp/.setting_power_profile"
-            continue
-        elif [ "$key" = "ctrl-c" ]; then
-            if command -v swaync-client >/dev/null 2>&1; then
-                swaync-client -C >/dev/null 2>&1 || true
-                notify low notifications "SwayNC" "Cleared all notifications"
-            fi
             continue
         fi
 
@@ -681,10 +608,6 @@ cmd_interactive() {
                 # Automatically close modal window after copying an item
                 [ "$clip_rc" -eq 0 ] && exit 0
                 ;;
-            dnd)
-                cmd_dnd_toggle
-                sleep 0.2
-                ;;
             powerprofile)
                 cmd_powerprofile_cycle
                 sleep 0.2
@@ -704,25 +627,12 @@ cmd_interactive() {
                     "$HOME/.local/bin/task"
                 fi
                 ;;
-            theme)
-                if [ -x "$TUI_DIR/theme" ]; then
-                    "$TUI_DIR/theme"
-                elif [ -x "$HOME/.local/bin/theme" ]; then
-                    "$HOME/.local/bin/theme"
-                fi
-                ;;
             config)
                 if [ -x "$TUI_DIR/conf" ]; then
                     "$TUI_DIR/conf"
                 elif [ -x "$HOME/.local/bin/conf" ]; then
                     "$HOME/.local/bin/conf"
                 fi
-                ;;
-            warp)
-                if [ -x "$HOME/.local/bin/warp_toggle.sh" ]; then
-                    "$HOME/.local/bin/warp_toggle.sh"
-                fi
-                sleep 0.2
                 ;;
             colorpicker)
                 local color
@@ -777,14 +687,11 @@ ${BOLD}USAGE:${RESET}
     setting awake | idle            Toggle screen awake / idle inhibitor
     setting nightlight | night      Toggle night light or set temperature
     setting clipboard | clip        Open clipboard history
-    setting dnd                     Toggle Do Not Disturb notifications
     setting powerprofile [mode]     Cycle or set power profile (balanced/performance/power-saver)
     setting lock                    Lock screen immediately
     setting power                   Open power & shutdown menu
     setting process | top           Open process manager
-    setting theme                   Open theme, wallpaper & accent customizer
     setting configs                 Open configuration files selector
-    setting warp                    Toggle Cloudflare WARP VPN
     setting colorpicker             Pick color from screen
     setting disk                    Open disk & storage manager
     setting clean                   Clean system garbage and cache
@@ -795,7 +702,6 @@ ${BOLD}USAGE:${RESET}
 ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
     ${CYAN}Enter${RESET}   Select item / Toggle setting / Open tool
     ${CYAN}Ctrl-R${RESET}  Refresh settings status
-    ${CYAN}Ctrl-C${RESET}  Clear all SwayNC notifications
     ${CYAN}Esc${RESET}     Exit
 
 EOF
@@ -858,9 +764,6 @@ case "${1:-}" in
             "$HOME/.local/bin/clip" "$@"
         fi
         ;;
-    dnd)
-        cmd_dnd_toggle
-        ;;
     powerprofile|profile)
         shift
         if [ -n "${1:-}" ] && command -v powerprofilesctl >/dev/null 2>&1; then
@@ -885,25 +788,12 @@ case "${1:-}" in
             "$HOME/.local/bin/task" "$@"
         fi
         ;;
-    theme|appearance|gtk)
-        shift
-        if [ -x "$TUI_DIR/theme" ]; then
-            "$TUI_DIR/theme" "$@"
-        elif [ -x "$HOME/.local/bin/theme" ]; then
-            "$HOME/.local/bin/theme" "$@"
-        fi
-        ;;
     configs|config)
         shift
         if [ -x "$TUI_DIR/conf" ]; then
             "$TUI_DIR/conf" "$@"
         elif [ -x "$HOME/.local/bin/conf" ]; then
             "$HOME/.local/bin/conf" "$@"
-        fi
-        ;;
-    warp|vpn)
-        if [ -x "$HOME/.local/bin/warp_toggle.sh" ]; then
-            "$HOME/.local/bin/warp_toggle.sh"
         fi
         ;;
     colorpicker|picker)

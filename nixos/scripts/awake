@@ -19,7 +19,7 @@ export PATH="/run/wrappers/bin:/run/current-system/sw/bin:/etc/profiles/per-user
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
 
-STATE_DIR="$HOME/.local/state/haku_theme"
+STATE_DIR="$HOME/.local/state/idle"
 STATE_FILE="$STATE_DIR/idle_inhibit"
 DPMS_HANDLER_BIN="$HOME/.local/bin/dpms_handler.sh"
 

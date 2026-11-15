@@ -41,7 +41,3 @@ elif [[ "$WM" =~ labwc ]]; then
         fi
     fi
 fi
-
-if [ "$1" = "on" ]; then
-    ( sleep 0.5 && "$HOME/.local/bin/wallpaper_set.sh" --restore ) >/dev/null 2>&1 &
-fi

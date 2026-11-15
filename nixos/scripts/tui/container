@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# container - Docker Containers & Libvirt VM Manager (CLI & fzf TUI)
-# Manage local containers, images, volumes, and virtual machines.
+# container - Docker Containers Manager (CLI & fzf TUI)
+# Manage local containers, images and volumes.
 # ==============================================================================
 
 # Colors
@@ -51,15 +51,6 @@ get_docker_containers() {
     docker ps -a --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.State}}\t{{.Ports}}" 2>/dev/null
 }
 
-# Returns: ID<TAB>NAME<TAB>STATE
-get_virsh_vms() {
-    if ! command -v virsh >/dev/null 2>&1; then return 0; fi
-    virsh list --all 2>/dev/null | tail -n +3 | while read -r id name state rest; do
-        [ -z "$name" ] && continue
-        echo -e "${id}\t${name}\t${state}"
-    done
-}
-
 # Returns: REPO:TAG<TAB>ID<TAB>SIZE<TAB>CREATED
 get_docker_images() {
     if ! command -v docker >/dev/null 2>&1; then return 0; fi
@@ -78,11 +69,6 @@ cmd_start() {
         if docker start "$id" 2>&1; then
             notify "normal" "media-playback-start" "Docker" "Started container $id"
         fi
-    elif [ "$type" = "vm" ]; then
-        echo -e "${CYAN}Starting VM ${id}...${RESET}"
-        if virsh start "$id" 2>&1; then
-            notify "normal" "media-playback-start" "Virtual Machine" "Started VM $id"
-        fi
     fi
 }
 
@@ -94,11 +80,6 @@ cmd_stop() {
         if docker stop "$id" 2>&1; then
             notify "normal" "media-playback-stop" "Docker" "Stopped container $id"
         fi
-    elif [ "$type" = "vm" ]; then
-        echo -e "${YELLOW}Stopping VM ${id}...${RESET}"
-        if virsh shutdown "$id" 2>&1; then
-            notify "normal" "media-playback-stop" "Virtual Machine" "Shutting down VM $id"
-        fi
     fi
 }
 
@@ -108,9 +89,6 @@ cmd_restart() {
     if [ "$type" = "docker" ]; then
         echo -e "${CYAN}Restarting container ${id}...${RESET}"
         docker restart "$id" 2>&1
-    elif [ "$type" = "vm" ]; then
-        echo -e "${CYAN}Rebooting VM ${id}...${RESET}"
-        virsh reboot "$id" 2>&1
     fi
 }
 
@@ -143,7 +121,7 @@ cmd_shell() {
 cmd_preview() {
     local target="$1"
     if [ -z "$target" ]; then
-        echo -e "${DIM}Select a container, image, or VM to inspect details.${RESET}"
+        echo -e "${DIM}Select a container or image to inspect details.${RESET}"
         return 0
     fi
 
@@ -195,12 +173,6 @@ Architecture: {{.Architecture}}
 Author: {{.Author}}' 2>/dev/null
             ;;
 
-        vm)
-            local vm_name="$payload"
-            echo -e "${BOLD}🖥️  Virtual Machine:${RESET} ${vm_name}"
-            echo "─────────────────────────────────────────────────────────────────────────────"
-            virsh dominfo "$vm_name" 2>/dev/null || echo "VM details unavailable"
-            ;;
     esac
 }
 
@@ -254,22 +226,6 @@ show_action_menu() {
             esac
             ;;
 
-        vm)
-            acts+=("1. ▶️  Start Virtual Machine")
-            acts+=("2. ⏹️  Graceful Shutdown")
-            acts+=("3. 🔄 Reboot VM")
-            acts+=("4. 💀 Force Off / Destroy")
-            acts+=("5. ✘  Cancel")
-
-            local choice
-            choice=$(printf "%s\n" "${acts[@]}" | fzf --prompt="VM [$payload] > " --height=45% --reverse --border=rounded) || return 0
-            case "$choice" in
-                1*) virsh start "$payload" ;;
-                2*) virsh shutdown "$payload" ;;
-                3*) virsh reboot "$payload" ;;
-                4*) virsh destroy "$payload" ;;
-            esac
-            ;;
     esac
 }
 
@@ -282,15 +238,14 @@ cmd_interactive() {
     self_bin="$(readlink -f "$0")"
 
     local current_scope="all"
-    local scopes=("all" "running" "stopped" "images" "vms")
+    local scopes=("all" "running" "stopped" "images")
 
     while true; do
         clear
 
-        local containers_raw images_raw vms_raw
+        local containers_raw images_raw
         containers_raw=$(get_docker_containers)
         images_raw=$(get_docker_images)
-        vms_raw=$(get_virsh_vms)
 
         local running_cnt=0 stopped_cnt=0
         if [ -n "$containers_raw" ]; then
@@ -300,11 +255,10 @@ cmd_interactive() {
 
         local scope_label
         case "$current_scope" in
-            all) scope_label="${CYAN}All Containers & VMs${RESET}" ;;
+            all) scope_label="${CYAN}All Containers & Images${RESET}" ;;
             running) scope_label="${GREEN}Running Containers (${running_cnt})${RESET}" ;;
             stopped) scope_label="${YELLOW}Stopped Containers (${stopped_cnt})${RESET}" ;;
             images) scope_label="${MAGENTA}Docker Images${RESET}" ;;
-            vms) scope_label="${BLUE}Virtual Machines${RESET}" ;;
         esac
 
         local header_info="Scope: $scope_label | Running: $running_cnt | Stopped: $stopped_cnt"
@@ -324,7 +278,7 @@ cmd_interactive() {
         menu+=("🧹  [Ctrl-P] Prune Stopped Containers & Caches"$'\t'"action:prune_docker")
 
         # Docker Containers
-        if [ "$current_scope" != "images" ] && [ "$current_scope" != "vms" ]; then
+        if [ "$current_scope" != "images" ]; then
             if [ -n "$containers_raw" ]; then
                 while IFS=$'\t' read -r cid cname cimage cstatus cstate cports; do
                     [ -z "$cid" ] && continue
@@ -341,19 +295,6 @@ cmd_interactive() {
             fi
         fi
 
-        # Libvirt VMs
-        if [ "$current_scope" = "all" ] || [ "$current_scope" = "vms" ]; then
-            if [ -n "$vms_raw" ]; then
-                while IFS=$'\t' read -r vid vname vstate; do
-                    [ -z "$vname" ] && continue
-                    local icon="🖥️"
-                    [ "$vstate" = "running" ] && icon="🟢"
-                    local label
-                    label=$(printf "%s  VM: %-18s (%s)" "$icon" "$vname" "$vstate")
-                    menu+=("${label}"$'\t'"vm:${vname}")
-                done <<< "$vms_raw"
-            fi
-        fi
 
         # Docker Images
         if [ "$current_scope" = "all" ] || [ "$current_scope" = "images" ]; then
@@ -369,7 +310,7 @@ cmd_interactive() {
 
         # If empty
         if [ ${#menu[@]} -le 2 ]; then
-            menu+=("ℹ️  No containers or virtual machines found"$'\t'"action:toggle_scope")
+            menu+=("ℹ️  No containers found"$'\t'"action:toggle_scope")
         fi
 
         # Invoke fzf
@@ -429,11 +370,11 @@ cmd_interactive() {
 
 cmd_help() {
     cat <<EOF
-${BOLD}container${RESET} - Docker Containers & Libvirt VM Manager (CLI & fzf TUI)
+${BOLD}container${RESET} - Docker Containers Manager (CLI & fzf TUI)
 
 ${BOLD}USAGE:${RESET}
-    container                       Launch interactive fzf container & VM dashboard
-    container list                  List all containers and VMs
+    container                       Launch interactive fzf container dashboard
+    container list                  List all containers
     container start <id>            Start container
     container stop <id>             Stop container
     container restart <id>          Restart container
@@ -444,13 +385,13 @@ ${BOLD}USAGE:${RESET}
 
 ${BOLD}INTERACTIVE HOTKEYS (inside fzf menu):${RESET}
     ${CYAN}Enter${RESET}       Open contextual action menu (Start/Stop, Shell, Logs, Remove)
-    ${CYAN}Ctrl-S${RESET}      Start container or VM
-    ${CYAN}Ctrl-K${RESET}      Stop container or VM
+    ${CYAN}Ctrl-S${RESET}      Start container
+    ${CYAN}Ctrl-K${RESET}      Stop container
     ${CYAN}Ctrl-L${RESET}      Follow container logs (docker logs -f)
     ${CYAN}Ctrl-A${RESET}      Attach interactive terminal shell (docker exec -it sh)
     ${CYAN}Ctrl-P${RESET}      Prune unused Docker objects
     ${CYAN}Ctrl-R${RESET}      Refresh list
-    ${CYAN}Tab${RESET}         Cycle scope filter (all -> running -> stopped -> images -> vms)
+    ${CYAN}Tab${RESET}         Cycle scope filter (all -> running -> stopped -> images)
     ${CYAN}Esc / Ctrl-C${RESET} Exit dashboard
 
 EOF
@@ -462,11 +403,7 @@ EOF
 
 case "${1:-}" in
     list|ls)
-        echo "=== Docker Containers ==="
         docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Image}}" 2>/dev/null
-        echo ""
-        echo "=== Virtual Machines ==="
-        virsh list --all 2>/dev/null
         ;;
     start) cmd_start "docker" "$2" ;;
     stop) cmd_stop "docker" "$2" ;;

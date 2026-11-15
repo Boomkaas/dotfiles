@@ -50,16 +50,15 @@ notify() {
 # ------------------------------------------------------------------------------
 get_tool_registry() {
     cat <<EOF
-wifi|network|󰖩 |Wi-Fi Network & Scanning Manager|wifi|Scan networks, QR codes, WPS, monitor signal
+wifi|network|󰖩 |Wi-Fi Network & Scanning Manager|wifi|Scan networks, connect, monitor signal
 bluetooth|network|󰂯 |Bluetooth Device & Audio Manager|bt|Pair, connect, trust, battery %, agent monitor
 tb|network|🐻|TunnelBear VPN & Split Tunneling Manager|tunnelbear, vpn|Connect servers, per-app routing, quota meter
 ports|network|🌐|Live Ports, Sockets & Dev Servers|port, net|Inspect listening ports, kill stuck dev servers
-share|network|󰝰 |Samba & Hamachi Local File Sharing|share|Samba folders, Hamachi VPN, mount remote CIFS
 tailscale|network|🔗|Tailscale Mesh VPN Controller|ts, tailscale-tui|Connect/disconnect this device, peers, subnet routes
 nixos|system| |NixOS Generations & Rollback Manager|gens|List generations, diff closures, rollback, gc
 service|system|󰒓 |Systemd Services & Daemons Manager|services|Control user/system units, view logs, restart
 disk|system|󰋊 |Storage, USB Drives & Nix Store Cleaner|storage|Partitions, USB auto-mount/eject, nh clean, gc
-task|system|󰌢 |Process & Mango Wayland Window Controller|tasks|List windows, focus, SIGTERM/SIGKILL, freeze
+task|system|󰌢 |Process & niri Window Controller|tasks|List windows, focus, SIGTERM/SIGKILL, freeze
 ram|system|󰍛 |Memory Recovery & Boot State Restorer|restore, restore-ram|Close apps, drop caches, restore ~1.0 GB boot RAM
 log|system|📜|Systemd Journal & Kernel Log Explorer|logs, journal|Filter system errors, dmesg, boot logs, follow
 app|desktop|󰀻 |Application Launcher & .desktop Browser|apps, launch|Launch GUI apps, parse .desktop files, fuzzy search
@@ -69,8 +68,7 @@ pkg|dev|📦|Nix Package Explorer & Ephemeral Shells|pkgs|Inspect declared pkgs,
 container|dev|🐳|Docker Containers Manager|containers|Start, stop, restart, follow logs, shell
 conf|dev|󰒓 |Dotfiles & Config Picker with Preview|config, configs|Bat preview, git diff, jump to configs in Zed
 audio|desktop|󰕾 |PipeWire & WirePlumber Audio Mixer|audio|Volume slider, mute, node routing, ALC256 test
-setting|desktop|󰒓 |System Settings & Wayland Controls|settings|Brightness, volume, power profile, idle, DND
-theme|desktop|󰏘 |Themes, Wallpapers & Customizer|theme|Switch wallpapers, fonts, cava
+setting|desktop|󰒓 |System Settings & Wayland Controls|settings|Brightness, volume, power profile, idle, night light
 clip|desktop|📋|Wayland Clipboard & Snippet History|clips, clipboard|Cliphist decode, bat preview, pin snippets
 EOF
 }
@@ -310,20 +308,10 @@ get_live_telemetry() {
             pmode=$(powerprofilesctl get 2>/dev/null || echo "balanced")
             echo -e "${CYAN}● Power Profile:${RESET} ${pmode}"
             ;;
-        theme)
-            local gt
-            gt=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'" || echo "default")
-            echo -e "${MAGENTA}● Active GTK Theme:${RESET} ${gt:-default}"
-            ;;
         clip)
             local hcnt=0
             command -v cliphist >/dev/null 2>&1 && hcnt=$(cliphist list 2>/dev/null | wc -l || echo "0")
             echo -e "${WHITE}● Clipboard History:${RESET} ${hcnt} items in memory"
-            ;;
-        share)
-            local h_ip
-            h_ip=$(ip -4 addr show ham0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "offline")
-            echo -e "${CYAN}● Hamachi VPN:${RESET} ${h_ip}"
             ;;
         app|apps|launch)
             local app_cnt=0
@@ -352,11 +340,11 @@ cmd_preview() {
             cat <<EOF
 ${BOLD}${CYAN}Scope Filtering${RESET}
 Cycle through tool categories:
-  • ${BOLD}all${RESET}     - All 22 registered TUI tools
-  • ${BOLD}network${RESET} - Wi-Fi, Bluetooth, TunnelBear VPN, Ports & Sockets, Sharing
+  • ${BOLD}all${RESET}     - All 20 registered TUI tools
+  • ${BOLD}network${RESET} - Wi-Fi, Bluetooth, TunnelBear VPN, Ports & Sockets, Tailscale
   • ${BOLD}system${RESET}  - NixOS Manager, Systemd Services, Disks, Tasks, RAM & Memory, Logs
   • ${BOLD}dev${RESET}     - Git Repos, Tmux, Nix Packages, Containers, Configs
-  • ${BOLD}desktop${RESET} - System Settings, Themes & Wallpapers, Audio Mixer, Clipboard
+  • ${BOLD}desktop${RESET} - System Settings, App Launcher, Audio Mixer, Clipboard
 
 ${DIM}Shortcut:${RESET} Press ${BOLD}TAB${RESET} at any time.
 EOF
@@ -427,14 +415,14 @@ cmd_interactive() {
 
         local scope_label
         case "$current_scope" in
-            all) scope_label="${CYAN}All Tools (22)${RESET}" ;;
+            all) scope_label="${CYAN}All Tools (20)${RESET}" ;;
             network) scope_label="${YELLOW}Network & Wireless (5)${RESET}" ;;
             system) scope_label="${MAGENTA}System & Hardware (6)${RESET}" ;;
             dev) scope_label="${GREEN}Developer & Workspace (5)${RESET}" ;;
-            desktop) scope_label="${BLUE}Desktop & Media (5)${RESET}" ;;
+            desktop) scope_label="${BLUE}Desktop & Media (4)${RESET}" ;;
         esac
 
-        local header_info="Scope: $scope_label | Hub: 22 Tools Available"
+        local header_info="Scope: $scope_label | Hub: 20 Tools Available"
 
         # Next scope for Tab
         local next_scope="all"
@@ -520,7 +508,7 @@ cmd_interactive() {
 }
 
 cmd_list() {
-    echo -e "${BOLD}Unified TUI Scripts Registry (22 Tools):${RESET}\n"
+    echo -e "${BOLD}Unified TUI Scripts Registry (20 Tools):${RESET}\n"
     printf "%-12s %-10s %-40s %s\n" "COMMAND" "CATEGORY" "DESCRIPTION" "ALIASES"
     echo "─────────────────────────────────────────────────────────────────────────────────────────────"
     while IFS='|' read -r cmd cat icon title aliases desc; do
@@ -536,7 +524,7 @@ ${BOLD}s${RESET} - Master TUI Command Center & Script Launcher (CLI & fzf TUI)
 ${BOLD}USAGE:${RESET}
     s                               Launch interactive TUI hub to browse and launch all tools
     s <tool> [args...]              Directly run any TUI script (e.g. 's wifi', 's disk clean')
-    s list                          Print formatted table of all 22 available TUI tools
+    s list                          Print formatted table of all 20 available TUI tools
     s preview <tool>                Internal preview generator for fzf
     s help                          Show this help message
 
@@ -544,13 +532,12 @@ ${BOLD}SUPPORTED TOOLS & ALIASES:${RESET}
     ${CYAN}wifi${RESET}                        Wi-Fi network & scanning manager
     ${CYAN}bluetooth${RESET} (bt)               Bluetooth devices & battery manager
     ${CYAN}ports${RESET} (port, net)            Live ports, listening sockets & process killer
-    ${CYAN}share${RESET}                       Samba folders & Hamachi VPN sharing
     ${CYAN}tb${RESET} (tunnelbear, vpn)         TunnelBear VPN & Split Tunneling Manager
     ${CYAN}tailscale${RESET} (ts, tailscale-tui) Tailscale mesh VPN connect/disconnect
     ${CYAN}nixos${RESET} (gens)                 NixOS generations & rollback manager
     ${CYAN}service${RESET} (services)           Systemd user & system services
     ${CYAN}disk${RESET} (storage)               Partitions, USB auto-mount/eject & Nix GC
-    ${CYAN}task${RESET} (tasks)                 Process & Mango Wayland window controller
+    ${CYAN}task${RESET} (tasks)                 Process & niri window controller
     ${CYAN}ram${RESET} (restore, restore-ram)   Memory recovery & post-boot state restorer
     ${CYAN}log${RESET} (logs, journal)          Systemd journal & kernel dmesg explorer
     ${CYAN}app${RESET} (apps, launch)           Application launcher with .desktop parser
@@ -561,7 +548,6 @@ ${BOLD}SUPPORTED TOOLS & ALIASES:${RESET}
     ${CYAN}conf${RESET} (config, configs)       Dotfiles & config picker with syntax preview
     ${CYAN}audio${RESET}                       PipeWire & WirePlumber mixer
     ${CYAN}setting${RESET} (settings)           System settings & desktop toggles
-    ${CYAN}theme${RESET}                       Themes, wallpapers & accent switcher
     ${CYAN}clip${RESET} (clips, clipboard)      Wayland clipboard history & snippets
 
 ${BOLD}INTERACTIVE HOTKEYS (inside fzf hub):${RESET}
@@ -597,7 +583,7 @@ case "${1:-}" in
             exec "$target_script" "$@"
         else
             echo -e "${RED}✘ Unknown tool or command:${RESET} $1"
-            echo -e "${DIM}Run 's list' or 's help' to see all 22 available tools.${RESET}"
+            echo -e "${DIM}Run 's list' or 's help' to see all 20 available tools.${RESET}"
             exit 1
         fi
         ;;

@@ -16,44 +16,11 @@ let
   twitch = pkgs.writeShellScriptBin "twitch" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/twitch "$@"
   '';
-  wifi-menu = pkgs.writeShellScriptBin "wifi-menu" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/wifi_menu.sh "$@"
-  '';
-  bluetooth-menu = pkgs.writeShellScriptBin "bluetooth-menu" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/bluetooth_menu.sh "$@"
-  '';
-  audio-menu = pkgs.writeShellScriptBin "audio-menu" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/audio_menu.sh "$@"
-  '';
-  process-menu = pkgs.writeShellScriptBin "process-menu" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/process_menu.sh "$@"
-  '';
-  gtk-theme-menu = pkgs.writeShellScriptBin "gtk-theme-menu" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/gtk_theme_menu.sh "$@"
-  '';
-  disk-menu = pkgs.writeShellScriptBin "disk-menu" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/disk_menu.sh "$@"
-  '';
-  clean-menu = pkgs.writeShellScriptBin "clean-menu" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/clean_menu.sh "$@"
-  '';
   ram = pkgs.writeShellScriptBin "ram" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/ram "$@"
-  '';
-  restore-boot-state = pkgs.writeShellScriptBin "restore-boot-state" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/ram "$@"
   '';
   restore-ram = pkgs.writeShellScriptBin "restore-ram" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/ram "$@"
-  '';
-  config-menu = pkgs.writeShellScriptBin "config-menu" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/config_menu.sh "$@"
-  '';
-  share-menu = pkgs.writeShellScriptBin "share-menu" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/share_menu.sh "$@"
-  '';
-  share = pkgs.writeShellScriptBin "share" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/share "$@"
   '';
   tailscale-tui = pkgs.writeShellScriptBin "tailscale-tui" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/tailscale "$@"
@@ -72,9 +39,6 @@ let
   '';
   settings = pkgs.writeShellScriptBin "settings" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/setting "$@"
-  '';
-  theme = pkgs.writeShellScriptBin "theme" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/theme "$@"
   '';
   audio = pkgs.writeShellScriptBin "audio" ''
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/audio "$@"
@@ -164,10 +128,10 @@ let
     exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/s "$@"
   '';
   tunnelbear-cmd = pkgs.writeShellScriptBin "tunnelbear" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tunnelbear "$@"
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/tb "$@"
   '';
   tb-cmd = pkgs.writeShellScriptBin "tb" ''
-    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tunnelbear "$@"
+    exec ${pkgs.bash}/bin/bash /home/peng/Code/Dotfiles/nixos/scripts/tui/tb "$@"
   '';
   gfn = pkgs.writeShellScriptBin "gfn" ''
     nohup flatpak run com.nvidia.geforcenow > /dev/null 2>&1 &
@@ -597,26 +561,14 @@ in
     twitch
     nixreb
     awake
-    wifi-menu
-    bluetooth-menu
-    audio-menu
-    process-menu
-    gtk-theme-menu
-    disk-menu
-    clean-menu
     ram
-    restore-boot-state
     restore-ram
-    config-menu
-    share
-    share-menu
     wifi
     bluetooth
     bt
     audio
     setting
     settings
-    theme
     nixos-cmd
     gens
     tm

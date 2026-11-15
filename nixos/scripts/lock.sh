@@ -15,21 +15,12 @@ VISUAL_TARGETS=(
     "bongocat-all"
     "cava"
     "mpvpaper"
-    "awww-daemon"
-)
-
-VISUAL_PATTERNS=(
-    "cava-layer.py"
-    "random_wallpaper.sh"
 )
 
 suspend_visual_processes() {
-    echo "Suspending visual background processes (pet, cava, wallpaper randomizer, etc.)..."
+    echo "Suspending visual background processes (pet, cava, video wallpaper)..."
     for proc in "${VISUAL_TARGETS[@]}"; do
         pkill -STOP -x "$proc" 2>/dev/null || true
-    done
-    for pat in "${VISUAL_PATTERNS[@]}"; do
-        pkill -STOP -f "$pat" 2>/dev/null || true
     done
 }
 
@@ -37,9 +28,6 @@ resume_visual_processes() {
     echo "Resuming visual background processes..."
     for proc in "${VISUAL_TARGETS[@]}"; do
         pkill -CONT -x "$proc" 2>/dev/null || true
-    done
-    for pat in "${VISUAL_PATTERNS[@]}"; do
-        pkill -CONT -f "$pat" 2>/dev/null || true
     done
 }
 
