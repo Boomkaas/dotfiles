@@ -12,6 +12,13 @@
       animation = "none"; # matrix is green; keep the black-and-white look
       bigclock = true;
       clear_password = true;
+      # Ly runs every session, the "shell" one too, through the session wrapper, which
+      # pipes stdout into systemd-cat. fish then writes to the journal and hangs waiting
+      # for a terminal reply. Mark shells as already wrapped so they keep the tty.
+      setup_cmd = toString (pkgs.writeShellScript "ly-setup" ''
+        grep -qxF -- "$1" /etc/shells && export _DID_SYSTEMD_CAT=1
+        exec ${config.services.displayManager.sessionData.wrapper} "$@"
+      '');
     };
   };
   # Ly's PAM unlocks the Secret Service keyring at login (GDM did this itself).
