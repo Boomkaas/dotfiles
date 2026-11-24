@@ -72,8 +72,8 @@
 
     programs.git = {
       enable = true;
-      settings.user.email = "vilatiimakohin@gmail.com";
-      settings.user.name = "SyntaxTears";
+      settings.user.email = "boomeceeb@gmail.com";
+      settings.user.name = "Boomkaas";
       # Same as `gh auth setup-git`, which can't write this read-only config.
       settings.credential."https://github.com".helper = [ "" "!${pkgs.gh}/bin/gh auth git-credential" ];
     };
