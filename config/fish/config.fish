@@ -133,3 +133,6 @@ if status is-interactive
         end
     end
 end
+
+# Claude Code drops to 256 colors inside tmux (orange turns pink) unless told truecolor works
+set -gx CLAUDE_CODE_TMUX_TRUECOLOR 1

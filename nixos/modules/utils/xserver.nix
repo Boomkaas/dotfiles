@@ -1,17 +1,19 @@
-{ config, pkgs, inputs, ... }:
+{ config, lib, pkgs, inputs, ... }:
 
 {
   services.xserver = {
     enable = true;
   };
 
-  # Display Manager: Ly (TUI on tty1), which lists the niri session.
+  # Display Manager: Ly (TUI on tty2), which lists the niri session.
   services.displayManager.ly = {
     enable = true;
     settings = {
       animation = "none"; # matrix is green; keep the black-and-white look
       bigclock = true;
       clear_password = true;
+      # 26.05 pins Ly to tty1 (the boot console); 25.05 ran it on tty2.
+      tty = lib.mkForce 2;
       # Ly runs every session, the "shell" one too, through the session wrapper, which
       # pipes stdout into systemd-cat. fish then writes to the journal and hangs waiting
       # for a terminal reply. Mark shells as already wrapped so they keep the tty.
@@ -21,6 +23,9 @@
       '');
     };
   };
+  # NixOS only keeps getty off tty1; stop logind spawning one on Ly's tty2.
+  systemd.services."autovt@tty2".enable = false;
+
   # Ly's PAM unlocks the Secret Service keyring at login (GDM did this itself).
   security.pam.services.ly.enableGnomeKeyring = true;
 
