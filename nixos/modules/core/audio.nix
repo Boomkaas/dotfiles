@@ -10,7 +10,7 @@
     audio.enable = true;
     jack.enable = true;
 
-    # Prevent Bluetooth devices from suspending when idle and prevent autoswitching to low-quality headset profile
+    # Suspend idle Bluetooth sinks so multipoint buds can hand off to other devices; prevent autoswitching to low-quality headset profile
     wireplumber.extraConfig."10-bluez" = {
       "wireplumber.settings" = {
         "bluetooth.autoswitch-to-headset-profile" = false;
@@ -24,7 +24,7 @@
           ];
           actions = {
             update-props = {
-              "session.suspend-timeout-seconds" = 0;
+              "session.suspend-timeout-seconds" = 5;
             };
           };
         }
