@@ -18,8 +18,8 @@ input {
         tap
         natural-scroll
         accel-speed 0.2
-        accel-profile "flat"
-        scroll-factor 1.0
+        accel-profile "adaptive"
+        scroll-factor 0.3
     }
 
     mouse {
